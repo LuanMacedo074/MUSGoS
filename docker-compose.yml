@@ -1,0 +1,12 @@
+services:
+  fsos-server:
+    build: .
+    ports:
+      - "1199:1199"
+    volumes:
+      - ./logs:/root/logs
+    environment:
+      - PORT=1199
+      - LOG_LEVEL=DEBUG
+      - ENVIRONMENT=development
+    restart: unless-stopped
