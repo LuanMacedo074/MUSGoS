@@ -93,7 +93,7 @@ func FromRawBytes(rawBytes []byte, offset int) LValue {
 	// - VtPoint (8)
 	// - VtRect (9)
 	case VtPropList:
-		fmt.Print("Gerou uma proplist")
+		newVal = &LPropList{BaseLValue: BaseLValue{ValueType: VtPropList}}
 	// - VtColor (18)
 	// - VtDate (19)
 	// - Vt3dVector (22)
