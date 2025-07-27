@@ -36,7 +36,7 @@ func (h *SMUSHandler) HandleRawMessage(clientID string, data []byte) ([]byte, er
 		return nil, err
 	}
 
-	h.logger.Info("SMUS Message Parsed", map[string]interface{}{
+	h.logger.Debug("SMUS Message Parsed", map[string]interface{}{
 		"client":           clientID,
 		"subject":          msg.Subject.Value,
 		"sender":           msg.SenderID.Value,
