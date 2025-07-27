@@ -78,14 +78,13 @@ func ParseMUSMessageWithDecryption(rawmsg []byte, decrypt *crypto.Blowfish) (*MU
 
 	if readPtr < len(rawmsg) {
 		remainingBytes := rawmsg[readPtr:]
+		content := remainingBytes
 
 		if msg.Subject.Value == "Logon" {
-			msg.MsgContent = lingo.FromRawBytes(decrypt.Decrypt(remainingBytes), 0)
-			fmt.Print("xd \n")
-
-		} else {
-			msg.MsgContent = lingo.FromRawBytes(remainingBytes, 0)
+			content = decrypt.Decrypt(remainingBytes)
 		}
+
+		msg.MsgContent = lingo.FromRawBytes(content, 0)
 	}
 
 	return msg, nil
