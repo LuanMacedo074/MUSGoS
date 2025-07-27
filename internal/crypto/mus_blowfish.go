@@ -421,19 +421,15 @@ func (b *Blowfish) clearState() {
 }
 
 func (b *Blowfish) Encrypt(inBuffer []byte) []byte {
-	if b.lastOperation != kEncrypt {
-		b.clearState()
-		b.lastOperation = kEncrypt
-	}
+	b.clearState()
+	b.lastOperation = kEncrypt
 
 	return b.mungeData(inBuffer, kEncrypt)
 }
 
 func (b *Blowfish) Decrypt(inBuffer []byte) []byte {
-	if b.lastOperation != kDecrypt {
-		b.clearState()
-		b.lastOperation = kDecrypt
-	}
+	b.clearState()
+	b.lastOperation = kDecrypt
 
 	return b.mungeData(inBuffer, kDecrypt)
 }
