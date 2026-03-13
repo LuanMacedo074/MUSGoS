@@ -17,14 +17,16 @@ type TCPServer struct {
 	shutdown       chan bool
 	wg             sync.WaitGroup
 	messageHandler ports.MessageHandler
+	sessionStore   ports.SessionStore
 }
 
-func NewTCPServer(port string, logger ports.Logger, handler ports.MessageHandler) *TCPServer {
+func NewTCPServer(port string, logger ports.Logger, handler ports.MessageHandler, sessionStore ports.SessionStore) *TCPServer {
 	return &TCPServer{
 		port:           port,
 		logger:         logger,
 		shutdown:       make(chan bool),
 		messageHandler: handler,
+		sessionStore:   sessionStore,
 	}
 }
 
@@ -65,9 +67,26 @@ func (s *TCPServer) Start() error {
 
 func (s *TCPServer) handleConnection(conn net.Conn) {
 	defer s.wg.Done()
-	defer conn.Close()
 
 	clientIP := conn.RemoteAddr().String()
+
+	if err := s.sessionStore.RegisterConnection(clientIP, clientIP); err != nil {
+		s.logger.Error("Failed to register connection", map[string]interface{}{
+			"client": clientIP,
+			"error":  err.Error(),
+		})
+	}
+
+	defer func() {
+		if err := s.sessionStore.UnregisterConnection(clientIP); err != nil {
+			s.logger.Error("Failed to unregister connection", map[string]interface{}{
+				"client": clientIP,
+				"error":  err.Error(),
+			})
+		}
+		conn.Close()
+	}()
+
 	s.logger.Info("New connection established", map[string]interface{}{
 		"client": clientIP,
 	})

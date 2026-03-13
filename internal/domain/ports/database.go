@@ -19,12 +19,6 @@ type DBAdapter interface {
 	GetPlayerAttributeNames(appName, userID string) ([]string, error)
 	DeletePlayerAttribute(appName, userID, attrName string) error
 
-	// DBUser (session, per clientID)
-	SetUserAttribute(clientID, attrName string, value lingo.LValue) error
-	GetUserAttribute(clientID, attrName string) (lingo.LValue, error)
-	GetUserAttributeNames(clientID string) ([]string, error)
-	DeleteUserAttribute(clientID, attrName string) error
-
 	// ExecRaw executes raw SQL — used by migrations for schema changes.
 	ExecRaw(sql string) error
 

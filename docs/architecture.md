@@ -45,7 +45,8 @@ internal/
 │   └── ports/                     ← interfaces (contratos)
 │       ├── cipher.go              ← interface Cipher
 │       ├── handler.go             ← interface MessageHandler
-│       └── logger.go              ← interface Logger + LogLevel
+│       ├── logger.go              ← interface Logger + LogLevel
+│       └── session_store.go       ← interface SessionStore
 │
 └── adapters/                      ← implementações concretas
     ├── inbound/                   ← adaptadores de ENTRADA
@@ -53,7 +54,8 @@ internal/
     │   └── smus_handler.go        ← processa mensagens SMUS recebidas
     └── outbound/                  ← adaptadores de SAÍDA
         ├── blowfish.go            ← implementação da criptografia Blowfish
-        └── file_logger.go         ← implementação do logger em arquivo
+        ├── file_logger.go         ← implementação do logger em arquivo
+        └── redis_session_store.go ← implementação do session store via Redis
 ```
 
 ---
@@ -82,7 +84,29 @@ O pacote `factory/` contém funções construtoras (`NewCipher`, `NewHandler`, `
 
 Porta é só um nome bonito para **interface**. São os pontos de conexão entre o domínio e o mundo externo.
 
-Temos três:
+Temos quatro:
+
+#### `SessionStore` (porta outbound)
+```go
+type SessionStore interface {
+    RegisterConnection(clientID, ip string) error
+    UnregisterConnection(clientID string) error
+    GetConnection(clientID string) (*ConnectionInfo, error)
+    GetAllConnections() ([]ConnectionInfo, error)
+    IsConnected(clientID string) (bool, error)
+    SetUserAttribute(clientID, attrName string, value lingo.LValue) error
+    GetUserAttribute(clientID, attrName string) (lingo.LValue, error)
+    GetUserAttributeNames(clientID string) ([]string, error)
+    DeleteUserAttribute(clientID, attrName string) error
+    JoinRoom(roomName, clientID string) error
+    LeaveRoom(roomName, clientID string) error
+    GetRoomMembers(roomName string) ([]string, error)
+    GetClientRooms(clientID string) ([]string, error)
+    LeaveAllRooms(clientID string) error
+    Close() error
+}
+```
+Centraliza o gerenciamento de conexões ativas, atributos efêmeros de sessão (por clientID) e membership de rooms/groups. Implementado via Redis (`RedisSessionStore`), permitindo múltiplas instâncias do servidor compartilharem estado de sessão. Quando um cliente desconecta (`UnregisterConnection`), todos os dados associados (conexão, atributos, rooms) são limpos automaticamente.
 
 #### `Cipher` (porta outbound)
 ```go
@@ -133,6 +157,8 @@ São os adaptadores que o domínio **usa** para fazer coisas que ele não sabe (
 
 - **`file_logger.go`** — a implementação concreta do logger em arquivo. Implementa a interface `ports.Logger`. Escreve logs formatados em arquivo e no stdout. É outbound porque logging é um **recurso de infraestrutura** que o sistema consome.
 
+- **`redis_session_store.go`** — a implementação concreta do session store via Redis. Implementa a interface `ports.SessionStore`. Gerencia conexões TCP ativas, atributos efêmeros de sessão e membership de rooms usando estruturas Redis (HASH, SET). É outbound porque Redis é um **recurso de infraestrutura** que o sistema consome.
+
 ---
 
 ## Como tudo se conecta
@@ -151,8 +177,11 @@ cipher, _ := factory.NewCipher(cfg.CipherType, cfg.EncryptionKey)
 // factory cria o handler (inbound), injetando logger e cipher pelas interfaces
 handler, _ := factory.NewHandler(cfg.Protocol, gameLogger, cipher)
 
-// cria o servidor TCP (inbound), injetando logger e handler pelas interfaces
-server := inbound.NewTCPServer(cfg.Port, gameLogger, handler)
+// factory cria o session store (outbound) baseado no tipo configurado
+sessionStore, _ := factory.NewSessionStore(cfg.SessionStoreType, cfg.Redis)
+
+// cria o servidor TCP (inbound), injetando logger, handler e session store pelas interfaces
+server := inbound.NewTCPServer(cfg.Port, gameLogger, handler, sessionStore)
 ```
 
 Perceba que:
@@ -190,9 +219,9 @@ O domínio **nunca** importa adapters, config ou factory. Adapters importam o do
 | **Domain** | Lógica e tipos centrais do sistema | `types/lingo/`, `types/smus/` |
 | **Port** | Interface que define um contrato | `Cipher`, `MessageHandler`, `Logger` |
 | **Adapter Inbound** | Recebe dados do mundo externo | `TCPServer`, `SMUSHandler` |
-| **Adapter Outbound** | Provê capacidades ao domínio | `Blowfish`, `FileLogger` |
+| **Adapter Outbound** | Provê capacidades ao domínio | `Blowfish`, `FileLogger`, `RedisSessionStore` |
 | **Config** | Carrega variáveis de ambiente | `ServerConfig`, `LoadServerConfig()` |
-| **Factory** | Cria implementações concretas pelo tipo | `NewCipher()`, `NewHandler()`, `NewLogger()` |
+| **Factory** | Cria implementações concretas pelo tipo | `NewCipher()`, `NewHandler()`, `NewLogger()`, `NewSessionStore()` |
 | **main.go** | Cola tudo usando config + factories | Injeção de dependência manual |
 
 ---

@@ -20,11 +20,7 @@ func (m *initialSchema) Up(db ports.DBAdapter) error {
 		CREATE TABLE IF NOT EXISTS application_attributes (
 			app_id INTEGER NOT NULL,
 			attr_name TEXT NOT NULL,
-			value_type TEXT NOT NULL,
-			value_int INTEGER,
-			value_real REAL,
-			value_text TEXT,
-			value_blob BLOB,
+			value_json TEXT NOT NULL,
 			PRIMARY KEY (app_id, attr_name),
 			FOREIGN KEY (app_id) REFERENCES applications(id) ON DELETE CASCADE
 		);
@@ -33,31 +29,15 @@ func (m *initialSchema) Up(db ports.DBAdapter) error {
 			app_id INTEGER NOT NULL,
 			user_id TEXT NOT NULL,
 			attr_name TEXT NOT NULL,
-			value_type TEXT NOT NULL,
-			value_int INTEGER,
-			value_real REAL,
-			value_text TEXT,
-			value_blob BLOB,
+			value_json TEXT NOT NULL,
 			PRIMARY KEY (app_id, user_id, attr_name),
 			FOREIGN KEY (app_id) REFERENCES applications(id) ON DELETE CASCADE
-		);
-
-		CREATE TABLE IF NOT EXISTS user_attributes (
-			client_id TEXT NOT NULL,
-			attr_name TEXT NOT NULL,
-			value_type TEXT NOT NULL,
-			value_int INTEGER,
-			value_real REAL,
-			value_text TEXT,
-			value_blob BLOB,
-			PRIMARY KEY (client_id, attr_name)
 		);
 	`)
 }
 
 func (m *initialSchema) Down(db ports.DBAdapter) error {
 	return db.ExecRaw(`
-		DROP TABLE IF EXISTS user_attributes;
 		DROP TABLE IF EXISTS player_attributes;
 		DROP TABLE IF EXISTS application_attributes;
 		DROP TABLE IF EXISTS applications;

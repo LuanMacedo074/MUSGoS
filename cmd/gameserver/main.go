@@ -32,7 +32,6 @@ func main() {
 		"env":       cfg.Environment,
 	})
 
-	// Database
 	dbResult, err := factory.NewDatabase(cfg.DatabaseType, cfg.DatabasePath, migrations.All)
 	if err != nil {
 		gameLogger.Fatal("Failed to initialize database", map[string]interface{}{
@@ -72,7 +71,18 @@ func main() {
 		"type": cfg.Protocol,
 	})
 
-	server := inbound.NewTCPServer(cfg.Port, gameLogger, handler)
+	sessionStore, err := factory.NewSessionStore(cfg.SessionStoreType, cfg.Redis)
+	if err != nil {
+		gameLogger.Fatal("Failed to initialize session store", map[string]interface{}{
+			"error": err,
+		})
+	}
+	defer sessionStore.Close()
+	gameLogger.Info("Session store initialized", map[string]interface{}{
+		"type": cfg.SessionStoreType,
+	})
+
+	server := inbound.NewTCPServer(cfg.Port, gameLogger, handler, sessionStore)
 
 	go func() {
 		if err := server.Start(); err != nil {

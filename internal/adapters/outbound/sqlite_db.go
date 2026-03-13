@@ -111,16 +111,16 @@ func (s *SQLiteDB) SetApplicationAttribute(appName, attrName string, value lingo
 		return err
 	}
 
-	vType, vInt, vReal, vText, vBlob := marshalLValue(value)
+	jsonBytes, err := lingo.MarshalLValue(value)
+	if err != nil {
+		return err
+	}
 
 	_, err = s.db.Exec(`
-		INSERT INTO application_attributes (app_id, attr_name, value_type, value_int, value_real, value_text, value_blob)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(app_id, attr_name) DO UPDATE SET
-			value_type=excluded.value_type, value_int=excluded.value_int,
-			value_real=excluded.value_real, value_text=excluded.value_text,
-			value_blob=excluded.value_blob`,
-		appID, attrName, vType, vInt, vReal, vText, vBlob)
+		INSERT INTO application_attributes (app_id, attr_name, value_json)
+		VALUES (?, ?, ?)
+		ON CONFLICT(app_id, attr_name) DO UPDATE SET value_json=excluded.value_json`,
+		appID, attrName, string(jsonBytes))
 	return err
 }
 
@@ -131,7 +131,7 @@ func (s *SQLiteDB) GetApplicationAttribute(appName, attrName string) (lingo.LVal
 	}
 
 	return s.scanAttribute(
-		"SELECT value_type, value_int, value_real, value_text, value_blob FROM application_attributes WHERE app_id = ? AND attr_name = ?",
+		"SELECT value_json FROM application_attributes WHERE app_id = ? AND attr_name = ?",
 		appID, attrName)
 }
 
@@ -160,16 +160,16 @@ func (s *SQLiteDB) SetPlayerAttribute(appName, userID, attrName string, value li
 		return err
 	}
 
-	vType, vInt, vReal, vText, vBlob := marshalLValue(value)
+	jsonBytes, err := lingo.MarshalLValue(value)
+	if err != nil {
+		return err
+	}
 
 	_, err = s.db.Exec(`
-		INSERT INTO player_attributes (app_id, user_id, attr_name, value_type, value_int, value_real, value_text, value_blob)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(app_id, user_id, attr_name) DO UPDATE SET
-			value_type=excluded.value_type, value_int=excluded.value_int,
-			value_real=excluded.value_real, value_text=excluded.value_text,
-			value_blob=excluded.value_blob`,
-		appID, userID, attrName, vType, vInt, vReal, vText, vBlob)
+		INSERT INTO player_attributes (app_id, user_id, attr_name, value_json)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(app_id, user_id, attr_name) DO UPDATE SET value_json=excluded.value_json`,
+		appID, userID, attrName, string(jsonBytes))
 	return err
 }
 
@@ -180,7 +180,7 @@ func (s *SQLiteDB) GetPlayerAttribute(appName, userID, attrName string) (lingo.L
 	}
 
 	return s.scanAttribute(
-		"SELECT value_type, value_int, value_real, value_text, value_blob FROM player_attributes WHERE app_id = ? AND user_id = ? AND attr_name = ?",
+		"SELECT value_json FROM player_attributes WHERE app_id = ? AND user_id = ? AND attr_name = ?",
 		appID, userID, attrName)
 }
 
@@ -198,37 +198,6 @@ func (s *SQLiteDB) DeletePlayerAttribute(appName, userID, attrName string) error
 		return err
 	}
 	_, err = s.db.Exec("DELETE FROM player_attributes WHERE app_id = ? AND user_id = ? AND attr_name = ?", appID, userID, attrName)
-	return err
-}
-
-// --- DBUser ---
-
-func (s *SQLiteDB) SetUserAttribute(clientID, attrName string, value lingo.LValue) error {
-	vType, vInt, vReal, vText, vBlob := marshalLValue(value)
-
-	_, err := s.db.Exec(`
-		INSERT INTO user_attributes (client_id, attr_name, value_type, value_int, value_real, value_text, value_blob)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(client_id, attr_name) DO UPDATE SET
-			value_type=excluded.value_type, value_int=excluded.value_int,
-			value_real=excluded.value_real, value_text=excluded.value_text,
-			value_blob=excluded.value_blob`,
-		clientID, attrName, vType, vInt, vReal, vText, vBlob)
-	return err
-}
-
-func (s *SQLiteDB) GetUserAttribute(clientID, attrName string) (lingo.LValue, error) {
-	return s.scanAttribute(
-		"SELECT value_type, value_int, value_real, value_text, value_blob FROM user_attributes WHERE client_id = ? AND attr_name = ?",
-		clientID, attrName)
-}
-
-func (s *SQLiteDB) GetUserAttributeNames(clientID string) ([]string, error) {
-	return s.queryNames("SELECT attr_name FROM user_attributes WHERE client_id = ?", clientID)
-}
-
-func (s *SQLiteDB) DeleteUserAttribute(clientID, attrName string) error {
-	_, err := s.db.Exec("DELETE FROM user_attributes WHERE client_id = ? AND attr_name = ?", clientID, attrName)
 	return err
 }
 
@@ -275,15 +244,9 @@ func (s *SQLiteDB) queryNames(query string, args ...interface{}) ([]string, erro
 }
 
 func (s *SQLiteDB) scanAttribute(query string, args ...interface{}) (lingo.LValue, error) {
-	var (
-		vType string
-		vInt  sql.NullInt64
-		vReal sql.NullFloat64
-		vText sql.NullString
-		vBlob []byte
-	)
+	var valueJSON string
 
-	err := s.db.QueryRow(query, args...).Scan(&vType, &vInt, &vReal, &vText, &vBlob)
+	err := s.db.QueryRow(query, args...).Scan(&valueJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return lingo.NewLVoid(), nil
@@ -291,59 +254,5 @@ func (s *SQLiteDB) scanAttribute(query string, args ...interface{}) (lingo.LValu
 		return lingo.NewLVoid(), err
 	}
 
-	return unmarshalLValue(vType, vInt, vReal, vText, vBlob), nil
-}
-
-func marshalLValue(value lingo.LValue) (vType string, vInt *int64, vReal *float64, vText *string, vBlob []byte) {
-	switch v := value.(type) {
-	case *lingo.LInteger:
-		vType = "integer"
-		i := int64(v.Value)
-		vInt = &i
-	case *lingo.LFloat:
-		vType = "float"
-		f := v.Value
-		vReal = &f
-	case *lingo.LString:
-		vType = "string"
-		vText = &v.Value
-	case *lingo.LSymbol:
-		vType = "symbol"
-		vText = &v.Value
-	case *lingo.LPropList:
-		vType = "proplist"
-		vBlob = v.GetBytes()
-	case *lingo.LList:
-		vType = "list"
-		vBlob = v.GetBytes()
-	default:
-		vType = "void"
-	}
-	return
-}
-
-func unmarshalLValue(vType string, vInt sql.NullInt64, vReal sql.NullFloat64, vText sql.NullString, vBlob []byte) lingo.LValue {
-	switch vType {
-	case "integer":
-		if vInt.Valid {
-			return lingo.NewLInteger(int32(vInt.Int64))
-		}
-	case "float":
-		if vReal.Valid {
-			return lingo.NewLFloat(vReal.Float64)
-		}
-	case "string":
-		if vText.Valid {
-			return lingo.NewLString(vText.String)
-		}
-	case "symbol":
-		if vText.Valid {
-			return lingo.NewLSymbol(vText.String)
-		}
-	case "proplist", "list":
-		if len(vBlob) > 0 {
-			return lingo.FromRawBytes(vBlob, 0)
-		}
-	}
-	return lingo.NewLVoid()
+	return lingo.UnmarshalLValue([]byte(valueJSON))
 }

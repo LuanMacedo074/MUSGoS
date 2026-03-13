@@ -310,47 +310,6 @@ func TestPlayerAttribute_SetGetDelete(t *testing.T) {
 	}
 }
 
-// --- DBUser attributes ---
-
-func TestUserAttribute_SetGetDelete(t *testing.T) {
-	db := newTestDB(t)
-
-	mustNoErr(t, db.SetUserAttribute("client1", "token", lingo.NewLString("session-data")))
-
-	got, err := db.GetUserAttribute("client1", "token")
-	mustNoErr(t, err)
-	ls, ok := got.(*lingo.LString)
-	if !ok {
-		t.Fatalf("expected *LString, got %T", got)
-	}
-	if ls.Value != "session-data" {
-		t.Errorf("expected 'session-data', got %q", ls.Value)
-	}
-
-	// Different client
-	got2, err := db.GetUserAttribute("client2", "token")
-	mustNoErr(t, err)
-	if got2.GetType() != lingo.VtVoid {
-		t.Error("different client should not have the attribute")
-	}
-
-	// GetNames
-	mustNoErr(t, db.SetUserAttribute("client1", "flag", lingo.NewLInteger(1)))
-	names, err := db.GetUserAttributeNames("client1")
-	mustNoErr(t, err)
-	if len(names) != 2 {
-		t.Errorf("expected 2 names, got %d", len(names))
-	}
-
-	// Delete
-	mustNoErr(t, db.DeleteUserAttribute("client1", "token"))
-	got3, err := db.GetUserAttribute("client1", "token")
-	mustNoErr(t, err)
-	if got3.GetType() != lingo.VtVoid {
-		t.Error("expected void after delete")
-	}
-}
-
 // --- MigrationTracker ---
 
 func TestMigrationTracker_EmptyInitially(t *testing.T) {
