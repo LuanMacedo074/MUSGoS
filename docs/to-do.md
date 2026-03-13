@@ -17,11 +17,15 @@ Análise comparativa com [OpenSMUS 1.02](https://sourceforge.net/p/opensmus/code
 | Schema DSL | `ports/schema.go` | — |
 | Lingo JSON Codec | `lingo/codec.go` | — |
 | Lua Script Engine | `lua_script_engine.go` | `ServerSideScript.java` |
+| Message Queue (memory/redis/rabbitmq) | `memory_queue.go`, `redis_queue.go`, `rabbitmq_queue.go` | — |
 | Logging | `file_logger.go` | `MUSLog.java` |
 | Config | `config.go` | `MUSServerProperties.java` |
 | Migrations | `migration_runner.go` | — |
 | Error Codes | `mus_error_code.go` | `MUSErrorCode.java` |
 | Users & Bans (DB) | `sqlite_db.go` + migration | `MUSSQLConnection.java` (user/ban tables) |
+| #All Encryption | `mus_message.go` | `MUSMessage.java` (full-packet decrypt) |
+| Movie (Room) Manager | `movie.go` | `MUSMovie.java` |
+| Group Manager | `group.go` | `MUSGroup.java` |
 
 ## O que falta
 
@@ -32,8 +36,8 @@ Análise comparativa com [OpenSMUS 1.02](https://sourceforge.net/p/opensmus/code
 | ~~1~~ | ~~**Error Codes**~~ | ~~`MUSErrorCode.java`~~ | ~~Implementado em `mus_error_code.go`~~ |
 | ~~2~~ | ~~**Response Builder**~~ | ~~`MUSMessage.send()`~~ | ~~Serializar `MUSMessage` de volta para bytes~~ ✅ FEITO |
 | ~~3~~ | ~~**Logon Handler**~~ | ~~`MUSLogonMessage.java`~~ | ~~Processar logon: extrair movieID, userID, password; validar; responder~~ ✅ FEITO |
-| 4 | **Movie (Room) Manager** | `MUSMovie.java` | Gerenciar movies — criar, adicionar/remover usuários, listar groups |
-| 5 | **Group Manager** | `MUSGroup.java` | `@AllUsers` auto-join, join/leave, broadcast |
+| ~~4~~ | ~~**Movie (Room) Manager**~~ | ~~`MUSMovie.java`~~ | ~~Gerenciar movies — criar, adicionar/remover usuários, listar groups~~ ✅ FEITO |
+| ~~5~~ | ~~**Group Manager**~~ | ~~`MUSGroup.java`~~ | ~~`@AllUsers` auto-join, join/leave, broadcast~~ ✅ FEITO |
 | 6 | **Message Dispatcher** | `MUSDispatcher.java` | Roteamento central por subject/recipient |
 | 7 | **Group Messaging** | `MUSGroup.deliver()` | Broadcast para todos os membros de um group |
 | 8 | **User-to-User Messaging** | `MUSUser.send()` | Envio direto entre usuários |
@@ -44,8 +48,8 @@ Análise comparativa com [OpenSMUS 1.02](https://sourceforge.net/p/opensmus/code
 |---|---|---|---|
 | 9 | **System Commands** | `MUSDispatcher.handleSystemMsg()` | `system.server.*`, `system.group.*`, `system.user.*` |
 | 10 | **DB Dispatcher** | `MUSDBDispatcher.java` | Comandos `DBPlayer.*`, `DBApplication.*`, `DBAdmin.*` |
-| 11 | **User Send Queue** | `MUSUserSendQueue.java` | Fila assíncrona por usuário |
-| 12 | **Group Send Queue** | `MUSGroupSendQueue.java` | Fila assíncrona por group |
+| ~~11~~ | ~~**User Send Queue**~~ | ~~`MUSUserSendQueue.java`~~ | ~~Fila assíncrona por usuário~~ ✅ Substituído pelo sistema de queue genérico (memory/redis/rabbitmq) |
+| ~~12~~ | ~~**Group Send Queue**~~ | ~~`MUSGroupSendQueue.java`~~ | ~~Fila assíncrona por group~~ ✅ Substituído pelo sistema de queue genérico |
 | 13 | **Idle Check** | `MUSIdleCheck.java` | Desconexão de usuários inativos |
 | 14 | **Lingo Types faltantes** | `LPoint, LRect, LColor, LDate, L3dVector, L3dTransform, LPicture` | Tipos raramente usados |
 
@@ -97,10 +101,11 @@ Cliente Shockwave                         Servidor
    Users & Bans DB ────────── ✅ FEITO (migration + CRUD no sqlite_db.go)
    Session Store ───────────── ✅ FEITO (memory + Redis)
    Console ─────────────────── ✅ FEITO (create user)
-   Lua Scripting (fundação) ── ✅ FEITO (ScriptEngine + LValue↔Lua)
+   Lua Scripting (fundação) ── ✅ FEITO (ScriptEngine + LValue↔Lua + mus.publish)
+   Message Queue ────────────── ✅ FEITO (memory/redis/rabbitmq + registry + factory)
 2. Response Builder ─────── ✅ FEITO (LValue.GetBytes() + MUSMessage.GetBytes())
 3. Logon Handler ────────── ✅ FEITO (LogonService com 3 modos: none/open/strict)
-4. Movie + Group Manager ── cria movie, auto-join @AllUsers
+4. Movie + Group Manager ── ✅ FEITO (movie sessions + group sessions)
 5. Message Dispatcher ───── roteia por recipient/subject
 6. Group Messaging ──────── broadcast para group
 7. User-to-User ─────────── envio direto

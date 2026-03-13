@@ -12,14 +12,20 @@ type SMUSHandler struct {
 	cipher       ports.Cipher
 	scriptEngine ports.ScriptEngine
 	logonService *mus.LogonService
+	movieManager *mus.MovieManager
+	groupManager *mus.GroupManager
+	queue        ports.QueuePublisher
 }
 
-func NewSMUSHandler(logger ports.Logger, cipher ports.Cipher, scriptEngine ports.ScriptEngine, logonService *mus.LogonService) *SMUSHandler {
+func NewSMUSHandler(logger ports.Logger, cipher ports.Cipher, scriptEngine ports.ScriptEngine, logonService *mus.LogonService, movieManager *mus.MovieManager, groupManager *mus.GroupManager, queue ports.QueuePublisher) *SMUSHandler {
 	return &SMUSHandler{
 		logger:       logger,
 		cipher:       cipher,
 		scriptEngine: scriptEngine,
 		logonService: logonService,
+		movieManager: movieManager,
+		groupManager: groupManager,
+		queue:        queue,
 	}
 }
 

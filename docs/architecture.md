@@ -38,6 +38,7 @@ internal/
 │   ├── database.go                   ← NewDatabase() — cria DB + migration runner
 │   ├── handler.go                    ← NewHandler() — escolhe o handler pelo protocolo
 │   ├── logger.go                     ← NewLogger() — escolhe o logger pelo tipo
+│   ├── queue.go                      ← NewMessageQueue() — memory, Redis ou RabbitMQ
 │   ├── script_engine.go              ← NewScriptEngine() — cria o engine Lua
 │   └── session_store.go              ← NewSessionStore() — memory ou Redis
 │
@@ -55,6 +56,7 @@ internal/
 │   │   ├── logger.go                 ← interface Logger + LogLevel
 │   │   ├── migration.go              ← interfaces Migration + MigrationTracker
 │   │   ├── schema.go                 ← DSL para definição de tabelas/índices
+│   │   ├── queue.go                  ← interfaces QueuePublisher, QueueConsumer, MessageQueue
 │   │   ├── script_engine.go          ← interface ScriptEngine
 │   │   └── session_store.go          ← interface SessionStore
 │   └── services/
@@ -64,6 +66,8 @@ internal/
     ├── inbound/                      ← adaptadores de ENTRADA
     │   ├── mus/                      ← lógica específica do protocolo MUS
     │   │   ├── logon.go              ← autenticação com 3 modos (none/open/strict)
+    │   │   ├── movie.go              ← MovieManager — gerencia movies e groups
+    │   │   ├── group.go              ← Group — membership e broadcast dentro de movies
     │   │   └── response.go           ← helpers para construção de respostas SMUS
     │   ├── tcp_server.go             ← servidor TCP que aceita conexões
     │   ├── smus_handler.go           ← processa mensagens SMUS, dispara scripts
@@ -72,6 +76,10 @@ internal/
         ├── blowfish.go               ← implementação da criptografia Blowfish
         ├── file_logger.go            ← implementação do logger em arquivo
         ├── lua_script_engine.go      ← execução de scripts Lua (gopher-lua)
+        ├── memory_queue.go           ← message queue in-memory (dev)
+        ├── redis_queue.go            ← message queue via Redis pub/sub
+        ├── rabbitmq_queue.go         ← message queue via RabbitMQ (AMQP)
+        ├── queue_errors.go           ← erros compartilhados dos adapters de queue
         ├── memory_session_store.go   ← session store in-memory (dev)
         ├── redis_session_store.go    ← session store via Redis (produção)
         └── sqlite_db.go             ← SQLite: users, bans, atributos, schema DSL
@@ -79,6 +87,8 @@ internal/
 external/
 ├── migrations/                       ← migrations SQL versionadas
 │   └── 00000000000000_initial_schema.go
+├── queues/                           ← registro de consumers de queue
+│   └── registry.go                   ← lista de topic→handler para bootstrap
 └── scripts/                          ← scripts Lua server-side
     └── echo.lua                      ← script exemplo
 ```
@@ -93,7 +103,7 @@ O pacote `config/` centraliza a leitura de variáveis de ambiente numa struct `S
 
 ### Factory
 
-O pacote `factory/` contém funções construtoras (`NewCipher`, `NewHandler`, `NewLogger`, `NewDatabase`, `NewSessionStore`, `NewScriptEngine`) que recebem um tipo (string vinda do config) e retornam a interface correspondente do domínio. Isso isola o `main.go` de conhecer as implementações concretas diretamente — ele só precisa saber o tipo desejado.
+O pacote `factory/` contém funções construtoras (`NewCipher`, `NewHandler`, `NewLogger`, `NewDatabase`, `NewSessionStore`, `NewScriptEngine`, `NewMessageQueue`) que recebem um tipo (string vinda do config) e retornam a interface correspondente do domínio. Isso isola o `main.go` de conhecer as implementações concretas diretamente — ele só precisa saber o tipo desejado.
 
 ### Domain (Domínio)
 
@@ -109,7 +119,7 @@ O pacote `factory/` contém funções construtoras (`NewCipher`, `NewHandler`, `
 
 Porta é só um nome bonito para **interface**. São os pontos de conexão entre o domínio e o mundo externo.
 
-Temos sete:
+Temos oito:
 
 #### `SessionStore` (porta outbound)
 ```go
@@ -190,6 +200,26 @@ type MigrationTracker interface {
 ```
 Contratos para o sistema de migrations. Cada migration tem um ID ordenável (timestamp) e um método `Up`. O `MigrationTracker` (implementado pelo próprio `DBAdapter`) registra quais já foram executadas. O `MigrationRunner` (service) orquestra a execução em ordem.
 
+#### `MessageQueue` (porta outbound)
+```go
+type QueuePublisher interface {
+    Publish(topic string, payload []byte) error
+    Close() error
+}
+
+type QueueConsumer interface {
+    Subscribe(topic string, handler QueueSubscriber) error
+    Unsubscribe(topic string) error
+    Close() error
+}
+
+type MessageQueue interface {
+    QueuePublisher
+    QueueConsumer
+}
+```
+Sistema de mensageria pub/sub genérico com três implementações: `MemoryQueue` (in-memory, para dev/testes), `RedisQueue` (via Redis pub/sub) e `RabbitMQQueue` (via AMQP). O `ScriptEngine` recebe apenas `QueuePublisher` para publicar mensagens via `mus.publish()` em scripts Lua. Consumers são registrados no bootstrap via `external/queues/registry.go`.
+
 #### `ScriptEngine` (porta outbound)
 ```go
 type ScriptEngine interface {
@@ -231,7 +261,13 @@ São os adaptadores que o domínio **usa** para fazer coisas que ele não sabe (
 
 - **`redis_session_store.go`** — session store via Redis. Implementa `ports.SessionStore`. Gerencia conexões, atributos efêmeros e rooms usando estruturas Redis (HASH, SET) com key prefixing e TTL. Para produção e cenários multi-instância.
 
-- **`lua_script_engine.go`** — implementação do `ports.ScriptEngine` via gopher-lua. Cria uma VM Lua fresca por execução, com libs inseguras removidas (`os`, `io`, `debug`). Registra o módulo `mus` com `getSender()`, `getContent()` e `response()`. Scripts ficam em `external/scripts/` com mapping 1:1 por subject. Timeout de execução configurável via `SCRIPT_TIMEOUT`.
+- **`lua_script_engine.go`** — implementação do `ports.ScriptEngine` via gopher-lua. Cria uma VM Lua fresca por execução, com libs inseguras removidas (`os`, `io`, `debug`). Registra o módulo `mus` com `getSender()`, `getContent()`, `response()` e `publish()`. Scripts ficam em `external/scripts/` com mapping 1:1 por subject. Timeout de execução configurável via `SCRIPT_TIMEOUT`. Recebe um `QueuePublisher` no construtor para que scripts possam publicar mensagens via `mus.publish(topic, data)`.
+
+- **`memory_queue.go`** — message queue in-memory com `sync.RWMutex`. Implementa `ports.MessageQueue`. Ideal para desenvolvimento e testes — sem dependências externas.
+
+- **`redis_queue.go`** — message queue via Redis pub/sub. Implementa `ports.MessageQueue`. Usa Redis `PUBLISH`/`SUBSCRIBE` para distribuir mensagens entre instâncias.
+
+- **`rabbitmq_queue.go`** — message queue via RabbitMQ (AMQP 0-9-1). Implementa `ports.MessageQueue`. Usa topic exchanges para roteamento flexível de mensagens. Cada subscription cria um canal dedicado com queue anônima e auto-delete.
 
 ---
 
@@ -252,15 +288,18 @@ dbResult.MigrationRunner.RunPending()
 // factory cria o cipher (outbound) baseado no tipo configurado
 cipher, _ := factory.NewCipher(cfg.CipherType, cfg.EncryptionKey)
 
-// factory cria o script engine (outbound) baseado no path e timeout configurados
-scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout)
+// factory cria o session store (outbound) baseado no tipo configurado
+sessionStore, _ := factory.NewSessionStore(cfg.SessionStoreType, cfg.Redis)
+
+// factory cria a message queue (outbound) baseada no tipo configurado
+queue, _ := factory.NewMessageQueue(cfg.QueueType, cfg.QueueRedis, cfg.RabbitMQ)
+
+// factory cria o script engine (outbound), recebendo o publisher para mus.publish()
+scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout, queue)
 
 // factory cria o handler (inbound), injetando dependências + defaultUserLevel
 handler, _ := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine,
-    dbResult.Adapter, sessionStore, cfg.AuthMode, cfg.DefaultUserLevel)
-
-// factory cria o session store (outbound) baseado no tipo configurado
-sessionStore, _ := factory.NewSessionStore(cfg.SessionStoreType, cfg.Redis)
+    dbResult.Adapter, sessionStore, queue, cfg.AuthMode, cfg.DefaultUserLevel)
 
 // cria o servidor TCP (inbound) com config de rede (IP, buffer, NoDelay)
 server := inbound.NewTCPServer(inbound.TCPServerConfig{
@@ -305,11 +344,11 @@ O domínio **nunca** importa adapters, config ou factory. Adapters importam o do
 | Conceito | O que é | No MUSGoS |
 |---|---|---|
 | **Domain** | Lógica e tipos centrais do sistema | `types/lingo/`, `types/smus/`, `services/` |
-| **Port** | Interface que define um contrato | `Cipher`, `MessageHandler`, `Logger`, `DBAdapter`, `SessionStore`, `ScriptEngine`, `Migration` |
-| **Adapter Inbound** | Recebe dados do mundo externo | `TCPServer`, `SMUSHandler`, `Console` |
-| **Adapter Outbound** | Provê capacidades ao domínio | `Blowfish`, `FileLogger`, `SQLiteDB`, `MemorySessionStore`, `RedisSessionStore`, `LuaScriptEngine` |
+| **Port** | Interface que define um contrato | `Cipher`, `MessageHandler`, `Logger`, `DBAdapter`, `SessionStore`, `ScriptEngine`, `MessageQueue`, `Migration` |
+| **Adapter Inbound** | Recebe dados do mundo externo | `TCPServer`, `SMUSHandler`, `Console`, `MovieManager`, `Group` |
+| **Adapter Outbound** | Provê capacidades ao domínio | `Blowfish`, `FileLogger`, `SQLiteDB`, `MemorySessionStore`, `RedisSessionStore`, `LuaScriptEngine`, `MemoryQueue`, `RedisQueue`, `RabbitMQQueue` |
 | **Config** | Carrega variáveis de ambiente | `ServerConfig`, `LoadServerConfig()` |
-| **Factory** | Cria implementações concretas pelo tipo | `NewCipher()`, `NewHandler()`, `NewLogger()`, `NewDatabase()`, `NewSessionStore()`, `NewScriptEngine()` |
+| **Factory** | Cria implementações concretas pelo tipo | `NewCipher()`, `NewHandler()`, `NewLogger()`, `NewDatabase()`, `NewSessionStore()`, `NewScriptEngine()`, `NewMessageQueue()` |
 | **main.go** | Cola tudo usando config + factories | Injeção de dependência manual |
 
 ---

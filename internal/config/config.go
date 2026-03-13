@@ -17,6 +17,15 @@ type RedisConfig struct {
 	ConnTTL   string
 }
 
+type RabbitMQConfig struct {
+	Host     string
+	Port     string
+	User     string
+	Password string
+	VHost    string
+	Exchange string
+}
+
 type ServerConfig struct {
 	ApplicationName  string
 	Port             string
@@ -38,6 +47,9 @@ type ServerConfig struct {
 	ScriptTimeout    int
 	AuthMode         string
 	Redis            RedisConfig
+	QueueType        string
+	QueueRedis       RedisConfig
+	RabbitMQ         RabbitMQConfig
 }
 
 func LoadServerConfig() ServerConfig {
@@ -57,7 +69,7 @@ func LoadServerConfig() ServerConfig {
 		LogPath:       getEnv("LOG_PATH", "logs"),
 		Environment:   getEnv("ENVIRONMENT", "development"),
 		CipherType:    getEnv("CIPHER_TYPE", "blowfish"),
-		EncryptionKey: getEnv("ENCRYPTION_KEY", "NO_ENCRYPTION_KEY"),
+		EncryptionKey: getEnv("ENCRYPTION_KEY", "IPAddress resolution"),
 		Protocol:      getEnv("PROTOCOL", "smus"),
 		DatabaseType:     getEnv("DATABASE_TYPE", "sqlite"),
 		DatabasePath:     getEnv("DATABASE_PATH", "data/musgo.db"),
@@ -72,6 +84,22 @@ func LoadServerConfig() ServerConfig {
 			DB:        getEnv("REDIS_DB", "0"),
 			KeyPrefix: getEnv("REDIS_KEY_PREFIX", "musgo"),
 			ConnTTL:   getEnv("REDIS_CONN_TTL", "3600"),
+		},
+		QueueType: getEnv("QUEUE_TYPE", "memory"),
+		QueueRedis: RedisConfig{
+			Host:      getEnv("QUEUE_REDIS_HOST", "localhost"),
+			Port:      getEnv("QUEUE_REDIS_PORT", "6379"),
+			Password:  getEnv("QUEUE_REDIS_PASSWORD", ""),
+			DB:        getEnv("QUEUE_REDIS_DB", "1"),
+			KeyPrefix: getEnv("QUEUE_REDIS_KEY_PREFIX", "musgoq"),
+		},
+		RabbitMQ: RabbitMQConfig{
+			Host:     getEnv("RABBITMQ_HOST", "localhost"),
+			Port:     getEnv("RABBITMQ_PORT", "5672"),
+			User:     getEnv("RABBITMQ_USER", "guest"),
+			Password: getEnv("RABBITMQ_PASSWORD", "guest"),
+			VHost:    getEnv("RABBITMQ_VHOST", "/"),
+			Exchange: getEnv("RABBITMQ_EXCHANGE", "musgo"),
 		},
 	}
 }

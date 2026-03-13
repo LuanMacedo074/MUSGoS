@@ -272,6 +272,61 @@ func (m *MockSessionStore) Close() error {
 	return nil
 }
 
+// MockMessageQueue implements ports.MessageQueue with configurable behavior.
+type MockMessageQueue struct {
+	mu           sync.Mutex
+	PublishFunc  func(topic string, payload []byte) error
+	PublishCalls []struct {
+		Topic   string
+		Payload []byte
+	}
+	subscribers map[string][]ports.QueueSubscriber
+	closed      bool
+}
+
+func NewMockMessageQueue() *MockMessageQueue {
+	return &MockMessageQueue{
+		subscribers: make(map[string][]ports.QueueSubscriber),
+	}
+}
+
+func (m *MockMessageQueue) Publish(topic string, payload []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.PublishCalls = append(m.PublishCalls, struct {
+		Topic   string
+		Payload []byte
+	}{topic, payload})
+	if m.PublishFunc != nil {
+		return m.PublishFunc(topic, payload)
+	}
+	for _, handler := range m.subscribers[topic] {
+		handler(ports.QueueMessage{Topic: topic, Payload: payload})
+	}
+	return nil
+}
+
+func (m *MockMessageQueue) Subscribe(topic string, handler ports.QueueSubscriber) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.subscribers[topic] = append(m.subscribers[topic], handler)
+	return nil
+}
+
+func (m *MockMessageQueue) Unsubscribe(topic string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.subscribers, topic)
+	return nil
+}
+
+func (m *MockMessageQueue) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.closed = true
+	return nil
+}
+
 // MockDBAdapter implements ports.DBAdapter with configurable behavior for user/ban lookups.
 type MockDBAdapter struct {
 	GetUserFunc            func(username string) (*ports.User, error)

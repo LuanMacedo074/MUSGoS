@@ -7,8 +7,10 @@ import (
 	"syscall"
 
 	"fsos-server/external/migrations"
+	"fsos-server/external/queues"
 	"fsos-server/internal/adapters/inbound"
 	"fsos-server/internal/config"
+	"fsos-server/internal/domain/ports"
 	"fsos-server/internal/factory"
 )
 
@@ -62,11 +64,6 @@ func main() {
 		"type": cfg.CipherType,
 	})
 
-	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout)
-	gameLogger.Info("Script engine initialized", map[string]interface{}{
-		"scripts_path": cfg.ScriptsPath,
-	})
-
 	sessionStore, err := factory.NewSessionStore(cfg.SessionStoreType, cfg.Redis)
 	if err != nil {
 		gameLogger.Fatal("Failed to initialize session store", map[string]interface{}{
@@ -78,7 +75,34 @@ func main() {
 		"type": cfg.SessionStoreType,
 	})
 
-	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine, dbResult.Adapter, sessionStore, cfg.AuthMode, cfg.DefaultUserLevel)
+	queue, err := factory.NewMessageQueue(cfg.QueueType, cfg.QueueRedis, cfg.RabbitMQ)
+	if err != nil {
+		gameLogger.Fatal("Failed to initialize message queue", map[string]interface{}{
+			"error": err,
+		})
+	}
+	defer queue.Close()
+	gameLogger.Info("Message queue initialized", map[string]interface{}{
+		"type": cfg.QueueType,
+	})
+
+	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout, queue)
+	gameLogger.Info("Script engine initialized", map[string]interface{}{
+		"scripts_path": cfg.ScriptsPath,
+	})
+
+	for _, q := range queues.All {
+		topic := q.Topic
+		h := q.Handler
+		queue.Subscribe(topic, func(msg ports.QueueMessage) {
+			h(msg.Payload)
+		})
+		gameLogger.Debug("Registered queue consumer", map[string]interface{}{
+			"topic": topic,
+		})
+	}
+
+	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine, dbResult.Adapter, sessionStore, queue, cfg.AuthMode, cfg.DefaultUserLevel)
 	if err != nil {
 		gameLogger.Fatal("Failed to initialize protocol handler", map[string]interface{}{
 			"error": err,

@@ -5,9 +5,9 @@ import (
 	"fsos-server/internal/domain/ports"
 )
 
-func NewScriptEngine(scriptsPath string, logger ports.Logger, scriptTimeoutSeconds int) ports.ScriptEngine {
+func NewScriptEngine(scriptsPath string, logger ports.Logger, scriptTimeoutSeconds int, publisher ports.QueuePublisher) ports.ScriptEngine {
 	if scriptsPath == "" {
 		return nil
 	}
-	return outbound.NewLuaScriptEngine(scriptsPath, logger, scriptTimeoutSeconds)
+	return outbound.NewLuaScriptEngine(scriptsPath, logger, scriptTimeoutSeconds, publisher)
 }

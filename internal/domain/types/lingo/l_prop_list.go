@@ -42,8 +42,20 @@ func (v *LPropList) GetPropAt(pos int) LValue {
 }
 
 func (v *LPropList) GetElement(propName string) (LValue, error) {
+	// Lingo property names are conventionally prefixed with "!"
+	// Accept lookups with or without the prefix
+	nameWithBang := propName
+	if len(propName) > 0 && propName[0] != '!' {
+		nameWithBang = "!" + propName
+	}
+	nameWithoutBang := propName
+	if len(propName) > 0 && propName[0] == '!' {
+		nameWithoutBang = propName[1:]
+	}
+
 	for i, prop := range v.Properties {
-		if prop.String() == propName {
+		s := prop.String()
+		if s == nameWithBang || s == nameWithoutBang || s == propName {
 			return v.Values[i], nil
 		}
 	}

@@ -56,7 +56,7 @@ func TestSMUSHandler_HandleRawMessage_Valid(t *testing.T) {
 	logger := &testutil.MockLogger{}
 	cipher := &testutil.MockCipher{}
 
-	handler := inbound.NewSMUSHandler(logger, cipher, nil, nil)
+	handler := inbound.NewSMUSHandler(logger, cipher, nil, nil, nil, nil, nil)
 	raw := buildValidSMUSMessage("Test", "user1", []string{"user2"})
 
 	_, err := handler.HandleRawMessage("client-1", raw)
@@ -74,7 +74,7 @@ func TestSMUSHandler_HandleRawMessage_Invalid(t *testing.T) {
 	logger := &testutil.MockLogger{}
 	cipher := &testutil.MockCipher{}
 
-	handler := inbound.NewSMUSHandler(logger, cipher, nil, nil)
+	handler := inbound.NewSMUSHandler(logger, cipher, nil, nil, nil, nil, nil)
 
 	_, err := handler.HandleRawMessage("client-1", []byte{0xFF, 0xFF})
 	if err == nil {
@@ -97,7 +97,7 @@ func TestSMUSHandler_SystemScript_ExecutesScript(t *testing.T) {
 		},
 	}
 
-	handler := inbound.NewSMUSHandler(logger, cipher, scriptEngine, nil)
+	handler := inbound.NewSMUSHandler(logger, cipher, scriptEngine, nil, nil, nil, nil)
 	raw := buildValidSMUSMessage("QueryCreate", "user1", []string{"system.script"})
 
 	resp, err := handler.HandleRawMessage("client-1", raw)
@@ -122,7 +122,7 @@ func TestSMUSHandler_SystemScript_NoScript(t *testing.T) {
 		},
 	}
 
-	handler := inbound.NewSMUSHandler(logger, cipher, scriptEngine, nil)
+	handler := inbound.NewSMUSHandler(logger, cipher, scriptEngine, nil, nil, nil, nil)
 	raw := buildValidSMUSMessage("NonExistent", "user1", []string{"system.script"})
 
 	resp, err := handler.HandleRawMessage("client-1", raw)
@@ -149,7 +149,7 @@ func TestSMUSHandler_NonSystemScript_DoesNotExecute(t *testing.T) {
 		},
 	}
 
-	handler := inbound.NewSMUSHandler(logger, cipher, scriptEngine, nil)
+	handler := inbound.NewSMUSHandler(logger, cipher, scriptEngine, nil, nil, nil, nil)
 	raw := buildValidSMUSMessage("QueryCreate", "user1", []string{"someuser"})
 
 	_, err := handler.HandleRawMessage("client-1", raw)

@@ -1,6 +1,7 @@
 package mus
 
 import (
+	"fmt"
 	"fsos-server/internal/domain/ports"
 	"fsos-server/internal/domain/types/lingo"
 	"fsos-server/internal/domain/types/smus"
@@ -13,23 +14,29 @@ type LogonService struct {
 	sessionStore     ports.SessionStore
 	cipher           ports.Cipher
 	logger           ports.Logger
+	movieManager     *MovieManager
 	authMode         string
 	defaultUserLevel int
 }
 
-func NewLogonService(db ports.DBAdapter, sessionStore ports.SessionStore, cipher ports.Cipher, logger ports.Logger, authMode string, defaultUserLevel int) *LogonService {
+func NewLogonService(db ports.DBAdapter, sessionStore ports.SessionStore, cipher ports.Cipher, logger ports.Logger, movieManager *MovieManager, authMode string, defaultUserLevel int) *LogonService {
 	return &LogonService{
 		db:               db,
 		sessionStore:     sessionStore,
 		cipher:           cipher,
 		logger:           logger,
+		movieManager:     movieManager,
 		authMode:         authMode,
 		defaultUserLevel: defaultUserLevel,
 	}
 }
 
 func (s *LogonService) HandleLogon(clientIP string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
-	userID, password, err := s.extractCredentials(msg.MsgContent)
+	s.logger.Debug("Logon content", map[string]interface{}{
+		"content_type": fmt.Sprintf("%T", msg.MsgContent),
+		"content":      msg.MsgContent.String(),
+	})
+	movieID, userID, password, err := s.extractCredentials(msg.MsgContent)
 	if err != nil {
 		if s.authMode == "strict" {
 			s.logger.Warn("Logon failed: could not extract credentials", map[string]interface{}{
@@ -94,9 +101,22 @@ func (s *LogonService) HandleLogon(clientIP string, msg *smus.MUSMessage) (*smus
 	// Store user level in session for permission checks
 	s.sessionStore.SetUserAttribute(userID, "#userLevel", lingo.NewLInteger(int32(userLevel)))
 
+	// Join movie if movieID was provided and MovieManager is available
+	if movieID != "" && s.movieManager != nil {
+		if err := s.movieManager.JoinMovie(movieID, userID); err != nil {
+			s.logger.Error("Failed to join movie after logon", map[string]interface{}{
+				"client":  clientIP,
+				"userID":  userID,
+				"movieID": movieID,
+				"error":   err.Error(),
+			})
+		}
+	}
+
 	s.logger.Info("Logon successful", map[string]interface{}{
 		"client":     clientIP,
 		"userID":     userID,
+		"movieID":    movieID,
 		"user_level": userLevel,
 	})
 
@@ -125,9 +145,9 @@ func (s *LogonService) validateUserCredentials(user *ports.User, password, clien
 	return nil
 }
 
-func (s *LogonService) extractCredentials(content lingo.LValue) (userID, password string, err error) {
+func (s *LogonService) extractCredentials(content lingo.LValue) (movieID, userID, password string, err error) {
 	if content == nil {
-		return "", "", ports.ErrInvalidCredentials
+		return "", "", "", ports.ErrInvalidCredentials
 	}
 
 	switch v := content.(type) {
@@ -136,32 +156,40 @@ func (s *LogonService) extractCredentials(content lingo.LValue) (userID, passwor
 	case *lingo.LPropList:
 		return s.extractFromPropList(v)
 	default:
-		return "", "", ports.ErrInvalidCredentials
+		return "", "", "", ports.ErrInvalidCredentials
 	}
 }
 
-func (s *LogonService) extractFromList(list *lingo.LList) (string, string, error) {
+func (s *LogonService) extractFromList(list *lingo.LList) (string, string, string, error) {
 	if len(list.Values) < 3 {
-		return "", "", ports.ErrInvalidCredentials
+		return "", "", "", ports.ErrInvalidCredentials
 	}
 	// [movieID, userID, password]
+	movieID := extractStringValue(list.Values[0])
 	userID := extractStringValue(list.Values[1])
 	password := extractStringValue(list.Values[2])
-	return userID, password, nil
+	return movieID, userID, password, nil
 }
 
-func (s *LogonService) extractFromPropList(plist *lingo.LPropList) (string, string, error) {
+func (s *LogonService) extractFromPropList(plist *lingo.LPropList) (string, string, string, error) {
 	userVal, err := plist.GetElement("userID")
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	passVal, err := plist.GetElement("password")
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	userID := extractStringValue(userVal)
 	password := extractStringValue(passVal)
-	return userID, password, nil
+
+	// movieID is optional in proplist
+	var movieID string
+	if movieVal, err := plist.GetElement("movieID"); err == nil {
+		movieID = extractStringValue(movieVal)
+	}
+
+	return movieID, userID, password, nil
 }
 
 func extractStringValue(v lingo.LValue) string {

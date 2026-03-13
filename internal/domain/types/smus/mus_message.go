@@ -36,7 +36,15 @@ func ParseMUSMessageWithDecryption(rawmsg []byte, decrypt ports.Cipher) (*MUSMes
 
 	// verifica header mus
 	if rawmsg[0] != MUSHeader[0] || rawmsg[1] != MUSHeader[1] {
-		return nil, fmt.Errorf("invalid MUS header: expected %X, got %X", MUSHeader, rawmsg[:2])
+		// #All mode: entire packet is encrypted, try decrypting
+		if decrypt != nil {
+			rawmsg = decrypt.Decrypt(rawmsg)
+			if len(rawmsg) < 14 || rawmsg[0] != MUSHeader[0] || rawmsg[1] != MUSHeader[1] {
+				return nil, fmt.Errorf("invalid MUS header after decryption: expected %X, got %X", MUSHeader, rawmsg[:2])
+			}
+		} else {
+			return nil, fmt.Errorf("invalid MUS header: expected %X, got %X", MUSHeader, rawmsg[:2])
+		}
 	}
 
 	// é importante pular os 6 primeiros bytes que é o header padrão + o tamanho da mensagem, ai começamos a parsear a partir do offset 6
@@ -85,6 +93,8 @@ func ParseMUSMessageWithDecryption(rawmsg []byte, decrypt ports.Cipher) (*MUSMes
 			content = decrypt.Decrypt(remainingBytes)
 		}
 
+		msg.RawContents = remainingBytes
+		msg.DecryptedContents = content
 		msg.MsgContent = lingo.FromRawBytes(content, 0)
 	}
 

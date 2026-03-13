@@ -17,7 +17,8 @@ func setupLogonService(db *testutil.MockDBAdapter, authMode string) *mus.LogonSe
 	cipher := &testutil.MockCipher{}
 	sessionStore := testutil.NewMockSessionStore()
 	sessionStore.RegisterConnection("client-1", "192.168.1.1")
-	return mus.NewLogonService(db, sessionStore, cipher, logger, authMode, 40)
+	movieManager := mus.NewMovieManager(sessionStore, logger)
+	return mus.NewLogonService(db, sessionStore, cipher, logger, movieManager, authMode, 40)
 }
 
 func hashPassword(password string) string {
@@ -196,6 +197,43 @@ func TestLogonService_OpenMode_CorrectPassword(t *testing.T) {
 	}
 	if resp.ErrCode != smus.ErrNoError {
 		t.Errorf("ErrCode = %d, want %d", resp.ErrCode, smus.ErrNoError)
+	}
+}
+
+func TestLogonService_Success_JoinsMovie(t *testing.T) {
+	db := &testutil.MockDBAdapter{}
+
+	logger := &testutil.MockLogger{}
+	cipher := &testutil.MockCipher{}
+	sessionStore := testutil.NewMockSessionStore()
+	sessionStore.RegisterConnection("client-1", "192.168.1.1")
+	movieManager := mus.NewMovieManager(sessionStore, logger)
+	svc := mus.NewLogonService(db, sessionStore, cipher, logger, movieManager, "none", 40)
+
+	msg := buildLogonMsgWithList("testuser", "nopass")
+
+	resp, err := svc.HandleLogon("client-1", msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.ErrCode != smus.ErrNoError {
+		t.Fatalf("ErrCode = %d, want %d", resp.ErrCode, smus.ErrNoError)
+	}
+
+	// Verify user joined the movie room (movieID = "movieID" from buildLogonMsgWithList)
+	members, err := sessionStore.GetRoomMembers("movie:movieID")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, m := range members {
+		if m == "testuser" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected testuser in movie:movieID room, got members: %v", members)
 	}
 }
 

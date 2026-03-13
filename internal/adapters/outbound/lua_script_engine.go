@@ -17,13 +17,15 @@ type LuaScriptEngine struct {
 	scriptsDir    string
 	logger        ports.Logger
 	scriptTimeout time.Duration
+	publisher     ports.QueuePublisher
 }
 
-func NewLuaScriptEngine(scriptsDir string, logger ports.Logger, scriptTimeoutSeconds int) *LuaScriptEngine {
+func NewLuaScriptEngine(scriptsDir string, logger ports.Logger, scriptTimeoutSeconds int, publisher ports.QueuePublisher) *LuaScriptEngine {
 	return &LuaScriptEngine{
 		scriptsDir:    scriptsDir,
 		logger:        logger,
 		scriptTimeout: time.Duration(scriptTimeoutSeconds) * time.Second,
+		publisher:     publisher,
 	}
 }
 
@@ -88,6 +90,21 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 		result = &ports.ScriptResult{Content: content}
 		L.Push(arg)
 		return 1
+	}))
+
+	musMod.RawSetString("publish", L.NewFunction(func(L *lua.LState) int {
+		topic := L.CheckString(1)
+		content := L.Get(2)
+		payload := lingo.LuaToLValue(content).GetBytes()
+		if e.publisher != nil {
+			if err := e.publisher.Publish(topic, payload); err != nil {
+				e.logger.Error("mus.publish failed", map[string]interface{}{
+					"topic": topic,
+					"error": err.Error(),
+				})
+			}
+		}
+		return 0
 	}))
 
 	L.SetGlobal("mus", musMod)
