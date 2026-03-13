@@ -38,6 +38,20 @@ func (v *LSymbol) ExtractFromBytes(rawBytes []byte, offset int) int {
 	return bytesConsumed
 }
 
+func (v *LSymbol) GetBytes() []byte {
+	symBytes := []byte(v.Value)
+	length := len(symBytes)
+	paddedLength := length
+	if length%2 != 0 {
+		paddedLength = length + 1
+	}
+	buf := make([]byte, 2+4+paddedLength)
+	binary.BigEndian.PutUint16(buf[0:], uint16(VtSymbol))
+	binary.BigEndian.PutUint32(buf[2:], uint32(length))
+	copy(buf[6:], symBytes)
+	return buf
+}
+
 func (v *LSymbol) String() string {
 	return v.Value
 }

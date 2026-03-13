@@ -38,3 +38,15 @@ func (v *LList) ExtractFromBytes(rawBytes []byte, offset int) int {
     
     return currentOffset - offset
 }
+
+func (v *LList) GetBytes() []byte {
+	var buf []byte
+	header := make([]byte, 6)
+	binary.BigEndian.PutUint16(header[0:], uint16(VtList))
+	binary.BigEndian.PutUint32(header[2:], uint32(len(v.Values)))
+	buf = append(buf, header...)
+	for _, elem := range v.Values {
+		buf = append(buf, elem.GetBytes()...)
+	}
+	return buf
+}

@@ -13,17 +13,17 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-const scriptTimeout = 5 * time.Second
-
 type LuaScriptEngine struct {
-	scriptsDir string
-	logger     ports.Logger
+	scriptsDir    string
+	logger        ports.Logger
+	scriptTimeout time.Duration
 }
 
-func NewLuaScriptEngine(scriptsDir string, logger ports.Logger) *LuaScriptEngine {
+func NewLuaScriptEngine(scriptsDir string, logger ports.Logger, scriptTimeoutSeconds int) *LuaScriptEngine {
 	return &LuaScriptEngine{
-		scriptsDir: scriptsDir,
-		logger:     logger,
+		scriptsDir:    scriptsDir,
+		logger:        logger,
+		scriptTimeout: time.Duration(scriptTimeoutSeconds) * time.Second,
 	}
 }
 
@@ -44,7 +44,7 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 	defer L.Close()
 
 	// Execution timeout to prevent runaway scripts (e.g. infinite loops)
-	ctx, cancel := context.WithTimeout(context.Background(), scriptTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), e.scriptTimeout)
 	defer cancel()
 	L.SetContext(ctx)
 

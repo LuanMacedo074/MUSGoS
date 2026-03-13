@@ -10,35 +10,46 @@ import (
 	"fsos-server/internal/domain/ports"
 )
 
+type TCPServerConfig struct {
+	Port           string
+	ServerIP       string
+	MaxMessageSize int
+	TCPNoDelay     bool
+}
+
 type TCPServer struct {
-	port           string
+	config         TCPServerConfig
 	listener       net.Listener
 	logger         ports.Logger
 	shutdown       chan bool
 	wg             sync.WaitGroup
 	messageHandler ports.MessageHandler
 	sessionStore   ports.SessionStore
+	mu             sync.Mutex
+	conns          map[net.Conn]struct{}
 }
 
-func NewTCPServer(port string, logger ports.Logger, handler ports.MessageHandler, sessionStore ports.SessionStore) *TCPServer {
+func NewTCPServer(cfg TCPServerConfig, logger ports.Logger, handler ports.MessageHandler, sessionStore ports.SessionStore) *TCPServer {
 	return &TCPServer{
-		port:           port,
+		config:         cfg,
 		logger:         logger,
 		shutdown:       make(chan bool),
 		messageHandler: handler,
 		sessionStore:   sessionStore,
+		conns:          make(map[net.Conn]struct{}),
 	}
 }
 
 func (s *TCPServer) Start(ready chan struct{}) error {
+	addr := s.config.ServerIP + ":" + s.config.Port
 	var err error
-	s.listener, err = net.Listen("tcp", ":"+s.port)
+	s.listener, err = net.Listen("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("failed to listen on port %s: %w", s.port, err)
+		return fmt.Errorf("failed to listen on %s: %w", addr, err)
 	}
 
 	s.logger.Info("TCP Server listening", map[string]interface{}{
-		"port": s.port,
+		"address": addr,
 	})
 
 	if ready != nil {
@@ -72,6 +83,15 @@ func (s *TCPServer) Start(ready chan struct{}) error {
 func (s *TCPServer) handleConnection(conn net.Conn) {
 	defer s.wg.Done()
 
+	s.mu.Lock()
+	s.conns[conn] = struct{}{}
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.conns, conn)
+		s.mu.Unlock()
+	}()
+
 	clientIP := conn.RemoteAddr().String()
 
 	if err := s.sessionStore.RegisterConnection(clientIP, clientIP); err != nil {
@@ -91,12 +111,16 @@ func (s *TCPServer) handleConnection(conn net.Conn) {
 		conn.Close()
 	}()
 
+	if tcpConn, ok := conn.(*net.TCPConn); ok {
+		tcpConn.SetNoDelay(s.config.TCPNoDelay)
+	}
+
 	s.logger.Info("New connection established", map[string]interface{}{
 		"client": clientIP,
 	})
 
 	reader := bufio.NewReader(conn)
-	buffer := make([]byte, 4096)
+	buffer := make([]byte, s.config.MaxMessageSize)
 	totalBytes := 0
 
 	for {
@@ -159,6 +183,12 @@ func (s *TCPServer) Shutdown() {
 	if s.listener != nil {
 		s.listener.Close()
 	}
+
+	s.mu.Lock()
+	for conn := range s.conns {
+		conn.Close()
+	}
+	s.mu.Unlock()
 
 	s.wg.Wait()
 	s.logger.Info("TCP server shutdown complete")

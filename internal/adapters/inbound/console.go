@@ -12,16 +12,18 @@ import (
 )
 
 type Console struct {
-	db     ports.DBAdapter
-	logger ports.Logger
-	reader io.Reader
+	db               ports.DBAdapter
+	logger           ports.Logger
+	reader           io.Reader
+	defaultUserLevel int
 }
 
-func NewConsole(db ports.DBAdapter, logger ports.Logger, reader io.Reader) *Console {
+func NewConsole(db ports.DBAdapter, logger ports.Logger, reader io.Reader, defaultUserLevel int) *Console {
 	return &Console{
-		db:     db,
-		logger: logger,
-		reader: reader,
+		db:               db,
+		logger:           logger,
+		reader:           reader,
+		defaultUserLevel: defaultUserLevel,
 	}
 }
 
@@ -80,7 +82,7 @@ func (c *Console) createUser(args []string) {
 		return
 	}
 
-	if err := c.db.CreateUser(username, hash, ports.DefaultUserLevel); err != nil {
+	if err := c.db.CreateUser(username, hash, c.defaultUserLevel); err != nil {
 		fmt.Printf("Error creating user: %v\n", err)
 		return
 	}

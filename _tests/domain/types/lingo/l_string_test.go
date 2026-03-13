@@ -53,6 +53,22 @@ func TestLString_ExtractFromBytes_OddLength(t *testing.T) {
 	}
 }
 
+func TestLString_GetBytes_RoundTrip(t *testing.T) {
+	tests := []string{"", "hi", "hey", "test", "hello world"}
+	for _, val := range tests {
+		v := lingo.NewLString(val)
+		b := v.GetBytes()
+		parsed := lingo.FromRawBytes(b, 0)
+		str, ok := parsed.(*lingo.LString)
+		if !ok {
+			t.Fatalf("round-trip for %q: wrong type %T", val, parsed)
+		}
+		if str.Value != val {
+			t.Errorf("round-trip for %q: got %q", val, str.Value)
+		}
+	}
+}
+
 func TestLString_String(t *testing.T) {
 	v := lingo.NewLString("hello")
 	got := v.String()

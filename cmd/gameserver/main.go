@@ -29,6 +29,7 @@ func main() {
 		"log_path":  cfg.LogPath,
 		"cipher":    cfg.CipherType,
 		"protocol":  cfg.Protocol,
+		"auth_mode": cfg.AuthMode,
 		"env":       cfg.Environment,
 	})
 
@@ -61,19 +62,9 @@ func main() {
 		"type": cfg.CipherType,
 	})
 
-	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger)
+	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout)
 	gameLogger.Info("Script engine initialized", map[string]interface{}{
 		"scripts_path": cfg.ScriptsPath,
-	})
-
-	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine)
-	if err != nil {
-		gameLogger.Fatal("Failed to initialize protocol handler", map[string]interface{}{
-			"error": err,
-		})
-	}
-	gameLogger.Info("Protocol handler initialized", map[string]interface{}{
-		"type": cfg.Protocol,
 	})
 
 	sessionStore, err := factory.NewSessionStore(cfg.SessionStoreType, cfg.Redis)
@@ -87,7 +78,22 @@ func main() {
 		"type": cfg.SessionStoreType,
 	})
 
-	server := inbound.NewTCPServer(cfg.Port, gameLogger, handler, sessionStore)
+	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine, dbResult.Adapter, sessionStore, cfg.AuthMode, cfg.DefaultUserLevel)
+	if err != nil {
+		gameLogger.Fatal("Failed to initialize protocol handler", map[string]interface{}{
+			"error": err,
+		})
+	}
+	gameLogger.Info("Protocol handler initialized", map[string]interface{}{
+		"type": cfg.Protocol,
+	})
+
+	server := inbound.NewTCPServer(inbound.TCPServerConfig{
+		Port:           cfg.Port,
+		ServerIP:       cfg.ServerIP,
+		MaxMessageSize: cfg.MaxMessageSize,
+		TCPNoDelay:     cfg.TCPNoDelay,
+	}, gameLogger, handler, sessionStore)
 
 	serverReady := make(chan struct{})
 	go func() {
@@ -100,7 +106,7 @@ func main() {
 
 	<-serverReady
 
-	console := inbound.NewConsole(dbResult.Adapter, gameLogger, os.Stdin)
+	console := inbound.NewConsole(dbResult.Adapter, gameLogger, os.Stdin, cfg.DefaultUserLevel)
 	go console.Run()
 
 	c := make(chan os.Signal, 1)

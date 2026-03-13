@@ -31,6 +31,13 @@ func (v *LFloat) ToDouble() float64 {
     return v.Value
 }
 
+func (v *LFloat) GetBytes() []byte {
+	buf := make([]byte, 10)
+	binary.BigEndian.PutUint16(buf[0:], uint16(VtFloat))
+	binary.BigEndian.PutUint64(buf[2:], math.Float64bits(v.Value))
+	return buf
+}
+
 func (v *LFloat) String() string {
-    return fmt.Sprintf("%f", v.Value)
+	return fmt.Sprintf("%f", v.Value)
 }

@@ -22,6 +22,30 @@ func TestLList_ExtractFromBytes_Empty(t *testing.T) {
 	}
 }
 
+func TestLList_GetBytes_RoundTrip(t *testing.T) {
+	list := lingo.NewLList()
+	list.Values = []lingo.LValue{
+		lingo.NewLInteger(42),
+		lingo.NewLString("hello"),
+		lingo.NewLFloat(3.14),
+	}
+	b := list.GetBytes()
+	parsed := lingo.FromRawBytes(b, 0)
+	l, ok := parsed.(*lingo.LList)
+	if !ok {
+		t.Fatalf("wrong type %T", parsed)
+	}
+	if len(l.Values) != 3 {
+		t.Fatalf("len(Values) = %d, want 3", len(l.Values))
+	}
+	if l.Values[0].ToInteger() != 42 {
+		t.Errorf("Values[0] = %d, want 42", l.Values[0].ToInteger())
+	}
+	if l.Values[2].ToDouble() != 3.14 {
+		t.Errorf("Values[2] = %f, want 3.14", l.Values[2].ToDouble())
+	}
+}
+
 func TestLList_ExtractFromBytes_Mixed(t *testing.T) {
 	// List with 2 elements: integer(42) + string("hi")
 	var buf []byte

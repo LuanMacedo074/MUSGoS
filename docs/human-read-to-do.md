@@ -16,47 +16,20 @@ Implementado em `internal/domain/types/smus/mus_error_code.go` — ~54 constante
 
 ---
 
-### 2. Response Builder
+### ~~2. Response Builder~~ ✅ FEITO
 
-**OpenSMUS:** métodos `send()` e `deliver()` em `MUSUser.java` e `MUSGroup.java`
-
-Hoje o MUSGoS sabe **parsear** uma mensagem MUS (bytes → struct), mas não sabe fazer o caminho inverso (struct → bytes). Para responder ao cliente, precisamos serializar um `MUSMessage` de volta em bytes no formato que o protocolo espera:
-
-```
-[header 0x72 0x00] [content_size 4 bytes] [err_code 4 bytes] [timestamp 4 bytes]
-[subject] [sender_id] [recipient_list] [content (lingo encoded)]
-```
-
-Sem isso, o servidor recebe mensagens mas é mudo — não consegue responder nada.
-
-**O que implementar:** Um método `ToBytes()` no `MUSMessage` que serializa todos os campos de volta para o formato binário do protocolo. Também precisa suportar criptografia opcional (Blowfish) no conteúdo ao enviar.
+Implementado: `GetBytes()` em todos os tipos Lingo (`LVoid`, `LInteger`, `LString`, `LSymbol`, `LFloat`, `LList`, `LPropList`), `WriteBytes()` em `MUSMsgHeaderString` e `MUSMsgHeaderStringList`, `GetBytes()` em `MUSMessage`, e helpers de resposta em `internal/adapters/inbound/mus/response.go`.
 
 ---
 
-### 3. Logon Handler
+### ~~3. Logon Handler~~ ✅ FEITO
 
-**OpenSMUS:** `MUSLogonMessage.java`
+Implementado em `internal/adapters/inbound/mus/logon.go` com 3 modos de autenticação configuráveis via `AUTH_MODE`:
+- **`none`** — aceita qualquer conexão sem validação, atribui `DEFAULT_USER_LEVEL`
+- **`open`** — aceita qualquer usuário, mas verifica bans. Se o usuário existe no DB, usa o nível do DB; senão, usa `DEFAULT_USER_LEVEL`
+- **`strict`** — exige usuário cadastrado no banco, verifica senha (bcrypt) e bans. Usa o nível do DB
 
-A primeira mensagem que um cliente Shockwave envia após conectar via TCP é sempre uma mensagem de Logon. Ela tem `subject = "Logon"` e o conteúdo (criptografado com Blowfish) contém:
-
-- **movieID** — nome da sala/movie que o usuário quer entrar
-- **userID** — nome do usuário
-- **password** — senha
-
-O OpenSMUS suporta dois formatos no conteúdo:
-1. **Lista simples** (legado): `[movieID, userID, password]`
-2. **PropList** (moderno): `[#movieID: "sala1", #userID: "jogador1", #password: "abc123"]`
-
-O servidor precisa:
-1. Descriptografar o conteúdo com Blowfish
-2. Extrair movieID, userID e password
-3. Validar (movie existe? usuário já conectado? senha correta?)
-4. Se ok: criar/encontrar o Movie, adicionar o usuário, responder com sucesso
-5. Se erro: responder com o código de erro apropriado e fechar a conexão
-
-Sem o logon handler, nenhum cliente consegue se autenticar — fica preso na etapa de conexão TCP.
-
-**O que implementar:** Um serviço/handler de logon em `domain/services/` que processa `MUSLogonMessage`, extrai credenciais, valida e orquestra a criação de sessão.
+Suporta extração de credenciais de `LList` (legado) e `LPropList` (moderno). Integrado ao `SMUSHandler` via factory com parâmetros `authMode` e `defaultUserLevel`. Ao completar o logon, armazena `#userLevel` como atributo de sessão (`LInteger`) para uso futuro pelo dispatcher.
 
 ---
 
@@ -312,7 +285,7 @@ A fundação do sistema de scripting Lua está implementada:
 - **`LuaScriptEngine`** — implementação com gopher-lua, VM sandboxed (sem `os`/`io`/`debug`)
 - **Conversão bidirecional** LValue ↔ Lua (`lua_convert.go`)
 - **APIs disponíveis nos scripts:** `mus.getSender()`, `mus.getContent()`, `mus.response()`
-- **Integração no handler** — scripts são executados automaticamente quando existe `external/scripts/{subject}.lua`
+- **Roteamento** — scripts são invocados quando o `recipient` da mensagem é `"system.script"` (padrão OpenSMUS). O `subject` da mensagem é usado como nome do script. O handler busca `external/scripts/{subject}.lua` e o executa.
 - **Script exemplo:** `external/scripts/echo.lua`
 
 **O que falta (evolução futura):**
@@ -356,7 +329,7 @@ Implementação simples com `time.AfterFunc` em Go.
 
 ---
 
-### 19. User Levels / Permissions (DB ✅, enforcement pendente)
+### 19. User Levels / Permissions (DB ✅, sessão ✅, enforcement pendente)
 
 **OpenSMUS:** cache de user levels no `MUSDispatcher`
 
@@ -367,17 +340,25 @@ Cada usuário tem um nível numérico (0-100). Comandos system verificam o níve
 
 O nível é armazenado no banco e cacheado em memória para performance. O OpenSMUS permite configurar o nível mínimo por comando.
 
-**Status:** Tabela `users` com `user_level` já existe. `UpdateUserLevel` implementado. Falta o enforcement no dispatcher (verificar nível antes de executar comandos).
+**Status:**
+- ✅ Tabela `users` com `user_level` — `CreateUser`, `UpdateUserLevel` implementados
+- ✅ `DEFAULT_USER_LEVEL` configurável via env var (default: 20, mesmo do original Multiuser.cfg)
+- ✅ User level atribuído na sessão (`#userLevel`) durante o logon:
+  - `none` → `DEFAULT_USER_LEVEL`
+  - `open` → nível do DB se o usuário existe, senão `DEFAULT_USER_LEVEL`
+  - `strict` → nível do DB
+- ✅ Console usa `DEFAULT_USER_LEVEL` ao criar usuários
+- ❌ Enforcement no dispatcher (verificar `#userLevel` da sessão antes de executar comandos) — depende do dispatcher (item 6)
 
 ---
 
-### 20. Ban System (DB ✅, verificação no logon pendente)
+### 20. Ban System (DB ✅, verificação no logon ✅)
 
 **OpenSMUS:** `MUSDBDispatcher.ban/revokeBan`
 
 Permite banir usuários por IP ou nome, com duração configurável. Bans são verificados durante o logon — se o usuário está banido, a conexão é recusada com erro.
 
-**Status:** Tabela `bans` com suporte a ban por user_id e/ou IP, expiração temporal e ban permanente. CRUD implementado (`CreateBan`, `GetActiveBanByUserID`, `GetActiveBanByIP`, `RevokeBan`). Falta a verificação no logon handler.
+**Status:** Tabela `bans` com suporte a ban por user_id e/ou IP, expiração temporal e ban permanente. CRUD implementado (`CreateBan`, `GetActiveBanByUserID`, `GetActiveBanByIP`, `RevokeBan`). Verificação no logon implementada nos modos `strict` e `open` do `LogonService`.
 
 ---
 
@@ -389,8 +370,8 @@ Permite banir usuários por IP ou nome, com duração configurável. Bans são v
    Session Store ───────────── ✅ FEITO (memory + Redis)
    Console ─────────────────── ✅ FEITO (create user)
    Lua Scripting (fundação) ── ✅ FEITO (ScriptEngine + LValue↔Lua)
-2. Response Builder ─────── MUSMessage.ToBytes()
-3. Logon Handler ────────── parse logon → valida → responde
+2. Response Builder ─────── ✅ FEITO (LValue.GetBytes() + MUSMessage.GetBytes())
+3. Logon Handler ────────── ✅ FEITO (LogonService com 3 modos: none/open/strict)
 4. Movie + Group Manager ── cria movie, auto-join @AllUsers
 5. Message Dispatcher ───── roteia por recipient/subject
 6. Group Messaging ──────── broadcast para group

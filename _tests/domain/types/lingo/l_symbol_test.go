@@ -47,6 +47,22 @@ func TestLSymbol_ExtractFromBytes(t *testing.T) {
 	}
 }
 
+func TestLSymbol_GetBytes_RoundTrip(t *testing.T) {
+	tests := []string{"ab", "abc", "x", "test", "mySymbol"}
+	for _, val := range tests {
+		v := lingo.NewLSymbol(val)
+		b := v.GetBytes()
+		parsed := lingo.FromRawBytes(b, 0)
+		sym, ok := parsed.(*lingo.LSymbol)
+		if !ok {
+			t.Fatalf("round-trip for %q: wrong type %T", val, parsed)
+		}
+		if sym.Value != val {
+			t.Errorf("round-trip for %q: got %q", val, sym.Value)
+		}
+	}
+}
+
 func TestLSymbol_String(t *testing.T) {
 	v := lingo.NewLSymbol("mySymbol")
 	got := v.String()

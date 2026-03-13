@@ -29,6 +29,13 @@ func (v *LInteger) ToInteger() int32 {
     return v.Value
 }
 
+func (v *LInteger) GetBytes() []byte {
+	buf := make([]byte, 6)
+	binary.BigEndian.PutUint16(buf[0:], uint16(VtInteger))
+	binary.BigEndian.PutUint32(buf[2:], uint32(v.Value))
+	return buf
+}
+
 func (v *LInteger) String() string {
-    return fmt.Sprintf("%d", v.Value)
+	return fmt.Sprintf("%d", v.Value)
 }

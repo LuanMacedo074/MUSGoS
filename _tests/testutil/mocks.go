@@ -271,3 +271,59 @@ func (m *MockSessionStore) LeaveAllRooms(clientID string) error {
 func (m *MockSessionStore) Close() error {
 	return nil
 }
+
+// MockDBAdapter implements ports.DBAdapter with configurable behavior for user/ban lookups.
+type MockDBAdapter struct {
+	GetUserFunc            func(username string) (*ports.User, error)
+	GetActiveBanByUserIDFunc func(userID int64) (*ports.Ban, error)
+}
+
+func (m *MockDBAdapter) CreateApplication(appName string) error { return nil }
+func (m *MockDBAdapter) DeleteApplication(appName string) error { return nil }
+func (m *MockDBAdapter) SetApplicationAttribute(appName, attrName string, value lingo.LValue) error {
+	return nil
+}
+func (m *MockDBAdapter) GetApplicationAttribute(appName, attrName string) (lingo.LValue, error) {
+	return lingo.NewLVoid(), nil
+}
+func (m *MockDBAdapter) GetApplicationAttributeNames(appName string) ([]string, error) {
+	return nil, nil
+}
+func (m *MockDBAdapter) DeleteApplicationAttribute(appName, attrName string) error { return nil }
+func (m *MockDBAdapter) SetPlayerAttribute(appName, userID, attrName string, value lingo.LValue) error {
+	return nil
+}
+func (m *MockDBAdapter) GetPlayerAttribute(appName, userID, attrName string) (lingo.LValue, error) {
+	return lingo.NewLVoid(), nil
+}
+func (m *MockDBAdapter) GetPlayerAttributeNames(appName, userID string) ([]string, error) {
+	return nil, nil
+}
+func (m *MockDBAdapter) DeletePlayerAttribute(appName, userID, attrName string) error { return nil }
+func (m *MockDBAdapter) CreateUser(username, passwordHash string, userLevel int) error { return nil }
+func (m *MockDBAdapter) GetUser(username string) (*ports.User, error) {
+	if m.GetUserFunc != nil {
+		return m.GetUserFunc(username)
+	}
+	return nil, ports.ErrUserNotFound
+}
+func (m *MockDBAdapter) DeleteUser(username string) error                  { return nil }
+func (m *MockDBAdapter) UpdateUserLevel(username string, level int) error  { return nil }
+func (m *MockDBAdapter) UpdateUserPassword(username, passwordHash string) error { return nil }
+func (m *MockDBAdapter) CreateBan(userID *int64, ipAddress *string, reason string, expiresAt *time.Time) error {
+	return nil
+}
+func (m *MockDBAdapter) GetActiveBanByUserID(userID int64) (*ports.Ban, error) {
+	if m.GetActiveBanByUserIDFunc != nil {
+		return m.GetActiveBanByUserIDFunc(userID)
+	}
+	return nil, ports.ErrBanNotFound
+}
+func (m *MockDBAdapter) GetActiveBanByIP(ipAddress string) (*ports.Ban, error) {
+	return nil, ports.ErrBanNotFound
+}
+func (m *MockDBAdapter) RevokeBan(banID int64) error          { return nil }
+func (m *MockDBAdapter) CreateTable(def ports.Table) error    { return nil }
+func (m *MockDBAdapter) DropTable(name string) error          { return nil }
+func (m *MockDBAdapter) CreateIndex(def ports.Index) error    { return nil }
+func (m *MockDBAdapter) Close() error                         { return nil }

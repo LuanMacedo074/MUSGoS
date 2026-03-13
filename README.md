@@ -39,6 +39,11 @@ Via variáveis de ambiente (veja `.env.example`):
 | `CIPHER_TYPE` | `blowfish` | Tipo de criptografia |
 | `ENCRYPTION_KEY` | — | Chave de criptografia |
 | `PROTOCOL` | `smus` | Protocolo de comunicação |
+| `DATABASE_TYPE` | `sqlite` | Tipo de banco de dados |
+| `DATABASE_PATH` | `data/musgo.db` | Caminho do banco de dados |
+| `SESSION_STORE_TYPE` | `memory` | Tipo de session store (`memory`, `redis`) |
+| `SCRIPTS_PATH` | `external/scripts` | Caminho dos scripts Lua |
+| `AUTH_MODE` | `open` | Modo de autenticação (`none`, `open`, `strict`) |
 
 ## Arquitetura
 

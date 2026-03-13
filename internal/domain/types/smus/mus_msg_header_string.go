@@ -1,8 +1,9 @@
 package smus
 
 import (
-    "encoding/binary"
-    "errors"
+	"bytes"
+	"encoding/binary"
+	"errors"
 )
 
 type MUSMsgHeaderString struct {
@@ -32,4 +33,12 @@ func (m *MUSMsgHeaderString) ExtractMUSMsgHeaderString(data []byte, offset int) 
     }
     
     return bytesConsumed, nil
+}
+
+func (m *MUSMsgHeaderString) WriteBytes(buf *bytes.Buffer) {
+	binary.Write(buf, binary.BigEndian, int32(len(m.Value)))
+	buf.WriteString(m.Value)
+	if len(m.Value)%2 != 0 {
+		buf.WriteByte(0x00)
+	}
 }

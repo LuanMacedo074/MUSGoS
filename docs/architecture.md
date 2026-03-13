@@ -62,6 +62,9 @@ internal/
 │
 └── adapters/                         ← implementações concretas
     ├── inbound/                      ← adaptadores de ENTRADA
+    │   ├── mus/                      ← lógica específica do protocolo MUS
+    │   │   ├── logon.go              ← autenticação com 3 modos (none/open/strict)
+    │   │   └── response.go           ← helpers para construção de respostas SMUS
     │   ├── tcp_server.go             ← servidor TCP que aceita conexões
     │   ├── smus_handler.go           ← processa mensagens SMUS, dispara scripts
     │   └── console.go                ← CLI interativo (create user, etc.)
@@ -86,7 +89,7 @@ external/
 
 ### Config
 
-O pacote `config/` centraliza a leitura de variáveis de ambiente numa struct `ServerConfig`. Ele usa `os.LookupEnv` com fallbacks padrão para cada variável. O `main.go` chama `config.LoadServerConfig()` uma vez e passa os valores para as factories.
+O pacote `config/` centraliza a leitura de variáveis de ambiente numa struct `ServerConfig`. Ele usa `os.LookupEnv` com fallbacks padrão para cada variável. O `main.go` chama `config.LoadServerConfig()` uma vez e passa os valores para as factories. Os defaults são baseados no `Multiuser.cfg` original do Shockwave Multiuser Server 3.0 (ex: `DEFAULT_USER_LEVEL=20`, `MAX_MESSAGE_SIZE=2097151`, `TCP_NO_DELAY=1`).
 
 ### Factory
 
@@ -204,9 +207,13 @@ Adaptadores são as **implementações concretas** que conectam o domínio ao mu
 
 São os adaptadores que **recebem** dados do mundo externo e os entregam ao domínio.
 
-- **`tcp_server.go`** — abre uma porta TCP, aceita conexões, lê bytes da rede. Quando recebe dados, repassa para o `MessageHandler` (que ele conhece apenas pela interface). Ele é inbound porque é o **ponto de entrada** do sistema: o cliente Shockwave conecta aqui.
+- **`tcp_server.go`** — abre uma porta TCP, aceita conexões, lê bytes da rede. Quando recebe dados, repassa para o `MessageHandler` (que ele conhece apenas pela interface). Configurável via `TCPServerConfig` (bind address, buffer size, TCP_NODELAY). Suporta graceful shutdown — ao receber SIGINT/SIGTERM, fecha todas as conexões ativas. É inbound porque é o **ponto de entrada** do sistema: o cliente Shockwave conecta aqui.
 
-- **`smus_handler.go`** — recebe os bytes brutos do TCP server e usa o domínio (`smus.ParseMUSMessageWithDecryption`) para interpretar a mensagem. Após o parse, verifica se existe um script Lua para o subject da mensagem e o executa via `ScriptEngine`. É inbound porque está do lado de "receber e processar" a requisição.
+- **`smus_handler.go`** — recebe os bytes brutos do TCP server e usa o domínio (`smus.ParseMUSMessageWithDecryption`) para interpretar a mensagem. Roteia mensagens de Logon para o `LogonService`, e mensagens com recipient `system.script` para o `ScriptEngine` (o subject da mensagem é o nome do script). É inbound porque está do lado de "receber e processar" a requisição.
+
+- **`mus/`** — sub-pacote com lógica específica do protocolo MUS:
+  - **`logon.go`** — `LogonService` com 3 modos de autenticação configuráveis (`none`, `open`, `strict`). Extrai credenciais de `LList` ou `LPropList`, valida contra o banco, verifica bans. Atribui user level na sessão (`#userLevel`): em modo `strict`/`open` usa o nível do DB quando o usuário existe, senão usa `DEFAULT_USER_LEVEL`.
+  - **`response.go`** — helpers para construção de respostas SMUS (`NewResponse`), usados pelo handler e futuros services.
 
 - **`console.go`** — CLI interativo para administração do servidor. Suporta comandos como `create user <username> <password>`. Usa bcrypt para hash de senhas. Acessa o `DBAdapter` diretamente.
 
@@ -224,7 +231,7 @@ São os adaptadores que o domínio **usa** para fazer coisas que ele não sabe (
 
 - **`redis_session_store.go`** — session store via Redis. Implementa `ports.SessionStore`. Gerencia conexões, atributos efêmeros e rooms usando estruturas Redis (HASH, SET) com key prefixing e TTL. Para produção e cenários multi-instância.
 
-- **`lua_script_engine.go`** — implementação do `ports.ScriptEngine` via gopher-lua. Cria uma VM Lua fresca por execução, com libs inseguras removidas (`os`, `io`, `debug`). Registra o módulo `mus` com `getSender()`, `getContent()` e `response()`. Scripts ficam em `external/scripts/` com mapping 1:1 por subject.
+- **`lua_script_engine.go`** — implementação do `ports.ScriptEngine` via gopher-lua. Cria uma VM Lua fresca por execução, com libs inseguras removidas (`os`, `io`, `debug`). Registra o módulo `mus` com `getSender()`, `getContent()` e `response()`. Scripts ficam em `external/scripts/` com mapping 1:1 por subject. Timeout de execução configurável via `SCRIPT_TIMEOUT`.
 
 ---
 
@@ -245,20 +252,24 @@ dbResult.MigrationRunner.RunPending()
 // factory cria o cipher (outbound) baseado no tipo configurado
 cipher, _ := factory.NewCipher(cfg.CipherType, cfg.EncryptionKey)
 
-// factory cria o script engine (outbound) baseado no path de scripts
-scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger)
+// factory cria o script engine (outbound) baseado no path e timeout configurados
+scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout)
 
-// factory cria o handler (inbound), injetando logger, cipher e script engine
-handler, _ := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine)
+// factory cria o handler (inbound), injetando dependências + defaultUserLevel
+handler, _ := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine,
+    dbResult.Adapter, sessionStore, cfg.AuthMode, cfg.DefaultUserLevel)
 
 // factory cria o session store (outbound) baseado no tipo configurado
 sessionStore, _ := factory.NewSessionStore(cfg.SessionStoreType, cfg.Redis)
 
-// cria o servidor TCP (inbound), injetando logger, handler e session store
-server := inbound.NewTCPServer(cfg.Port, gameLogger, handler, sessionStore)
+// cria o servidor TCP (inbound) com config de rede (IP, buffer, NoDelay)
+server := inbound.NewTCPServer(inbound.TCPServerConfig{
+    Port: cfg.Port, ServerIP: cfg.ServerIP,
+    MaxMessageSize: cfg.MaxMessageSize, TCPNoDelay: cfg.TCPNoDelay,
+}, gameLogger, handler, sessionStore)
 
-// console interativo para administração
-console := inbound.NewConsole(dbResult.Adapter, gameLogger, os.Stdin)
+// console interativo para administração (usa DefaultUserLevel ao criar users)
+console := inbound.NewConsole(dbResult.Adapter, gameLogger, os.Stdin, cfg.DefaultUserLevel)
 ```
 
 Perceba que:
@@ -309,4 +320,10 @@ Em arquiteturas hexagonais tradicionais existe uma camada de "Application Servic
 
 Servidores MUS são **script-driven**: o cliente Shockwave/Director envia scripts Lingo, e o servidor reage. Porém, existem mensagens padrão do protocolo MUS (como `Logon`, `Logoff`, `joinGroup`, `leaveGroup`) que envolvem lógica de negócio real — autenticação, gerenciamento de salas, persistência de estado.
 
-Atualmente a camada `domain/services/` contém o `MigrationRunner`, que orquestra a execução de migrations pendentes. Futuros services (como `LoginService`, `Dispatcher`, etc.) serão adicionados aqui, mantendo os adapters finos e a lógica de negócio no domínio.
+Atualmente a camada `domain/services/` contém:
+
+- **`MigrationRunner`** — orquestra a execução de migrations pendentes em ordem.
+
+Lógica específica do protocolo MUS (como `LogonService` e helpers de resposta) vive em `adapters/inbound/mus/`, pois depende diretamente dos tipos SMUS e não é lógica de domínio pura.
+
+Futuros services de domínio (como `Dispatcher`, `MovieManager`, etc.) serão adicionados em `domain/services/` quando envolverem lógica de negócio agnóstica ao protocolo.

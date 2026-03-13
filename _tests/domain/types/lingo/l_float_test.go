@@ -33,6 +33,22 @@ func TestLFloat_ExtractFromBytes(t *testing.T) {
 	}
 }
 
+func TestLFloat_GetBytes_RoundTrip(t *testing.T) {
+	tests := []float64{0, 3.14, -2.718, 1e10}
+	for _, val := range tests {
+		v := lingo.NewLFloat(val)
+		b := v.GetBytes()
+		parsed := lingo.FromRawBytes(b, 0)
+		f, ok := parsed.(*lingo.LFloat)
+		if !ok {
+			t.Fatalf("round-trip for %f: wrong type %T", val, parsed)
+		}
+		if f.Value != val {
+			t.Errorf("round-trip for %f: got %f", val, f.Value)
+		}
+	}
+}
+
 func TestLFloat_String(t *testing.T) {
 	v := lingo.NewLFloat(3.14)
 	got := v.String()

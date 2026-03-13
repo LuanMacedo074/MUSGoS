@@ -164,6 +164,37 @@ func TestParseMUSMessage_NoContent(t *testing.T) {
 	_ = msg
 }
 
+func TestMUSMessage_GetBytes_RoundTrip(t *testing.T) {
+	// Build a message with content, serialize it, parse it back
+	content := []byte{0x00, 0x01, 0x00, 0x00, 0x00, 0x2A} // VtInteger(42)
+	raw := buildValidMUSMessageWithContent("Chat", "user1", []string{"user2", "user3"}, content)
+
+	msg, err := smus.ParseMUSMessage(raw)
+	if err != nil {
+		t.Fatalf("initial parse: %v", err)
+	}
+
+	// Serialize and re-parse
+	serialized := msg.GetBytes()
+	reparsed, err := smus.ParseMUSMessage(serialized)
+	if err != nil {
+		t.Fatalf("re-parse: %v", err)
+	}
+
+	if reparsed.Subject.Value != "Chat" {
+		t.Errorf("Subject = %q, want %q", reparsed.Subject.Value, "Chat")
+	}
+	if reparsed.SenderID.Value != "user1" {
+		t.Errorf("SenderID = %q, want %q", reparsed.SenderID.Value, "user1")
+	}
+	if reparsed.RecptID.Count != 2 {
+		t.Errorf("RecptID.Count = %d, want 2", reparsed.RecptID.Count)
+	}
+	if reparsed.MsgContent.ToInteger() != 42 {
+		t.Errorf("MsgContent = %d, want 42", reparsed.MsgContent.ToInteger())
+	}
+}
+
 func buildValidMUSMessageWithContent(subject, sender string, recipients []string, content []byte) []byte {
 	var payload []byte
 

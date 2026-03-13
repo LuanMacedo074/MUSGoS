@@ -30,8 +30,9 @@ type Ban struct {
 const DefaultUserLevel = 20
 
 var (
-	ErrUserNotFound = errors.New("user not found")
-	ErrBanNotFound  = errors.New("ban not found")
+	ErrUserNotFound      = errors.New("user not found")
+	ErrBanNotFound       = errors.New("ban not found")
+	ErrInvalidCredentials = errors.New("invalid credentials format")
 )
 
 type DBAdapter interface {

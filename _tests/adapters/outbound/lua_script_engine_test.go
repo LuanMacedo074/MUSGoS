@@ -29,7 +29,7 @@ func TestHasScript_Exists(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "echo", "return 1")
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{})
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5)
 	if !engine.HasScript("echo") {
 		t.Error("expected HasScript to return true")
 	}
@@ -38,7 +38,7 @@ func TestHasScript_Exists(t *testing.T) {
 func TestHasScript_NotExists(t *testing.T) {
 	dir := setupScriptsDir(t)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{})
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5)
 	if engine.HasScript("nonexistent") {
 		t.Error("expected HasScript to return false")
 	}
@@ -52,7 +52,7 @@ local content = mus.getContent()
 mus.response(content)
 `)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{})
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5)
 
 	msg := &ports.ScriptMessage{
 		Subject:  "test",
@@ -78,7 +78,7 @@ func TestExecute_ResponseWithValue(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "ret", `mus.response(42)`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{})
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5)
 
 	msg := &ports.ScriptMessage{
 		Subject:  "ret",
@@ -104,7 +104,7 @@ func TestExecute_NoResponse_ReturnsVoid(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "noop", `local x = 1 + 1`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{})
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5)
 
 	msg := &ports.ScriptMessage{
 		Subject:  "noop",
@@ -126,7 +126,7 @@ func TestExecute_LuaError(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "bad", `error("something went wrong")`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{})
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5)
 
 	msg := &ports.ScriptMessage{
 		Subject:  "bad",
@@ -143,7 +143,7 @@ func TestExecute_LuaError(t *testing.T) {
 func TestExecute_ScriptNotFound(t *testing.T) {
 	dir := setupScriptsDir(t)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{})
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5)
 
 	msg := &ports.ScriptMessage{
 		Subject:  "missing",
@@ -161,7 +161,7 @@ func TestExecute_SenderAccess(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "who", `mus.response(mus.getSender())`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{})
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5)
 
 	msg := &ports.ScriptMessage{
 		Subject:  "who",

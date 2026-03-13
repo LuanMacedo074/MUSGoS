@@ -46,6 +46,18 @@ func TestLInteger_ExtractFromBytes(t *testing.T) {
 	}
 }
 
+func TestLInteger_GetBytes_RoundTrip(t *testing.T) {
+	tests := []int32{0, 42, -100, 2147483647, -2147483648}
+	for _, val := range tests {
+		v := lingo.NewLInteger(val)
+		b := v.GetBytes()
+		parsed := lingo.FromRawBytes(b, 0)
+		if parsed.ToInteger() != val {
+			t.Errorf("round-trip for %d: got %d", val, parsed.ToInteger())
+		}
+	}
+}
+
 func TestLInteger_String(t *testing.T) {
 	v := lingo.NewLInteger(42)
 	got := v.String()

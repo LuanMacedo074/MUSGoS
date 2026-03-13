@@ -30,8 +30,8 @@ Análise comparativa com [OpenSMUS 1.02](https://sourceforge.net/p/opensmus/code
 | # | Componente | OpenSMUS equivalente | Descrição |
 |---|---|---|---|
 | ~~1~~ | ~~**Error Codes**~~ | ~~`MUSErrorCode.java`~~ | ~~Implementado em `mus_error_code.go`~~ |
-| 2 | **Response Builder** | `MUSMessage.send()` | Serializar `MUSMessage` de volta para bytes |
-| 3 | **Logon Handler** | `MUSLogonMessage.java` | Processar logon: extrair movieID, userID, password; validar; responder |
+| ~~2~~ | ~~**Response Builder**~~ | ~~`MUSMessage.send()`~~ | ~~Serializar `MUSMessage` de volta para bytes~~ ✅ FEITO |
+| ~~3~~ | ~~**Logon Handler**~~ | ~~`MUSLogonMessage.java`~~ | ~~Processar logon: extrair movieID, userID, password; validar; responder~~ ✅ FEITO |
 | 4 | **Movie (Room) Manager** | `MUSMovie.java` | Gerenciar movies — criar, adicionar/remover usuários, listar groups |
 | 5 | **Group Manager** | `MUSGroup.java` | `@AllUsers` auto-join, join/leave, broadcast |
 | 6 | **Message Dispatcher** | `MUSDispatcher.java` | Roteamento central por subject/recipient |
@@ -58,7 +58,7 @@ Análise comparativa com [OpenSMUS 1.02](https://sourceforge.net/p/opensmus/code
 | 17 | Email sending | `MUSEmail.java` | Envio de emails SMTP |
 | 18 | Kill timers | `MUSKillServerTimer.java`, `MUSKillUserTimer.java` | Timers de shutdown/desconexão |
 | 19 | User levels / permissions | user level cache no `MUSDispatcher` | Controle de acesso por nível (DB pronto, falta enforcement no dispatcher) |
-| 20 | Ban system | `MUSDBDispatcher.ban/revokeBan` | Banimento de usuários (DB pronto, falta verificação no logon) |
+| 20 | Ban system | `MUSDBDispatcher.ban/revokeBan` | Banimento de usuários (DB pronto, verificação no logon implementada nos modos `strict`/`open`) |
 
 ## Fluxo de conexão (referência OpenSMUS)
 
@@ -98,8 +98,8 @@ Cliente Shockwave                         Servidor
    Session Store ───────────── ✅ FEITO (memory + Redis)
    Console ─────────────────── ✅ FEITO (create user)
    Lua Scripting (fundação) ── ✅ FEITO (ScriptEngine + LValue↔Lua)
-2. Response Builder ─────── MUSMessage.ToBytes()
-3. Logon Handler ────────── parse logon → valida → responde
+2. Response Builder ─────── ✅ FEITO (LValue.GetBytes() + MUSMessage.GetBytes())
+3. Logon Handler ────────── ✅ FEITO (LogonService com 3 modos: none/open/strict)
 4. Movie + Group Manager ── cria movie, auto-join @AllUsers
 5. Message Dispatcher ───── roteia por recipient/subject
 6. Group Messaging ──────── broadcast para group

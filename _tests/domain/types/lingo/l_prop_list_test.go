@@ -160,6 +160,29 @@ func TestLPropList_Count(t *testing.T) {
 	}
 }
 
+func TestLPropList_GetBytes_RoundTrip(t *testing.T) {
+	plist := lingo.NewLPropList()
+	plist.AddElement(lingo.NewLSymbol("name"), lingo.NewLString("test"))
+	plist.AddElement(lingo.NewLSymbol("value"), lingo.NewLInteger(42))
+
+	b := plist.GetBytes()
+	parsed := lingo.FromRawBytes(b, 0)
+	pl, ok := parsed.(*lingo.LPropList)
+	if !ok {
+		t.Fatalf("wrong type %T", parsed)
+	}
+	if pl.Count() != 2 {
+		t.Fatalf("Count() = %d, want 2", pl.Count())
+	}
+	val, err := pl.GetElement("name")
+	if err != nil {
+		t.Fatalf("GetElement('name') error: %v", err)
+	}
+	if str, ok := val.(*lingo.LString); !ok || str.Value != "test" {
+		t.Errorf("name value = %v, want 'test'", val)
+	}
+}
+
 func TestLPropList_GetBytes_Structure(t *testing.T) {
 	pairs := [][2]interface{}{
 		{"key1", int32(100)},

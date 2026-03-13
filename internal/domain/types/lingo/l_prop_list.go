@@ -20,7 +20,7 @@ func NewLPropList() *LPropList {
 	}
 }
 
-func (v *LPropList) addElement(property LValue, value LValue) bool {
+func (v *LPropList) AddElement(property LValue, value LValue) bool {
 	v.Properties = append(v.Properties, property)
 	v.Values = append(v.Values, value)
 	return true

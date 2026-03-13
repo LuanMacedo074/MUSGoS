@@ -1,3 +1,5 @@
+> **Status:** ✅ Implementado.
+
 # Infraestrutura de Resposta SMUS
 
 ## Contexto
@@ -46,7 +48,7 @@ type Router struct {
 - `Register(subject, handler)` — registra handler por subject exato
 - `Route(subject)` — busca handler por subject (map lookup O(1))
 
-Novo arquivo: `internal/domain/services/response.go`
+Novo arquivo: `internal/adapters/inbound/mus/response.go`
 - `BuildResponse(req, errCode, content)` — constroi MUSMessage de resposta (swap sender/recipient, subject mantido, sender = "system")
 - `BuildErrorResponse(req, err)` — resposta de erro
 
@@ -65,7 +67,7 @@ Modificar `internal/adapters/inbound/smus_handler.go`:
 ## Arquivos novos (2)
 
 - `internal/domain/services/router.go`
-- `internal/domain/services/response.go`
+- `internal/adapters/inbound/mus/response.go`
 
 ## Arquivos modificados (11)
 

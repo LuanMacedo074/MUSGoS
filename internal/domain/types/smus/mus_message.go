@@ -1,6 +1,7 @@
 package smus
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -88,6 +89,27 @@ func ParseMUSMessageWithDecryption(rawmsg []byte, decrypt ports.Cipher) (*MUSMes
 	}
 
 	return msg, nil
+}
+
+func (msg *MUSMessage) GetBytes() []byte {
+	var payload bytes.Buffer
+
+	binary.Write(&payload, binary.BigEndian, msg.ErrCode)
+	binary.Write(&payload, binary.BigEndian, msg.TimeStamp)
+	msg.Subject.WriteBytes(&payload)
+	msg.SenderID.WriteBytes(&payload)
+	msg.RecptID.WriteBytes(&payload)
+
+	if msg.MsgContent != nil {
+		payload.Write(msg.MsgContent.GetBytes())
+	}
+
+	var buf bytes.Buffer
+	buf.Write(MUSHeader)
+	binary.Write(&buf, binary.BigEndian, int32(payload.Len()))
+	buf.Write(payload.Bytes())
+
+	return buf.Bytes()
 }
 
 func (msg *MUSMessage) String() string {

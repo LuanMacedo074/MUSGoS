@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"strconv"
 
 	"github.com/joho/godotenv"
 )
@@ -19,6 +20,10 @@ type RedisConfig struct {
 type ServerConfig struct {
 	ApplicationName  string
 	Port             string
+	ServerIP         string
+	MaxMessageSize   int
+	TCPNoDelay       bool
+	DefaultUserLevel int
 	LogLevel         string
 	LoggerType       string
 	LogPath          string
@@ -30,6 +35,8 @@ type ServerConfig struct {
 	DatabasePath     string
 	SessionStoreType string
 	ScriptsPath      string
+	ScriptTimeout    int
+	AuthMode         string
 	Redis            RedisConfig
 }
 
@@ -41,6 +48,10 @@ func LoadServerConfig() ServerConfig {
 	return ServerConfig{
 		ApplicationName: getEnv("APPLICATION_NAME", "SMUS-SERVER"),
 		Port:            getEnv("PORT", "1199"),
+		ServerIP:        getEnv("SERVER_IP", ""),
+		MaxMessageSize:  getEnvInt("MAX_MESSAGE_SIZE", 8192),
+		TCPNoDelay:      getEnv("TCP_NO_DELAY", "1") == "1",
+		DefaultUserLevel: getEnvInt("DEFAULT_USER_LEVEL", 20),
 		LogLevel:      getEnv("LOG_LEVEL", "INFO"),
 		LoggerType:    getEnv("LOGGER_TYPE", "file"),
 		LogPath:       getEnv("LOG_PATH", "logs"),
@@ -52,6 +63,8 @@ func LoadServerConfig() ServerConfig {
 		DatabasePath:     getEnv("DATABASE_PATH", "data/musgo.db"),
 		SessionStoreType: getEnv("SESSION_STORE_TYPE", "memory"),
 		ScriptsPath:      getEnv("SCRIPTS_PATH", "external/scripts"),
+		ScriptTimeout:    getEnvInt("SCRIPT_TIMEOUT", 5),
+		AuthMode:         getEnv("AUTH_MODE", "open"),
 		Redis: RedisConfig{
 			Host:      getEnv("REDIS_HOST", "localhost"),
 			Port:      getEnv("REDIS_PORT", "6379"),
@@ -66,6 +79,15 @@ func LoadServerConfig() ServerConfig {
 func getEnv(key, fallback string) string {
 	if value, exists := os.LookupEnv(key); exists {
 		return value
+	}
+	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	if value, exists := os.LookupEnv(key); exists {
+		if n, err := strconv.Atoi(value); err == nil {
+			return n
+		}
 	}
 	return fallback
 }
