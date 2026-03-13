@@ -12,6 +12,8 @@ type ServerConfig struct {
 	CipherType      string
 	EncryptionKey   string
 	Protocol        string
+	DatabaseType    string
+	DatabasePath    string
 }
 
 func LoadServerConfig() ServerConfig {
@@ -25,6 +27,8 @@ func LoadServerConfig() ServerConfig {
 		CipherType:    getEnv("CIPHER_TYPE", "blowfish"),
 		EncryptionKey: getEnv("ENCRYPTION_KEY", "NO_ENCRYPTION_KEY"),
 		Protocol:      getEnv("PROTOCOL", "smus"),
+		DatabaseType:  getEnv("DATABASE_TYPE", "sqlite"),
+		DatabasePath:  getEnv("DATABASE_PATH", "data/musgo.db"),
 	}
 }
 

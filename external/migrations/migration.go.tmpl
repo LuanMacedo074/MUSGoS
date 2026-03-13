@@ -1,0 +1,19 @@
+package migrations
+
+import "fsos-server/internal/domain/ports"
+
+func init() {
+	Register(&migration_TIMESTAMP_NAME{})
+}
+
+type migration_TIMESTAMP_NAME struct{}
+
+func (m *migration_TIMESTAMP_NAME) Name() string { return "TIMESTAMP_NAME" }
+
+func (m *migration_TIMESTAMP_NAME) Up(db ports.DBAdapter) error {
+	return nil
+}
+
+func (m *migration_TIMESTAMP_NAME) Down(db ports.DBAdapter) error {
+	return nil
+}

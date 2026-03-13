@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"fsos-server/external/migrations"
 	"fsos-server/internal/adapters/inbound"
 	"fsos-server/internal/config"
 	"fsos-server/internal/factory"
@@ -29,6 +30,26 @@ func main() {
 		"cipher":    cfg.CipherType,
 		"protocol":  cfg.Protocol,
 		"env":       cfg.Environment,
+	})
+
+	// Database
+	dbResult, err := factory.NewDatabase(cfg.DatabaseType, cfg.DatabasePath, migrations.All)
+	if err != nil {
+		gameLogger.Fatal("Failed to initialize database", map[string]interface{}{
+			"error": err,
+		})
+	}
+	defer dbResult.Adapter.Close()
+
+	if err := dbResult.MigrationRunner.RunPending(); err != nil {
+		dbResult.Adapter.Close()
+		gameLogger.Fatal("Failed to run migrations", map[string]interface{}{
+			"error": err,
+		})
+	}
+	gameLogger.Info("Database initialized", map[string]interface{}{
+		"type": cfg.DatabaseType,
+		"path": cfg.DatabasePath,
 	})
 
 	cipher, err := factory.NewCipher(cfg.CipherType, cfg.EncryptionKey)
