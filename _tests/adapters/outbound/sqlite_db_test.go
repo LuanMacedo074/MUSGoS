@@ -317,13 +317,13 @@ func TestPlayerAttribute_SetGetDelete(t *testing.T) {
 
 func TestCreateUser(t *testing.T) {
 	db := newTestDB(t)
-	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+	mustNoErr(t, db.CreateUser("alice", "hash123", ports.DefaultUserLevel))
 }
 
 func TestCreateUser_Duplicate(t *testing.T) {
 	db := newTestDB(t)
-	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
-	err := db.CreateUser("alice", "hash456", "salt456", 20)
+	mustNoErr(t, db.CreateUser("alice", "hash123", ports.DefaultUserLevel))
+	err := db.CreateUser("alice", "hash456", ports.DefaultUserLevel)
 	if err == nil {
 		t.Error("expected error for duplicate username")
 	}
@@ -331,7 +331,7 @@ func TestCreateUser_Duplicate(t *testing.T) {
 
 func TestGetUser(t *testing.T) {
 	db := newTestDB(t)
-	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+	mustNoErr(t, db.CreateUser("alice", "hash123", ports.DefaultUserLevel))
 
 	u, err := db.GetUser("alice")
 	mustNoErr(t, err)
@@ -342,11 +342,8 @@ func TestGetUser(t *testing.T) {
 	if u.PasswordHash != "hash123" {
 		t.Errorf("expected password_hash 'hash123', got %q", u.PasswordHash)
 	}
-	if u.Salt != "salt123" {
-		t.Errorf("expected salt 'salt123', got %q", u.Salt)
-	}
-	if u.UserLevel != 20 {
-		t.Errorf("expected user_level 20, got %d", u.UserLevel)
+	if u.UserLevel != ports.DefaultUserLevel {
+		t.Errorf("expected user_level %d, got %d", ports.DefaultUserLevel, u.UserLevel)
 	}
 	if u.ID == 0 {
 		t.Error("expected non-zero ID")
@@ -366,7 +363,7 @@ func TestGetUser_NotFound(t *testing.T) {
 
 func TestDeleteUser(t *testing.T) {
 	db := newTestDB(t)
-	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+	mustNoErr(t, db.CreateUser("alice", "hash123", ports.DefaultUserLevel))
 	mustNoErr(t, db.DeleteUser("alice"))
 
 	_, err := db.GetUser("alice")
@@ -377,7 +374,7 @@ func TestDeleteUser(t *testing.T) {
 
 func TestDeleteUser_CascadesBans(t *testing.T) {
 	db := newTestDB(t)
-	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+	mustNoErr(t, db.CreateUser("alice", "hash123", ports.DefaultUserLevel))
 
 	u, err := db.GetUser("alice")
 	mustNoErr(t, err)
@@ -400,7 +397,7 @@ func TestDeleteUser_CascadesBans(t *testing.T) {
 
 func TestUpdateUserLevel(t *testing.T) {
 	db := newTestDB(t)
-	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+	mustNoErr(t, db.CreateUser("alice", "hash123", ports.DefaultUserLevel))
 	mustNoErr(t, db.UpdateUserLevel("alice", 80))
 
 	u, err := db.GetUser("alice")
@@ -412,16 +409,13 @@ func TestUpdateUserLevel(t *testing.T) {
 
 func TestUpdateUserPassword(t *testing.T) {
 	db := newTestDB(t)
-	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
-	mustNoErr(t, db.UpdateUserPassword("alice", "newhash", "newsalt"))
+	mustNoErr(t, db.CreateUser("alice", "hash123", ports.DefaultUserLevel))
+	mustNoErr(t, db.UpdateUserPassword("alice", "newhash"))
 
 	u, err := db.GetUser("alice")
 	mustNoErr(t, err)
 	if u.PasswordHash != "newhash" {
 		t.Errorf("expected password_hash 'newhash', got %q", u.PasswordHash)
-	}
-	if u.Salt != "newsalt" {
-		t.Errorf("expected salt 'newsalt', got %q", u.Salt)
 	}
 }
 
@@ -429,7 +423,7 @@ func TestUpdateUserPassword(t *testing.T) {
 
 func TestCreateBan_ByUserID(t *testing.T) {
 	db := newTestDB(t)
-	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+	mustNoErr(t, db.CreateUser("alice", "hash123", ports.DefaultUserLevel))
 
 	u, err := db.GetUser("alice")
 	mustNoErr(t, err)
@@ -474,7 +468,7 @@ func TestCreateBan_ByIP(t *testing.T) {
 
 func TestGetActiveBan_Expired(t *testing.T) {
 	db := newTestDB(t)
-	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+	mustNoErr(t, db.CreateUser("alice", "hash123", ports.DefaultUserLevel))
 
 	u, err := db.GetUser("alice")
 	mustNoErr(t, err)
@@ -490,7 +484,7 @@ func TestGetActiveBan_Expired(t *testing.T) {
 
 func TestGetActiveBan_Permanent(t *testing.T) {
 	db := newTestDB(t)
-	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+	mustNoErr(t, db.CreateUser("alice", "hash123", ports.DefaultUserLevel))
 
 	u, err := db.GetUser("alice")
 	mustNoErr(t, err)
@@ -509,7 +503,7 @@ func TestGetActiveBan_Permanent(t *testing.T) {
 
 func TestRevokeBan(t *testing.T) {
 	db := newTestDB(t)
-	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+	mustNoErr(t, db.CreateUser("alice", "hash123", ports.DefaultUserLevel))
 
 	u, err := db.GetUser("alice")
 	mustNoErr(t, err)

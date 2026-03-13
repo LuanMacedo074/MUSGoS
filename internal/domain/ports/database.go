@@ -9,15 +9,16 @@ import (
 
 type User struct {
 	ID           int64
+	UUID         string
 	Username     string
 	PasswordHash string
-	Salt         string
 	UserLevel    int
 	CreatedAt    time.Time
 }
 
 type Ban struct {
 	ID        int64
+	UUID      string
 	UserID    *int64
 	IPAddress *string
 	Reason    string
@@ -25,6 +26,8 @@ type Ban struct {
 	RevokedAt *time.Time
 	CreatedAt time.Time
 }
+
+const DefaultUserLevel = 20
 
 var (
 	ErrUserNotFound = errors.New("user not found")
@@ -49,11 +52,11 @@ type DBAdapter interface {
 	DeletePlayerAttribute(appName, userID, attrName string) error
 
 	// DBUser (authentication)
-	CreateUser(username, passwordHash, salt string, userLevel int) error
+	CreateUser(username, passwordHash string, userLevel int) error
 	GetUser(username string) (*User, error)
 	DeleteUser(username string) error
 	UpdateUserLevel(username string, level int) error
-	UpdateUserPassword(username, passwordHash, salt string) error
+	UpdateUserPassword(username, passwordHash string) error
 
 	// DBBan
 	CreateBan(userID *int64, ipAddress *string, reason string, expiresAt *time.Time) error
@@ -61,8 +64,10 @@ type DBAdapter interface {
 	GetActiveBanByIP(ipAddress string) (*Ban, error)
 	RevokeBan(banID int64) error
 
-	// ExecRaw executes raw SQL — used by migrations for schema changes.
-	ExecRaw(sql string) error
+	// Schema operations — used by migrations for schema changes.
+	CreateTable(def Table) error
+	DropTable(name string) error
+	CreateIndex(def Index) error
 
 	Close() error
 }

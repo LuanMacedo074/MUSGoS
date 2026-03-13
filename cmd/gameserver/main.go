@@ -84,13 +84,19 @@ func main() {
 
 	server := inbound.NewTCPServer(cfg.Port, gameLogger, handler, sessionStore)
 
+	serverReady := make(chan struct{})
 	go func() {
-		if err := server.Start(); err != nil {
+		if err := server.Start(serverReady); err != nil {
 			gameLogger.Fatal("Failed to start server", map[string]interface{}{
 				"error": err,
 			})
 		}
 	}()
+
+	<-serverReady
+
+	console := inbound.NewConsole(dbResult.Adapter, gameLogger, os.Stdin)
+	go console.Run()
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)

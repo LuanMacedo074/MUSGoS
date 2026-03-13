@@ -30,7 +30,7 @@ func NewTCPServer(port string, logger ports.Logger, handler ports.MessageHandler
 	}
 }
 
-func (s *TCPServer) Start() error {
+func (s *TCPServer) Start(ready chan struct{}) error {
 	var err error
 	s.listener, err = net.Listen("tcp", ":"+s.port)
 	if err != nil {
@@ -40,6 +40,10 @@ func (s *TCPServer) Start() error {
 	s.logger.Info("TCP Server listening", map[string]interface{}{
 		"port": s.port,
 	})
+
+	if ready != nil {
+		close(ready)
+	}
 
 	for {
 		select {

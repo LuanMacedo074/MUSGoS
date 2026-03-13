@@ -5,13 +5,34 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"fsos-server/internal/domain/ports"
 	"fsos-server/internal/domain/types/lingo"
 
+	"github.com/google/uuid"
 	_ "modernc.org/sqlite"
 )
+
+var validIdentifier = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+
+var validOnDelete = map[string]bool{
+	"":           true,
+	"CASCADE":    true,
+	"SET NULL":   true,
+	"SET DEFAULT": true,
+	"RESTRICT":   true,
+	"NO ACTION":  true,
+}
+
+func validateIdentifier(name string) error {
+	if !validIdentifier.MatchString(name) {
+		return fmt.Errorf("identifier must match [a-zA-Z_][a-zA-Z0-9_]*")
+	}
+	return nil
+}
 
 type SQLiteDB struct {
 	db *sql.DB
@@ -204,18 +225,18 @@ func (s *SQLiteDB) DeletePlayerAttribute(appName, userID, attrName string) error
 
 // --- DBUser ---
 
-func (s *SQLiteDB) CreateUser(username, passwordHash, salt string, userLevel int) error {
+func (s *SQLiteDB) CreateUser(username, passwordHash string, userLevel int) error {
 	_, err := s.db.Exec(
-		"INSERT INTO users (username, password_hash, salt, user_level) VALUES (?, ?, ?, ?)",
-		username, passwordHash, salt, userLevel)
+		"INSERT INTO users (uuid, username, password_hash, user_level) VALUES (?, ?, ?, ?)",
+		uuid.New().String(), username, passwordHash, userLevel)
 	return err
 }
 
 func (s *SQLiteDB) GetUser(username string) (*ports.User, error) {
 	var u ports.User
 	err := s.db.QueryRow(
-		"SELECT id, username, password_hash, salt, user_level, created_at FROM users WHERE username = ?",
-		username).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Salt, &u.UserLevel, &u.CreatedAt)
+		"SELECT id, uuid, username, password_hash, user_level, created_at FROM users WHERE username = ?",
+		username).Scan(&u.ID, &u.UUID, &u.Username, &u.PasswordHash, &u.UserLevel, &u.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ports.ErrUserNotFound
@@ -255,10 +276,10 @@ func (s *SQLiteDB) UpdateUserLevel(username string, level int) error {
 	return nil
 }
 
-func (s *SQLiteDB) UpdateUserPassword(username, passwordHash, salt string) error {
+func (s *SQLiteDB) UpdateUserPassword(username, passwordHash string) error {
 	result, err := s.db.Exec(
-		"UPDATE users SET password_hash = ?, salt = ? WHERE username = ?",
-		passwordHash, salt, username)
+		"UPDATE users SET password_hash = ? WHERE username = ?",
+		passwordHash, username)
 	if err != nil {
 		return err
 	}
@@ -276,19 +297,19 @@ func (s *SQLiteDB) UpdateUserPassword(username, passwordHash, salt string) error
 
 func (s *SQLiteDB) CreateBan(userID *int64, ipAddress *string, reason string, expiresAt *time.Time) error {
 	_, err := s.db.Exec(
-		"INSERT INTO bans (user_id, ip_address, reason, expires_at) VALUES (?, ?, ?, ?)",
-		userID, ipAddress, reason, expiresAt)
+		"INSERT INTO bans (uuid, user_id, ip_address, reason, expires_at) VALUES (?, ?, ?, ?, ?)",
+		uuid.New().String(), userID, ipAddress, reason, expiresAt)
 	return err
 }
 
 func (s *SQLiteDB) GetActiveBanByUserID(userID int64) (*ports.Ban, error) {
 	var b ports.Ban
 	err := s.db.QueryRow(`
-		SELECT id, user_id, ip_address, reason, expires_at, revoked_at, created_at
+		SELECT id, uuid, user_id, ip_address, reason, expires_at, revoked_at, created_at
 		FROM bans
 		WHERE user_id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > datetime('now'))
 		ORDER BY created_at DESC LIMIT 1`,
-		userID).Scan(&b.ID, &b.UserID, &b.IPAddress, &b.Reason, &b.ExpiresAt, &b.RevokedAt, &b.CreatedAt)
+		userID).Scan(&b.ID, &b.UUID, &b.UserID, &b.IPAddress, &b.Reason, &b.ExpiresAt, &b.RevokedAt, &b.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ports.ErrBanNotFound
@@ -301,11 +322,11 @@ func (s *SQLiteDB) GetActiveBanByUserID(userID int64) (*ports.Ban, error) {
 func (s *SQLiteDB) GetActiveBanByIP(ipAddress string) (*ports.Ban, error) {
 	var b ports.Ban
 	err := s.db.QueryRow(`
-		SELECT id, user_id, ip_address, reason, expires_at, revoked_at, created_at
+		SELECT id, uuid, user_id, ip_address, reason, expires_at, revoked_at, created_at
 		FROM bans
 		WHERE ip_address = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > datetime('now'))
 		ORDER BY created_at DESC LIMIT 1`,
-		ipAddress).Scan(&b.ID, &b.UserID, &b.IPAddress, &b.Reason, &b.ExpiresAt, &b.RevokedAt, &b.CreatedAt)
+		ipAddress).Scan(&b.ID, &b.UUID, &b.UserID, &b.IPAddress, &b.Reason, &b.ExpiresAt, &b.RevokedAt, &b.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, ports.ErrBanNotFound
@@ -332,12 +353,168 @@ func (s *SQLiteDB) RevokeBan(banID int64) error {
 	return nil
 }
 
-// --- ExecRaw ---
+// --- Schema operations ---
 
-func (s *SQLiteDB) ExecRaw(sqlStr string) error {
-	_, err := s.db.Exec(sqlStr)
+func (s *SQLiteDB) CreateTable(def ports.Table) error {
+	if err := validateIdentifier(def.Name); err != nil {
+		return fmt.Errorf("invalid table name %q: %w", def.Name, err)
+	}
+	for _, col := range def.Columns {
+		if err := validateIdentifier(col.Name); err != nil {
+			return fmt.Errorf("invalid column name %q: %w", col.Name, err)
+		}
+	}
+	for _, fk := range def.ForeignKeys {
+		for _, id := range []string{fk.Column, fk.RefTable, fk.RefCol} {
+			if err := validateIdentifier(id); err != nil {
+				return fmt.Errorf("invalid identifier %q in foreign key: %w", id, err)
+			}
+		}
+		if !validOnDelete[fk.OnDelete] {
+			return fmt.Errorf("invalid ON DELETE action %q", fk.OnDelete)
+		}
+	}
+	for _, pk := range def.PrimaryKeys {
+		if err := validateIdentifier(pk); err != nil {
+			return fmt.Errorf("invalid primary key column %q: %w", pk, err)
+		}
+	}
+	for _, col := range def.RequireOneOf {
+		if err := validateIdentifier(col); err != nil {
+			return fmt.Errorf("invalid column %q in require_one_of: %w", col, err)
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString("CREATE TABLE IF NOT EXISTS ")
+	b.WriteString(def.Name)
+	b.WriteString(" (\n")
+
+	for i, col := range def.Columns {
+		if i > 0 {
+			b.WriteString(",\n")
+		}
+		b.WriteString("\t")
+		b.WriteString(col.Name)
+		b.WriteString(" ")
+		b.WriteString(s.columnTypeSQL(col.Type))
+
+		if col.IsPK && !s.hasCompositePK(def) {
+			b.WriteString(" PRIMARY KEY")
+			if col.IsAutoIncr {
+				b.WriteString(" AUTOINCREMENT")
+			}
+		}
+		if col.IsNotNull {
+			b.WriteString(" NOT NULL")
+		}
+		if col.IsUnique {
+			b.WriteString(" UNIQUE")
+		}
+		if col.DefType != ports.DefaultNone {
+			b.WriteString(" DEFAULT ")
+			b.WriteString(s.defaultSQL(col))
+		}
+	}
+
+	if s.hasCompositePK(def) {
+		b.WriteString(",\n\tPRIMARY KEY (")
+		b.WriteString(strings.Join(def.PrimaryKeys, ", "))
+		b.WriteString(")")
+	}
+
+	for _, fk := range def.ForeignKeys {
+		b.WriteString(",\n\tFOREIGN KEY (")
+		b.WriteString(fk.Column)
+		b.WriteString(") REFERENCES ")
+		b.WriteString(fk.RefTable)
+		b.WriteString("(")
+		b.WriteString(fk.RefCol)
+		b.WriteString(")")
+		if fk.OnDelete != "" {
+			b.WriteString(" ON DELETE ")
+			b.WriteString(fk.OnDelete)
+		}
+	}
+
+	if len(def.RequireOneOf) > 0 {
+		b.WriteString(",\n\tCHECK (")
+		for i, col := range def.RequireOneOf {
+			if i > 0 {
+				b.WriteString(" OR ")
+			}
+			b.WriteString(col)
+			b.WriteString(" IS NOT NULL")
+		}
+		b.WriteString(")")
+	}
+
+	b.WriteString("\n)")
+
+	_, err := s.db.Exec(b.String())
 	return err
 }
+
+func (s *SQLiteDB) DropTable(name string) error {
+	if err := validateIdentifier(name); err != nil {
+		return fmt.Errorf("invalid table name %q: %w", name, err)
+	}
+	_, err := s.db.Exec("DROP TABLE IF EXISTS " + name)
+	return err
+}
+
+func (s *SQLiteDB) CreateIndex(def ports.Index) error {
+	if err := validateIdentifier(def.Name); err != nil {
+		return fmt.Errorf("invalid index name %q: %w", def.Name, err)
+	}
+	if err := validateIdentifier(def.Table); err != nil {
+		return fmt.Errorf("invalid table name %q: %w", def.Table, err)
+	}
+	for _, col := range def.Columns {
+		if err := validateIdentifier(col); err != nil {
+			return fmt.Errorf("invalid column name %q: %w", col, err)
+		}
+	}
+	sql := fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s(%s)",
+		def.Name, def.Table, strings.Join(def.Columns, ", "))
+	_, err := s.db.Exec(sql)
+	return err
+}
+
+func (s *SQLiteDB) columnTypeSQL(t ports.ColumnType) string {
+	switch t {
+	case ports.ColInteger:
+		return "INTEGER"
+	case ports.ColText:
+		return "TEXT"
+	case ports.ColDatetime:
+		return "DATETIME"
+	default:
+		return "TEXT"
+	}
+}
+
+func (s *SQLiteDB) defaultSQL(col ports.Column) string {
+	switch col.DefType {
+	case ports.DefaultNow:
+		return "(datetime('now'))"
+	case ports.DefaultLiteral:
+		switch v := col.DefaultVal.(type) {
+		case string:
+			escaped := strings.ReplaceAll(v, "'", "''")
+			return fmt.Sprintf("'%s'", escaped)
+		default:
+			return fmt.Sprintf("%v", v)
+		}
+	default:
+		return ""
+	}
+}
+
+func (s *SQLiteDB) hasCompositePK(def ports.Table) bool {
+	return len(def.PrimaryKeys) > 0
+}
+
 
 // --- Close ---
 
