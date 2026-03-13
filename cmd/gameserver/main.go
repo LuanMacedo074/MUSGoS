@@ -61,7 +61,12 @@ func main() {
 		"type": cfg.CipherType,
 	})
 
-	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher)
+	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger)
+	gameLogger.Info("Script engine initialized", map[string]interface{}{
+		"scripts_path": cfg.ScriptsPath,
+	})
+
+	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine)
 	if err != nil {
 		gameLogger.Fatal("Failed to initialize protocol handler", map[string]interface{}{
 			"error": err,

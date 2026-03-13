@@ -54,7 +54,7 @@ func TestSMUSHandler_HandleRawMessage_Valid(t *testing.T) {
 	logger := &testutil.MockLogger{}
 	cipher := &testutil.MockCipher{}
 
-	handler := inbound.NewSMUSHandler(logger, cipher)
+	handler := inbound.NewSMUSHandler(logger, cipher, nil)
 	raw := buildValidSMUSMessage("Test", "user1", []string{"user2"})
 
 	_, err := handler.HandleRawMessage("client-1", raw)
@@ -72,7 +72,7 @@ func TestSMUSHandler_HandleRawMessage_Invalid(t *testing.T) {
 	logger := &testutil.MockLogger{}
 	cipher := &testutil.MockCipher{}
 
-	handler := inbound.NewSMUSHandler(logger, cipher)
+	handler := inbound.NewSMUSHandler(logger, cipher, nil)
 
 	_, err := handler.HandleRawMessage("client-1", []byte{0xFF, 0xFF})
 	if err == nil {

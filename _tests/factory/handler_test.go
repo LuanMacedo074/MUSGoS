@@ -11,7 +11,7 @@ func TestNewHandler_SMUS(t *testing.T) {
 	logger := &testutil.MockLogger{}
 	cipher := &testutil.MockCipher{}
 
-	handler, err := factory.NewHandler("smus", logger, cipher)
+	handler, err := factory.NewHandler("smus", logger, cipher, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestNewHandler_Unknown(t *testing.T) {
 	logger := &testutil.MockLogger{}
 	cipher := &testutil.MockCipher{}
 
-	_, err := factory.NewHandler("http", logger, cipher)
+	_, err := factory.NewHandler("http", logger, cipher, nil)
 	if err == nil {
 		t.Error("expected error for unknown protocol")
 	}

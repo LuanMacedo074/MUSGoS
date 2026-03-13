@@ -11,7 +11,12 @@ Análise comparativa com [OpenSMUS 1.02](https://sourceforge.net/p/opensmus/code
 | Blowfish Cipher | `blowfish.go` | `MUSBlowfish.java` / `MUSBlowfishCypher.java` |
 | Lingo Types (core) | `lingo/*.go` | `LInteger, LString, LSymbol, LList, LPropList, LFloat, LVoid, LMedia` |
 | Database (persistência) | `sqlite_db.go` | `MUSSQLConnection.java` |
-| Session Store | `redis_session_store.go` | — (in-memory no OpenSMUS) |
+| Session Store (memory) | `memory_session_store.go` | — (in-memory no OpenSMUS) |
+| Session Store (Redis) | `redis_session_store.go` | — |
+| Console | `console.go` | — |
+| Schema DSL | `ports/schema.go` | — |
+| Lingo JSON Codec | `lingo/codec.go` | — |
+| Lua Script Engine | `lua_script_engine.go` | `ServerSideScript.java` |
 | Logging | `file_logger.go` | `MUSLog.java` |
 | Config | `config.go` | `MUSServerProperties.java` |
 | Migrations | `migration_runner.go` | — |
@@ -48,7 +53,7 @@ Análise comparativa com [OpenSMUS 1.02](https://sourceforge.net/p/opensmus/code
 
 | # | Componente | OpenSMUS equivalente | Descrição |
 |---|---|---|---|
-| 15 | Server-side scripting | `ServerSideScript.java`, `MUSScriptMap.java` | Scripts Lua (planejado via gopher-lua) |
+| ~~15~~ | ~~**Server-side scripting (fundação)**~~ | ~~`ServerSideScript.java`, `MUSScriptMap.java`~~ | ~~ScriptEngine + LValue↔Lua + echo.lua (APIs DB pendentes)~~ |
 | 16 | UDP support | `MUSUDPListener.java` | Transporte UDP para baixa latência |
 | 17 | Email sending | `MUSEmail.java` | Envio de emails SMTP |
 | 18 | Kill timers | `MUSKillServerTimer.java`, `MUSKillUserTimer.java` | Timers de shutdown/desconexão |
@@ -90,6 +95,9 @@ Cliente Shockwave                         Servidor
 ```
 1. Error Codes ──────────── ✅ FEITO (mus_error_code.go)
    Users & Bans DB ────────── ✅ FEITO (migration + CRUD no sqlite_db.go)
+   Session Store ───────────── ✅ FEITO (memory + Redis)
+   Console ─────────────────── ✅ FEITO (create user)
+   Lua Scripting (fundação) ── ✅ FEITO (ScriptEngine + LValue↔Lua)
 2. Response Builder ─────── MUSMessage.ToBytes()
 3. Logon Handler ────────── parse logon → valida → responde
 4. Movie + Group Manager ── cria movie, auto-join @AllUsers

@@ -302,19 +302,25 @@ Nice to have. O servidor opera sem eles.
 
 ---
 
-### 15. Server-Side Scripting
+### ~~15. Server-Side Scripting (fundação)~~ ✅ FEITO
 
 **OpenSMUS:** `ServerSideScript.java`, `MUSScriptMap.java`
 
-O OpenSMUS permite carregar classes Java como scripts que interceptam eventos do servidor:
-- `scriptCreate` — inicialização do script
-- `userLogOn` / `userLogOff` — conexão/desconexão
-- `incomingMessage` — antes de rotear uma mensagem
-- `groupJoin` / `groupLeave` — entrada/saída de groups
+A fundação do sistema de scripting Lua está implementada:
 
-Scripts podem modificar mensagens, bloquear operações, implementar lógica de jogo customizada, etc.
+- **`ports.ScriptEngine`** — interface agnóstica ao protocolo (`HasScript`, `Execute`)
+- **`LuaScriptEngine`** — implementação com gopher-lua, VM sandboxed (sem `os`/`io`/`debug`)
+- **Conversão bidirecional** LValue ↔ Lua (`lua_convert.go`)
+- **APIs disponíveis nos scripts:** `mus.getSender()`, `mus.getContent()`, `mus.response()`
+- **Integração no handler** — scripts são executados automaticamente quando existe `external/scripts/{subject}.lua`
+- **Script exemplo:** `external/scripts/echo.lua`
 
-Para o MUSGoS, o plano é usar **Lua** via `gopher-lua` em vez de Go plugins, por ser mais leve e seguro para sandboxing.
+**O que falta (evolução futura):**
+- APIs de banco (`mus.db.getPlayerAttribute`, `mus.db.setPlayerAttribute`, etc.)
+- `mus.sendMessage()` para enviar mensagens a outros clientes
+- Event hooks (`userLogOn`, `userLogOff`, `groupJoin`, `groupLeave`)
+- Hot reload de scripts sem restart
+- Pool de VMs Lua para performance
 
 ---
 
@@ -380,6 +386,9 @@ Permite banir usuários por IP ou nome, com duração configurável. Bans são v
 ```
 1. Error Codes ──────────── ✅ FEITO (mus_error_code.go)
    Users & Bans DB ────────── ✅ FEITO (migration + CRUD no sqlite_db.go)
+   Session Store ───────────── ✅ FEITO (memory + Redis)
+   Console ─────────────────── ✅ FEITO (create user)
+   Lua Scripting (fundação) ── ✅ FEITO (ScriptEngine + LValue↔Lua)
 2. Response Builder ─────── MUSMessage.ToBytes()
 3. Logon Handler ────────── parse logon → valida → responde
 4. Movie + Group Manager ── cria movie, auto-join @AllUsers

@@ -72,6 +72,26 @@ func (m *MockCipher) Decrypt(data []byte) []byte {
 	return data
 }
 
+// MockScriptEngine implements ports.ScriptEngine with configurable behavior.
+type MockScriptEngine struct {
+	HasScriptFunc func(subject string) bool
+	ExecuteFunc   func(msg *ports.ScriptMessage) (*ports.ScriptResult, error)
+}
+
+func (m *MockScriptEngine) HasScript(subject string) bool {
+	if m.HasScriptFunc != nil {
+		return m.HasScriptFunc(subject)
+	}
+	return false
+}
+
+func (m *MockScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult, error) {
+	if m.ExecuteFunc != nil {
+		return m.ExecuteFunc(msg)
+	}
+	return &ports.ScriptResult{Content: lingo.NewLVoid()}, nil
+}
+
 // MockSessionStore implements ports.SessionStore with in-memory maps.
 type MockSessionStore struct {
 	mu          sync.RWMutex

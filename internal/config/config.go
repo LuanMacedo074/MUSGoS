@@ -29,6 +29,7 @@ type ServerConfig struct {
 	DatabaseType     string
 	DatabasePath     string
 	SessionStoreType string
+	ScriptsPath      string
 	Redis            RedisConfig
 }
 
@@ -50,6 +51,7 @@ func LoadServerConfig() ServerConfig {
 		DatabaseType:     getEnv("DATABASE_TYPE", "sqlite"),
 		DatabasePath:     getEnv("DATABASE_PATH", "data/musgo.db"),
 		SessionStoreType: getEnv("SESSION_STORE_TYPE", "memory"),
+		ScriptsPath:      getEnv("SCRIPTS_PATH", "external/scripts"),
 		Redis: RedisConfig{
 			Host:      getEnv("REDIS_HOST", "localhost"),
 			Port:      getEnv("REDIS_PORT", "6379"),

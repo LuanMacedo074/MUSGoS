@@ -7,14 +7,16 @@ import (
 )
 
 type SMUSHandler struct {
-	logger ports.Logger
-	cipher ports.Cipher
+	logger       ports.Logger
+	cipher       ports.Cipher
+	scriptEngine ports.ScriptEngine
 }
 
-func NewSMUSHandler(logger ports.Logger, cipher ports.Cipher) *SMUSHandler {
+func NewSMUSHandler(logger ports.Logger, cipher ports.Cipher, scriptEngine ports.ScriptEngine) *SMUSHandler {
 	return &SMUSHandler{
-		logger: logger,
-		cipher: cipher,
+		logger:       logger,
+		cipher:       cipher,
+		scriptEngine: scriptEngine,
 	}
 }
 
@@ -58,6 +60,32 @@ func (h *SMUSHandler) HandleRawMessage(clientID string, data []byte) ([]byte, er
 	h.logger.Debug("Message details", map[string]interface{}{
 		"parsed": msg.String(),
 	})
+
+	// Execute script if one exists for this subject
+	if h.scriptEngine != nil && h.scriptEngine.HasScript(msg.Subject.Value) {
+		scriptMsg := &ports.ScriptMessage{
+			Subject:  msg.Subject.Value,
+			SenderID: msg.SenderID.Value,
+			Content:  msg.MsgContent,
+		}
+
+		// Script errors are intentionally non-fatal: a broken script should not
+		// prevent the server from operating. The error is logged for debugging.
+		result, err := h.scriptEngine.Execute(scriptMsg)
+		if err != nil {
+			h.logger.Error("Script execution failed", map[string]interface{}{
+				"client":  clientID,
+				"subject": msg.Subject.Value,
+				"error":   err.Error(),
+			})
+		} else {
+			h.logger.Debug("Script executed", map[string]interface{}{
+				"client":  clientID,
+				"subject": msg.Subject.Value,
+				"result":  fmt.Sprintf("%v", result.Content),
+			})
+		}
+	}
 
 	return nil, nil
 }

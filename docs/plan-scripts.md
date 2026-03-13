@@ -1,5 +1,7 @@
 # Server-Side Scripting — Lua via gopher-lua
 
+> **Status:** Fundação implementada. ScriptEngine funcional com `getSender()`, `getContent()`, `response()`. APIs de DB e messaging pendentes.
+
 ## Contexto
 
 O MUS original suporta server-side scripting. Precisamos de uma forma extensível para que qualquer pessoa possa escrever lógica customizada no servidor sem alterar o código Go.
@@ -49,13 +51,19 @@ Cliente envia mensagem SMUS
 ## Estrutura
 
 ```
-scripts/                         ← pasta na raiz, usuário coloca scripts aqui
+external/scripts/                ← pasta de scripts, configurável via SCRIPTS_PATH
+├── echo.lua                     ← script exemplo (subject "echo")
 ├── buy-item.lua                 ← subject "buy-item" → buy-item.lua
-├── trade-request.lua
 └── ...
 
-internal/domain/services/
-└── script_engine.go             ← service que carrega/executa scripts Lua
+internal/domain/ports/
+└── script_engine.go             ← interface ScriptEngine + ScriptMessage/ScriptResult
+
+internal/domain/types/lingo/
+└── lua_convert.go               ← conversão bidirecional LValue ↔ Lua
+
+internal/adapters/outbound/
+└── lua_script_engine.go         ← implementação com gopher-lua
 ```
 
 - Subject da mensagem → nome do arquivo `.lua` (mapping 1:1)
@@ -85,10 +93,12 @@ else
 end
 ```
 
+APIs implementadas:
+- ✅ `mus.getSender()` — ID do cliente que enviou
+- ✅ `mus.getContent()` — conteúdo da mensagem (LValue convertido para tabela Lua)
+- ✅ `mus.response(table)` — monta resposta para o client
+
 APIs planejadas:
-- `mus.getSender()` — ID do cliente que enviou
-- `mus.getContent()` — conteúdo da mensagem (LValue convertido para tabela Lua)
-- `mus.response(table)` — monta resposta para o client
 - `mus.sendMessage(recipientID, subject, content)` — envia mensagem para outro client
 - `mus.db.getPlayerAttribute(userID, attr)` — lê atributo do jogador
 - `mus.db.setPlayerAttribute(userID, attr, value)` — grava atributo do jogador
