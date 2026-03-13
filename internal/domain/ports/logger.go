@@ -33,4 +33,5 @@ type Logger interface {
 	Warn(msg string, fields ...map[string]interface{})
 	Error(msg string, fields ...map[string]interface{})
 	Fatal(msg string, fields ...map[string]interface{})
+	Flush()
 }

@@ -22,10 +22,10 @@ func ParseLogLevel(level string) ports.LogLevel {
 	}
 }
 
-func NewLogger(loggerType, component string, level ports.LogLevel, logPath string) (ports.Logger, error) {
+func NewLogger(loggerType, component string, level ports.LogLevel, logPath string, bufferSize int) (ports.Logger, error) {
 	switch loggerType {
 	case "file":
-		return outbound.NewFileLogger(component, level, logPath), nil
+		return outbound.NewFileLogger(component, level, logPath, bufferSize), nil
 	default:
 		return nil, fmt.Errorf("unsupported logger type: %s", loggerType)
 	}

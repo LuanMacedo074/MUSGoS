@@ -33,7 +33,7 @@ func TestParseLogLevel(t *testing.T) {
 
 func TestNewLogger_File(t *testing.T) {
 	logPath := t.TempDir()
-	logger, err := factory.NewLogger("file", "test-component", ports.INFO, logPath)
+	logger, err := factory.NewLogger("file", "test-component", ports.INFO, logPath, 64)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -43,7 +43,7 @@ func TestNewLogger_File(t *testing.T) {
 }
 
 func TestNewLogger_Unknown(t *testing.T) {
-	_, err := factory.NewLogger("console", "test", ports.INFO, "/tmp")
+	_, err := factory.NewLogger("console", "test", ports.INFO, "/tmp", 64)
 	if err == nil {
 		t.Error("expected error for unknown logger type")
 	}

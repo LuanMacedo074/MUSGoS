@@ -36,6 +36,7 @@ type ServerConfig struct {
 	LogLevel         string
 	LoggerType       string
 	LogPath          string
+	LogBufferSize    int
 	Environment      string
 	CipherType       string
 	EncryptionKey    string
@@ -67,6 +68,7 @@ func LoadServerConfig() ServerConfig {
 		LogLevel:      getEnv("LOG_LEVEL", "INFO"),
 		LoggerType:    getEnv("LOGGER_TYPE", "file"),
 		LogPath:       getEnv("LOG_PATH", "logs"),
+		LogBufferSize: getEnvInt("LOG_BUFFER_SIZE", 1024),
 		Environment:   getEnv("ENVIRONMENT", "development"),
 		CipherType:    getEnv("CIPHER_TYPE", "blowfish"),
 		EncryptionKey: getEnv("ENCRYPTION_KEY", "IPAddress resolution"),

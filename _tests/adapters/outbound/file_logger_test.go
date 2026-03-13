@@ -12,7 +12,7 @@ import (
 
 func TestFileLogger_LevelFiltering(t *testing.T) {
 	logDir := t.TempDir()
-	logger := outbound.NewFileLogger("test", ports.WARN, logDir)
+	logger := outbound.NewFileLogger("test", ports.WARN, logDir, 64)
 
 	// These should be filtered out (below WARN)
 	logger.Debug("debug msg")
@@ -21,6 +21,8 @@ func TestFileLogger_LevelFiltering(t *testing.T) {
 	// These should be logged
 	logger.Warn("warn msg")
 	logger.Error("error msg")
+
+	logger.Flush()
 
 	// Read the log file
 	content := readLogFile(t, logDir)
@@ -41,9 +43,11 @@ func TestFileLogger_LevelFiltering(t *testing.T) {
 
 func TestFileLogger_OutputFormat(t *testing.T) {
 	logDir := t.TempDir()
-	logger := outbound.NewFileLogger("mycomp", ports.DEBUG, logDir)
+	logger := outbound.NewFileLogger("mycomp", ports.DEBUG, logDir, 64)
 
 	logger.Info("hello world", map[string]interface{}{"key": "val"})
+
+	logger.Flush()
 
 	content := readLogFile(t, logDir)
 

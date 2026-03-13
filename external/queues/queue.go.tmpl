@@ -1,0 +1,10 @@
+package queues
+
+func init() {
+	Register(QueueDefinition{
+		Topic: "TOPIC",
+		Handler: func(payload []byte) {
+			// TODO: implement handler for TOPIC
+		},
+	})
+}

@@ -40,6 +40,8 @@ func (m *MockLogger) Fatal(msg string, fields ...map[string]interface{}) {
 	m.record(ports.FATAL, msg, fields)
 }
 
+func (m *MockLogger) Flush() {}
+
 func (m *MockLogger) record(level ports.LogLevel, msg string, fields []map[string]interface{}) {
 	entry := LogEntry{Level: level, Msg: msg}
 	if len(fields) > 0 {
