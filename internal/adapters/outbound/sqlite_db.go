@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"fsos-server/internal/domain/ports"
 	"fsos-server/internal/domain/types/lingo"
 
 	_ "modernc.org/sqlite"
@@ -199,6 +200,136 @@ func (s *SQLiteDB) DeletePlayerAttribute(appName, userID, attrName string) error
 	}
 	_, err = s.db.Exec("DELETE FROM player_attributes WHERE app_id = ? AND user_id = ? AND attr_name = ?", appID, userID, attrName)
 	return err
+}
+
+// --- DBUser ---
+
+func (s *SQLiteDB) CreateUser(username, passwordHash, salt string, userLevel int) error {
+	_, err := s.db.Exec(
+		"INSERT INTO users (username, password_hash, salt, user_level) VALUES (?, ?, ?, ?)",
+		username, passwordHash, salt, userLevel)
+	return err
+}
+
+func (s *SQLiteDB) GetUser(username string) (*ports.User, error) {
+	var u ports.User
+	err := s.db.QueryRow(
+		"SELECT id, username, password_hash, salt, user_level, created_at FROM users WHERE username = ?",
+		username).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Salt, &u.UserLevel, &u.CreatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ports.ErrUserNotFound
+		}
+		return nil, err
+	}
+	return &u, nil
+}
+
+func (s *SQLiteDB) DeleteUser(username string) error {
+	result, err := s.db.Exec("DELETE FROM users WHERE username = ?", username)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ports.ErrUserNotFound
+	}
+	return nil
+}
+
+func (s *SQLiteDB) UpdateUserLevel(username string, level int) error {
+	result, err := s.db.Exec("UPDATE users SET user_level = ? WHERE username = ?", level, username)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ports.ErrUserNotFound
+	}
+	return nil
+}
+
+func (s *SQLiteDB) UpdateUserPassword(username, passwordHash, salt string) error {
+	result, err := s.db.Exec(
+		"UPDATE users SET password_hash = ?, salt = ? WHERE username = ?",
+		passwordHash, salt, username)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ports.ErrUserNotFound
+	}
+	return nil
+}
+
+// --- DBBan ---
+
+func (s *SQLiteDB) CreateBan(userID *int64, ipAddress *string, reason string, expiresAt *time.Time) error {
+	_, err := s.db.Exec(
+		"INSERT INTO bans (user_id, ip_address, reason, expires_at) VALUES (?, ?, ?, ?)",
+		userID, ipAddress, reason, expiresAt)
+	return err
+}
+
+func (s *SQLiteDB) GetActiveBanByUserID(userID int64) (*ports.Ban, error) {
+	var b ports.Ban
+	err := s.db.QueryRow(`
+		SELECT id, user_id, ip_address, reason, expires_at, revoked_at, created_at
+		FROM bans
+		WHERE user_id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > datetime('now'))
+		ORDER BY created_at DESC LIMIT 1`,
+		userID).Scan(&b.ID, &b.UserID, &b.IPAddress, &b.Reason, &b.ExpiresAt, &b.RevokedAt, &b.CreatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ports.ErrBanNotFound
+		}
+		return nil, err
+	}
+	return &b, nil
+}
+
+func (s *SQLiteDB) GetActiveBanByIP(ipAddress string) (*ports.Ban, error) {
+	var b ports.Ban
+	err := s.db.QueryRow(`
+		SELECT id, user_id, ip_address, reason, expires_at, revoked_at, created_at
+		FROM bans
+		WHERE ip_address = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > datetime('now'))
+		ORDER BY created_at DESC LIMIT 1`,
+		ipAddress).Scan(&b.ID, &b.UserID, &b.IPAddress, &b.Reason, &b.ExpiresAt, &b.RevokedAt, &b.CreatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ports.ErrBanNotFound
+		}
+		return nil, err
+	}
+	return &b, nil
+}
+
+func (s *SQLiteDB) RevokeBan(banID int64) error {
+	result, err := s.db.Exec(
+		"UPDATE bans SET revoked_at = datetime('now') WHERE id = ? AND revoked_at IS NULL",
+		banID)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ports.ErrBanNotFound
+	}
+	return nil
 }
 
 // --- ExecRaw ---

@@ -1,0 +1,103 @@
+# MUSGoS — Roadmap para MVP
+
+Análise comparativa com [OpenSMUS 1.02](https://sourceforge.net/p/opensmus/code/HEAD/tree/tags/1.02/src/net/sf/opensmus/) para identificar o que falta até um servidor mínimo operável.
+
+## O que já funciona
+
+| Componente | Arquivo | OpenSMUS equivalente |
+|---|---|---|
+| TCP Server | `tcp_server.go` | `MUSServer.java` |
+| Message Parsing | `mus_message.go` | `MUSMessage.java` |
+| Blowfish Cipher | `blowfish.go` | `MUSBlowfish.java` / `MUSBlowfishCypher.java` |
+| Lingo Types (core) | `lingo/*.go` | `LInteger, LString, LSymbol, LList, LPropList, LFloat, LVoid, LMedia` |
+| Database (persistência) | `sqlite_db.go` | `MUSSQLConnection.java` |
+| Session Store | `redis_session_store.go` | — (in-memory no OpenSMUS) |
+| Logging | `file_logger.go` | `MUSLog.java` |
+| Config | `config.go` | `MUSServerProperties.java` |
+| Migrations | `migration_runner.go` | — |
+| Error Codes | `mus_error_code.go` | `MUSErrorCode.java` |
+| Users & Bans (DB) | `sqlite_db.go` + migration | `MUSSQLConnection.java` (user/ban tables) |
+
+## O que falta
+
+### Prioridade CRÍTICA — sem isso o servidor não opera
+
+| # | Componente | OpenSMUS equivalente | Descrição |
+|---|---|---|---|
+| ~~1~~ | ~~**Error Codes**~~ | ~~`MUSErrorCode.java`~~ | ~~Implementado em `mus_error_code.go`~~ |
+| 2 | **Response Builder** | `MUSMessage.send()` | Serializar `MUSMessage` de volta para bytes |
+| 3 | **Logon Handler** | `MUSLogonMessage.java` | Processar logon: extrair movieID, userID, password; validar; responder |
+| 4 | **Movie (Room) Manager** | `MUSMovie.java` | Gerenciar movies — criar, adicionar/remover usuários, listar groups |
+| 5 | **Group Manager** | `MUSGroup.java` | `@AllUsers` auto-join, join/leave, broadcast |
+| 6 | **Message Dispatcher** | `MUSDispatcher.java` | Roteamento central por subject/recipient |
+| 7 | **Group Messaging** | `MUSGroup.deliver()` | Broadcast para todos os membros de um group |
+| 8 | **User-to-User Messaging** | `MUSUser.send()` | Envio direto entre usuários |
+
+### Prioridade MÉDIA — servidor funciona sem, mas é incompleto
+
+| # | Componente | OpenSMUS equivalente | Descrição |
+|---|---|---|---|
+| 9 | **System Commands** | `MUSDispatcher.handleSystemMsg()` | `system.server.*`, `system.group.*`, `system.user.*` |
+| 10 | **DB Dispatcher** | `MUSDBDispatcher.java` | Comandos `DBPlayer.*`, `DBApplication.*`, `DBAdmin.*` |
+| 11 | **User Send Queue** | `MUSUserSendQueue.java` | Fila assíncrona por usuário |
+| 12 | **Group Send Queue** | `MUSGroupSendQueue.java` | Fila assíncrona por group |
+| 13 | **Idle Check** | `MUSIdleCheck.java` | Desconexão de usuários inativos |
+| 14 | **Lingo Types faltantes** | `LPoint, LRect, LColor, LDate, L3dVector, L3dTransform, LPicture` | Tipos raramente usados |
+
+### Prioridade BAIXA — nice to have
+
+| # | Componente | OpenSMUS equivalente | Descrição |
+|---|---|---|---|
+| 15 | Server-side scripting | `ServerSideScript.java`, `MUSScriptMap.java` | Scripts Lua (planejado via gopher-lua) |
+| 16 | UDP support | `MUSUDPListener.java` | Transporte UDP para baixa latência |
+| 17 | Email sending | `MUSEmail.java` | Envio de emails SMTP |
+| 18 | Kill timers | `MUSKillServerTimer.java`, `MUSKillUserTimer.java` | Timers de shutdown/desconexão |
+| 19 | User levels / permissions | user level cache no `MUSDispatcher` | Controle de acesso por nível (DB pronto, falta enforcement no dispatcher) |
+| 20 | Ban system | `MUSDBDispatcher.ban/revokeBan` | Banimento de usuários (DB pronto, falta verificação no logon) |
+
+## Fluxo de conexão (referência OpenSMUS)
+
+```
+Cliente Shockwave                         Servidor
+       |                                      |
+       |──── TCP connect ────────────────────►│
+       │                                      │ registra conexão
+       │──── Logon message (encrypted) ──────►│
+       │                                      │ decrypt com Blowfish
+       │                                      │ extrai movieID, userID, password
+       │                                      │ valida credenciais
+       │                                      │ cria/encontra Movie
+       │                                      │ adiciona User ao Movie
+       │                                      │ auto-join @AllUsers group
+       │◄──── Logon reply (success/error) ────│
+       │                                      │
+       │──── message (subject, recipient) ───►│
+       │                                      │ Dispatcher analisa recipient:
+       │                                      │   "system.*"  → system command
+       │                                      │   "@GroupName" → group broadcast
+       │                                      │   "userName"   → user-to-user
+       │                                      │   "@MovieName" → cross-movie
+       │◄──── response / broadcast ───────────│
+       │                                      │
+       │──── disconnect ─────────────────────►│
+       │                                      │ remove de groups
+       │                                      │ remove de movie
+       │                                      │ cleanup sessão
+```
+
+## Ordem de implementação sugerida (MVP)
+
+```
+1. Error Codes ──────────── ✅ FEITO (mus_error_code.go)
+   Users & Bans DB ────────── ✅ FEITO (migration + CRUD no sqlite_db.go)
+2. Response Builder ─────── MUSMessage.ToBytes()
+3. Logon Handler ────────── parse logon → valida → responde
+4. Movie + Group Manager ── cria movie, auto-join @AllUsers
+5. Message Dispatcher ───── roteia por recipient/subject
+6. Group Messaging ──────── broadcast para group
+7. User-to-User ─────────── envio direto
+```
+
+Resultado: cliente conecta → autentica → entra em sala → troca mensagens.
+
+Para explicação detalhada de cada item, veja [human-read-to-do.md](human-read-to-do.md).

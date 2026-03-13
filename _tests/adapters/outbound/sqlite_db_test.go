@@ -1,12 +1,15 @@
 package outbound_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"fsos-server/external/migrations"
 	"fsos-server/internal/adapters/outbound"
+	"fsos-server/internal/domain/ports"
 	"fsos-server/internal/domain/services"
 	"fsos-server/internal/domain/types/lingo"
 )
@@ -307,6 +310,223 @@ func TestPlayerAttribute_SetGetDelete(t *testing.T) {
 	mustNoErr(t, err)
 	if got3.GetType() != lingo.VtVoid {
 		t.Error("expected void after delete")
+	}
+}
+
+// --- DBUser ---
+
+func TestCreateUser(t *testing.T) {
+	db := newTestDB(t)
+	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+}
+
+func TestCreateUser_Duplicate(t *testing.T) {
+	db := newTestDB(t)
+	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+	err := db.CreateUser("alice", "hash456", "salt456", 20)
+	if err == nil {
+		t.Error("expected error for duplicate username")
+	}
+}
+
+func TestGetUser(t *testing.T) {
+	db := newTestDB(t)
+	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+
+	u, err := db.GetUser("alice")
+	mustNoErr(t, err)
+
+	if u.Username != "alice" {
+		t.Errorf("expected username 'alice', got %q", u.Username)
+	}
+	if u.PasswordHash != "hash123" {
+		t.Errorf("expected password_hash 'hash123', got %q", u.PasswordHash)
+	}
+	if u.Salt != "salt123" {
+		t.Errorf("expected salt 'salt123', got %q", u.Salt)
+	}
+	if u.UserLevel != 20 {
+		t.Errorf("expected user_level 20, got %d", u.UserLevel)
+	}
+	if u.ID == 0 {
+		t.Error("expected non-zero ID")
+	}
+	if u.CreatedAt.IsZero() {
+		t.Error("expected non-zero created_at")
+	}
+}
+
+func TestGetUser_NotFound(t *testing.T) {
+	db := newTestDB(t)
+	_, err := db.GetUser("nobody")
+	if !errors.Is(err, ports.ErrUserNotFound) {
+		t.Errorf("expected ErrUserNotFound, got %v", err)
+	}
+}
+
+func TestDeleteUser(t *testing.T) {
+	db := newTestDB(t)
+	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+	mustNoErr(t, db.DeleteUser("alice"))
+
+	_, err := db.GetUser("alice")
+	if !errors.Is(err, ports.ErrUserNotFound) {
+		t.Errorf("expected ErrUserNotFound after delete, got %v", err)
+	}
+}
+
+func TestDeleteUser_CascadesBans(t *testing.T) {
+	db := newTestDB(t)
+	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+
+	u, err := db.GetUser("alice")
+	mustNoErr(t, err)
+
+	mustNoErr(t, db.CreateBan(&u.ID, nil, "bad behavior", nil))
+
+	ban, err := db.GetActiveBanByUserID(u.ID)
+	mustNoErr(t, err)
+	if ban == nil {
+		t.Fatal("expected ban to exist before delete")
+	}
+
+	mustNoErr(t, db.DeleteUser("alice"))
+
+	_, err = db.GetActiveBanByUserID(u.ID)
+	if !errors.Is(err, ports.ErrBanNotFound) {
+		t.Errorf("expected ErrBanNotFound after cascade delete, got %v", err)
+	}
+}
+
+func TestUpdateUserLevel(t *testing.T) {
+	db := newTestDB(t)
+	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+	mustNoErr(t, db.UpdateUserLevel("alice", 80))
+
+	u, err := db.GetUser("alice")
+	mustNoErr(t, err)
+	if u.UserLevel != 80 {
+		t.Errorf("expected user_level 80, got %d", u.UserLevel)
+	}
+}
+
+func TestUpdateUserPassword(t *testing.T) {
+	db := newTestDB(t)
+	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+	mustNoErr(t, db.UpdateUserPassword("alice", "newhash", "newsalt"))
+
+	u, err := db.GetUser("alice")
+	mustNoErr(t, err)
+	if u.PasswordHash != "newhash" {
+		t.Errorf("expected password_hash 'newhash', got %q", u.PasswordHash)
+	}
+	if u.Salt != "newsalt" {
+		t.Errorf("expected salt 'newsalt', got %q", u.Salt)
+	}
+}
+
+// --- DBBan ---
+
+func TestCreateBan_ByUserID(t *testing.T) {
+	db := newTestDB(t)
+	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+
+	u, err := db.GetUser("alice")
+	mustNoErr(t, err)
+
+	mustNoErr(t, db.CreateBan(&u.ID, nil, "spamming", nil))
+
+	ban, err := db.GetActiveBanByUserID(u.ID)
+	mustNoErr(t, err)
+	if ban == nil {
+		t.Fatal("expected ban to exist")
+	}
+	if *ban.UserID != u.ID {
+		t.Errorf("expected user_id %d, got %d", u.ID, *ban.UserID)
+	}
+	if ban.Reason != "spamming" {
+		t.Errorf("expected reason 'spamming', got %q", ban.Reason)
+	}
+}
+
+func TestCreateBan_NeitherUserNorIP(t *testing.T) {
+	db := newTestDB(t)
+	err := db.CreateBan(nil, nil, "orphan ban", nil)
+	if err == nil {
+		t.Error("expected error when both user_id and ip_address are nil")
+	}
+}
+
+func TestCreateBan_ByIP(t *testing.T) {
+	db := newTestDB(t)
+	ip := "192.168.1.100"
+	mustNoErr(t, db.CreateBan(nil, &ip, "abuse", nil))
+
+	ban, err := db.GetActiveBanByIP(ip)
+	mustNoErr(t, err)
+	if ban == nil {
+		t.Fatal("expected ban to exist")
+	}
+	if *ban.IPAddress != ip {
+		t.Errorf("expected ip_address %q, got %q", ip, *ban.IPAddress)
+	}
+}
+
+func TestGetActiveBan_Expired(t *testing.T) {
+	db := newTestDB(t)
+	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+
+	u, err := db.GetUser("alice")
+	mustNoErr(t, err)
+
+	past := time.Now().Add(-1 * time.Hour)
+	mustNoErr(t, db.CreateBan(&u.ID, nil, "temp ban", &past))
+
+	_, err = db.GetActiveBanByUserID(u.ID)
+	if !errors.Is(err, ports.ErrBanNotFound) {
+		t.Errorf("expected ErrBanNotFound for expired ban, got %v", err)
+	}
+}
+
+func TestGetActiveBan_Permanent(t *testing.T) {
+	db := newTestDB(t)
+	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+
+	u, err := db.GetUser("alice")
+	mustNoErr(t, err)
+
+	mustNoErr(t, db.CreateBan(&u.ID, nil, "permanent", nil))
+
+	ban, err := db.GetActiveBanByUserID(u.ID)
+	mustNoErr(t, err)
+	if ban == nil {
+		t.Fatal("expected permanent ban to be returned")
+	}
+	if ban.ExpiresAt != nil {
+		t.Error("expected nil expires_at for permanent ban")
+	}
+}
+
+func TestRevokeBan(t *testing.T) {
+	db := newTestDB(t)
+	mustNoErr(t, db.CreateUser("alice", "hash123", "salt123", 20))
+
+	u, err := db.GetUser("alice")
+	mustNoErr(t, err)
+
+	mustNoErr(t, db.CreateBan(&u.ID, nil, "revokable", nil))
+
+	ban, err := db.GetActiveBanByUserID(u.ID)
+	mustNoErr(t, err)
+	if ban == nil {
+		t.Fatal("expected ban to exist")
+	}
+
+	mustNoErr(t, db.RevokeBan(ban.ID))
+
+	_, err = db.GetActiveBanByUserID(u.ID)
+	if !errors.Is(err, ports.ErrBanNotFound) {
+		t.Errorf("expected ErrBanNotFound after revoke, got %v", err)
 	}
 }
 
