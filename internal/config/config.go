@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -48,6 +49,7 @@ type ServerConfig struct {
 	ScriptTimeout    int
 	AuthMode         string
 	Redis            RedisConfig
+	AllEncrypted     bool
 	QueueType        string
 	QueueRedis       RedisConfig
 	RabbitMQ         RabbitMQConfig
@@ -87,7 +89,8 @@ func LoadServerConfig() ServerConfig {
 			KeyPrefix: getEnv("REDIS_KEY_PREFIX", "musgo"),
 			ConnTTL:   getEnv("REDIS_CONN_TTL", "3600"),
 		},
-		QueueType: getEnv("QUEUE_TYPE", "memory"),
+		AllEncrypted: strings.HasPrefix(getEnv("ENCRYPTION_KEY", "IPAddress resolution"), "#All"),
+		QueueType:    getEnv("QUEUE_TYPE", "memory"),
 		QueueRedis: RedisConfig{
 			Host:      getEnv("QUEUE_REDIS_HOST", "localhost"),
 			Port:      getEnv("QUEUE_REDIS_PORT", "6379"),

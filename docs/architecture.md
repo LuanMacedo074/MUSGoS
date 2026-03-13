@@ -51,9 +51,11 @@ internal/
 │   │       └── mus_error_code.go     ← ~54 constantes de erro do protocolo MUS
 │   ├── ports/                        ← interfaces (contratos)
 │   │   ├── cipher.go                 ← interface Cipher
+│   │   ├── connection_writer.go      ← interface ConnectionWriter (write + remap)
 │   │   ├── database.go               ← interface DBAdapter (users, bans, atributos)
 │   │   ├── handler.go                ← interface MessageHandler
 │   │   ├── logger.go                 ← interface Logger + LogLevel
+│   │   ├── message_sender.go         ← interface MessageSender (envio de mensagens)
 │   │   ├── migration.go              ← interfaces Migration + MigrationTracker
 │   │   ├── schema.go                 ← DSL para definição de tabelas/índices
 │   │   ├── queue.go                  ← interfaces QueuePublisher, QueueConsumer, MessageQueue
@@ -65,12 +67,15 @@ internal/
 └── adapters/                         ← implementações concretas
     ├── inbound/                      ← adaptadores de ENTRADA
     │   ├── mus/                      ← lógica específica do protocolo MUS
-    │   │   ├── logon.go              ← autenticação com 3 modos (none/open/strict)
+    │   │   ├── system_service.go     ← SystemService (logon + futuros system commands)
+    │   │   ├── dispatcher.go         ← roteamento central por primeiro recipient
+    │   │   ├── sender.go             ← envio direto (user-to-user) e broadcast (group)
     │   │   ├── movie.go              ← MovieManager — gerencia movies e groups
     │   │   ├── group.go              ← Group — membership e broadcast dentro de movies
     │   │   └── response.go           ← helpers para construção de respostas SMUS
-    │   ├── tcp_server.go             ← servidor TCP que aceita conexões
-    │   ├── smus_handler.go           ← processa mensagens SMUS, dispara scripts
+    │   ├── tcp_server.go             ← servidor TCP, delega conexões para ConnPool
+    │   ├── conn_pool.go              ← pool de conexões com per-conn write mutex
+    │   ├── smus_handler.go           ← parseia mensagens SMUS, delega roteamento para Dispatcher
     │   └── console.go                ← CLI interativo (create user, etc.)
     └── outbound/                     ← adaptadores de SAÍDA
         ├── blowfish.go               ← implementação da criptografia Blowfish
@@ -119,7 +124,7 @@ O pacote `factory/` contém funções construtoras (`NewCipher`, `NewHandler`, `
 
 Porta é só um nome bonito para **interface**. São os pontos de conexão entre o domínio e o mundo externo.
 
-Temos oito:
+Temos dez:
 
 #### `SessionStore` (porta outbound)
 ```go
@@ -142,6 +147,23 @@ type SessionStore interface {
 }
 ```
 Centraliza o gerenciamento de conexões ativas, atributos efêmeros de sessão (por clientID) e membership de rooms/groups. Duas implementações: `MemorySessionStore` (in-memory, padrão para desenvolvimento) e `RedisSessionStore` (para produção, permite múltiplas instâncias compartilharem estado). Quando um cliente desconecta (`UnregisterConnection`), todos os dados associados (conexão, atributos, rooms) são limpos automaticamente.
+
+#### `ConnectionWriter` (porta outbound)
+```go
+type ConnectionWriter interface {
+    WriteToClient(clientID string, data []byte) error
+    RemapClientID(oldID, newID string)
+}
+```
+Abstração para escrita em conexões de rede. `WriteToClient` envia bytes para um cliente pelo seu ID. `RemapClientID` permite trocar o ID de uma conexão (usado durante o Logon, quando o IP é substituído pelo userID). Implementada pelo `ConnPool`.
+
+#### `MessageSender` (porta outbound)
+```go
+type MessageSender interface {
+    SendMessage(senderID, recipientID, subject string, content lingo.LValue) error
+}
+```
+Contrato para envio de mensagens MUS. Roteia automaticamente: se o recipientID começa com `@`, faz broadcast para o group; caso contrário, envia diretamente ao usuário. Implementada pelo `Sender`. Usada pelo `LuaScriptEngine` para `mus.sendMessage()`.
 
 #### `Cipher` (porta outbound)
 ```go
@@ -237,13 +259,17 @@ Adaptadores são as **implementações concretas** que conectam o domínio ao mu
 
 São os adaptadores que **recebem** dados do mundo externo e os entregam ao domínio.
 
-- **`tcp_server.go`** — abre uma porta TCP, aceita conexões, lê bytes da rede. Quando recebe dados, repassa para o `MessageHandler` (que ele conhece apenas pela interface). Configurável via `TCPServerConfig` (bind address, buffer size, TCP_NODELAY). Suporta graceful shutdown — ao receber SIGINT/SIGTERM, fecha todas as conexões ativas. É inbound porque é o **ponto de entrada** do sistema: o cliente Shockwave conecta aqui.
+- **`tcp_server.go`** — abre uma porta TCP, aceita conexões, lê bytes da rede. Não gerencia conexões diretamente — delega para o `ConnPool`. Quando recebe dados, repassa para o `MessageHandler` (que ele conhece apenas pela interface). Após `HandleRawMessage`, re-busca o ID atual da conexão no pool (pode ter sido remapeado durante Logon). Configurável via `TCPServerConfig` (bind address, buffer size, TCP_NODELAY). Suporta graceful shutdown. Recebe o handler no constructor (sem `SetHandler`).
 
-- **`smus_handler.go`** — recebe os bytes brutos do TCP server e usa o domínio (`smus.ParseMUSMessageWithDecryption`) para interpretar a mensagem. Roteia mensagens de Logon para o `LogonService`, e mensagens com recipient `system.script` para o `ScriptEngine` (o subject da mensagem é o nome do script). É inbound porque está do lado de "receber e processar" a requisição.
+- **`conn_pool.go`** — pool de conexões TCP com mapeamento bidirecional clientID↔conn e per-conn write mutex para thread safety. Operações: `Register`, `Unregister`, `CurrentID`, `WriteToClient`, `RemapClientID`, `CloseAll`. Implementa `ports.ConnectionWriter`.
+
+- **`smus_handler.go`** — recebe os bytes brutos do TCP server e usa o domínio (`smus.ParseMUSMessageWithDecryption`) para interpretar a mensagem. Delega toda a lógica de roteamento para o `Dispatcher`. É inbound porque está do lado de "receber e processar" a requisição.
 
 - **`mus/`** — sub-pacote com lógica específica do protocolo MUS:
-  - **`logon.go`** — `LogonService` com 3 modos de autenticação configuráveis (`none`, `open`, `strict`). Extrai credenciais de `LList` ou `LPropList`, valida contra o banco, verifica bans. Atribui user level na sessão (`#userLevel`): em modo `strict`/`open` usa o nível do DB quando o usuário existe, senão usa `DEFAULT_USER_LEVEL`.
-  - **`response.go`** — helpers para construção de respostas SMUS (`NewResponse`), usados pelo handler e futuros services.
+  - **`system_service.go`** — `SystemService` (renomeado de `logon.go`) com 3 modos de autenticação configuráveis (`none`, `open`, `strict`). Extrai credenciais de `LList` ou `LPropList`, valida contra o banco, verifica bans. Atribui user level na sessão (`#userLevel`). Faz remap do clientID via `ConnectionWriter` e join no movie via `MovieManager`.
+  - **`dispatcher.go`** — roteamento central por primeiro recipient: `System` → SystemService, `system.script` → ScriptEngine, `@Group` → Sender broadcast, `userName` → Sender direto.
+  - **`sender.go`** — envio de mensagens. `SendMessage()` roteia: groups (`@`) via `deliverToGroup()` (serializa uma vez, entrega a todos os membros), user-to-user via `ConnectionWriter.WriteToClient()`. Implementa `ports.MessageSender`.
+  - **`response.go`** — helpers para construção de respostas SMUS (`NewResponse`), usados pelo handler e services.
 
 - **`console.go`** — CLI interativo para administração do servidor. Suporta comandos como `create user <username> <password>`. Usa bcrypt para hash de senhas. Acessa o `DBAdapter` diretamente.
 
@@ -294,18 +320,24 @@ sessionStore, _ := factory.NewSessionStore(cfg.SessionStoreType, cfg.Redis)
 // factory cria a message queue (outbound) baseada no tipo configurado
 queue, _ := factory.NewMessageQueue(cfg.QueueType, cfg.QueueRedis, cfg.RabbitMQ)
 
-// factory cria o script engine (outbound), recebendo o publisher para mus.publish()
-scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout, queue)
+// 1. ConnPool — standalone, sem dependências
+pool := inbound.NewConnPool()
 
-// factory cria o handler (inbound), injetando dependências + defaultUserLevel
+// 2. Sender — usa pool como ConnectionWriter
+sender := mus.NewSender(pool, sessionStore, gameLogger)
+
+// 3. ScriptEngine — pode enviar mensagens via Sender
+scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout, queue, sender)
+
+// 4. Handler — Dispatcher recebe ScriptEngine + Sender + pool
 handler, _ := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine,
-    dbResult.Adapter, sessionStore, queue, cfg.AuthMode, cfg.DefaultUserLevel)
+    dbResult.Adapter, sessionStore, queue, pool, sender, cfg.AuthMode, cfg.DefaultUserLevel)
 
-// cria o servidor TCP (inbound) com config de rede (IP, buffer, NoDelay)
+// 5. TCPServer — totalmente construído, sem SetHandler
 server := inbound.NewTCPServer(inbound.TCPServerConfig{
     Port: cfg.Port, ServerIP: cfg.ServerIP,
     MaxMessageSize: cfg.MaxMessageSize, TCPNoDelay: cfg.TCPNoDelay,
-}, gameLogger, handler, sessionStore)
+}, handler, pool, gameLogger, sessionStore)
 
 // console interativo para administração (usa DefaultUserLevel ao criar users)
 console := inbound.NewConsole(dbResult.Adapter, gameLogger, os.Stdin, cfg.DefaultUserLevel)
@@ -344,8 +376,8 @@ O domínio **nunca** importa adapters, config ou factory. Adapters importam o do
 | Conceito | O que é | No MUSGoS |
 |---|---|---|
 | **Domain** | Lógica e tipos centrais do sistema | `types/lingo/`, `types/smus/`, `services/` |
-| **Port** | Interface que define um contrato | `Cipher`, `MessageHandler`, `Logger`, `DBAdapter`, `SessionStore`, `ScriptEngine`, `MessageQueue`, `Migration` |
-| **Adapter Inbound** | Recebe dados do mundo externo | `TCPServer`, `SMUSHandler`, `Console`, `MovieManager`, `Group` |
+| **Port** | Interface que define um contrato | `Cipher`, `ConnectionWriter`, `MessageHandler`, `MessageSender`, `Logger`, `DBAdapter`, `SessionStore`, `ScriptEngine`, `MessageQueue`, `Migration` |
+| **Adapter Inbound** | Recebe dados do mundo externo | `TCPServer`, `ConnPool`, `SMUSHandler`, `Dispatcher`, `Sender`, `SystemService`, `Console`, `MovieManager`, `Group` |
 | **Adapter Outbound** | Provê capacidades ao domínio | `Blowfish`, `FileLogger`, `SQLiteDB`, `MemorySessionStore`, `RedisSessionStore`, `LuaScriptEngine`, `MemoryQueue`, `RedisQueue`, `RabbitMQQueue` |
 | **Config** | Carrega variáveis de ambiente | `ServerConfig`, `LoadServerConfig()` |
 | **Factory** | Cria implementações concretas pelo tipo | `NewCipher()`, `NewHandler()`, `NewLogger()`, `NewDatabase()`, `NewSessionStore()`, `NewScriptEngine()`, `NewMessageQueue()` |
@@ -365,4 +397,4 @@ Atualmente a camada `domain/services/` contém:
 
 Lógica específica do protocolo MUS (como `LogonService` e helpers de resposta) vive em `adapters/inbound/mus/`, pois depende diretamente dos tipos SMUS e não é lógica de domínio pura.
 
-Futuros services de domínio (como `Dispatcher`, `MovieManager`, etc.) serão adicionados em `domain/services/` quando envolverem lógica de negócio agnóstica ao protocolo.
+Lógica específica do protocolo MUS (`Dispatcher`, `Sender`, `SystemService`, `MovieManager`, `GroupManager`) vive em `adapters/inbound/mus/`, pois depende diretamente dos tipos SMUS. Futuros services de domínio agnósticos ao protocolo serão adicionados em `domain/services/`.

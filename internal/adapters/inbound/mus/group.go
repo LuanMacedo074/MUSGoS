@@ -57,7 +57,7 @@ func (g *Group) GetAttributeNames() []string {
 }
 
 func groupRoomName(movieID, groupName string) string {
-	return fmt.Sprintf("%s:@%s", movieID, groupName)
+	return fmt.Sprintf("%s:%s", movieID, groupName)
 }
 
 type GroupManager struct {
@@ -137,7 +137,7 @@ func (gm *GroupManager) LeaveAllGroups(movieID, userID string) error {
 		return fmt.Errorf("failed to get client rooms: %w", err)
 	}
 
-	prefix := movieID + ":@"
+	prefix := movieID + ":"
 	for _, room := range rooms {
 		if strings.HasPrefix(room, prefix) {
 			if err := gm.sessionStore.LeaveRoom(room, userID); err != nil {

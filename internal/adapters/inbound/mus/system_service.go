@@ -9,29 +9,56 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type LogonService struct {
+type SystemService struct {
 	db               ports.DBAdapter
 	sessionStore     ports.SessionStore
 	cipher           ports.Cipher
 	logger           ports.Logger
 	movieManager     *MovieManager
+	groupManager     *GroupManager
+	connWriter       ports.ConnectionWriter
 	authMode         string
 	defaultUserLevel int
 }
 
-func NewLogonService(db ports.DBAdapter, sessionStore ports.SessionStore, cipher ports.Cipher, logger ports.Logger, movieManager *MovieManager, authMode string, defaultUserLevel int) *LogonService {
-	return &LogonService{
+func NewSystemService(
+	db ports.DBAdapter,
+	sessionStore ports.SessionStore,
+	cipher ports.Cipher,
+	logger ports.Logger,
+	movieManager *MovieManager,
+	groupManager *GroupManager,
+	connWriter ports.ConnectionWriter,
+	authMode string,
+	defaultUserLevel int,
+) *SystemService {
+	return &SystemService{
 		db:               db,
 		sessionStore:     sessionStore,
 		cipher:           cipher,
 		logger:           logger,
 		movieManager:     movieManager,
+		groupManager:     groupManager,
+		connWriter:       connWriter,
 		authMode:         authMode,
 		defaultUserLevel: defaultUserLevel,
 	}
 }
 
-func (s *LogonService) HandleLogon(clientIP string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
+func (s *SystemService) Handle(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
+	switch msg.Subject.Value {
+	case "Logon":
+		return s.handleLogon(senderID, msg)
+	default:
+		s.logger.Warn("Unknown system command", map[string]interface{}{
+			"subject":  msg.Subject.Value,
+			"senderID": senderID,
+		})
+		return nil, nil
+	}
+}
+
+func (s *SystemService) handleLogon(connectionID string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
 	s.logger.Debug("Logon content", map[string]interface{}{
 		"content_type": fmt.Sprintf("%T", msg.MsgContent),
 		"content":      msg.MsgContent.String(),
@@ -40,12 +67,11 @@ func (s *LogonService) HandleLogon(clientIP string, msg *smus.MUSMessage) (*smus
 	if err != nil {
 		if s.authMode == "strict" {
 			s.logger.Warn("Logon failed: could not extract credentials", map[string]interface{}{
-				"client": clientIP,
+				"client": connectionID,
 				"error":  err.Error(),
 			})
 			return NewResponse("Logon", "System", []string{msg.SenderID.Value}, smus.ErrInvalidMessageFormat, lingo.NewLVoid()), nil
 		}
-		// In none/open mode, fall back to SenderID
 		userID = msg.SenderID.Value
 		password = ""
 	}
@@ -60,13 +86,13 @@ func (s *LogonService) HandleLogon(clientIP string, msg *smus.MUSMessage) (*smus
 		user, err := s.db.GetUser(userID)
 		if err != nil {
 			s.logger.Info("Logon failed: user not found", map[string]interface{}{
-				"client": clientIP,
+				"client": connectionID,
 				"userID": userID,
 			})
 			return NewResponse("Logon", "System", []string{userID}, smus.ErrInvalidUserID, lingo.NewLVoid()), nil
 		}
 
-		if errResp := s.validateUserCredentials(user, password, clientIP, userID); errResp != nil {
+		if errResp := s.validateUserCredentials(user, password, connectionID, userID); errResp != nil {
 			return errResp, nil
 		}
 
@@ -79,14 +105,14 @@ func (s *LogonService) HandleLogon(clientIP string, msg *smus.MUSMessage) (*smus
 				// No DB record — accept anyway in open mode, use defaultUserLevel
 			} else {
 				s.logger.Error("Logon failed: database error", map[string]interface{}{
-					"client": clientIP,
+					"client": connectionID,
 					"userID": userID,
 					"error":  err.Error(),
 				})
 				return NewResponse("Logon", "System", []string{userID}, smus.ErrServerInternalError, lingo.NewLVoid()), nil
 			}
 		} else {
-			if errResp := s.validateUserCredentials(user, password, clientIP, userID); errResp != nil {
+			if errResp := s.validateUserCredentials(user, password, connectionID, userID); errResp != nil {
 				return errResp, nil
 			}
 
@@ -94,9 +120,14 @@ func (s *LogonService) HandleLogon(clientIP string, msg *smus.MUSMessage) (*smus
 		}
 	}
 
-	// Re-register session with userID instead of the initial clientIP
-	s.sessionStore.UnregisterConnection(clientIP)
-	s.sessionStore.RegisterConnection(userID, clientIP)
+	// Re-register session with userID instead of the initial connectionID
+	s.sessionStore.UnregisterConnection(connectionID)
+	s.sessionStore.RegisterConnection(userID, connectionID)
+
+	// Remap the connection so future messages use userID
+	if s.connWriter != nil {
+		s.connWriter.RemapClientID(connectionID, userID)
+	}
 
 	// Store user level in session for permission checks
 	s.sessionStore.SetUserAttribute(userID, "#userLevel", lingo.NewLInteger(int32(userLevel)))
@@ -105,7 +136,7 @@ func (s *LogonService) HandleLogon(clientIP string, msg *smus.MUSMessage) (*smus
 	if movieID != "" && s.movieManager != nil {
 		if err := s.movieManager.JoinMovie(movieID, userID); err != nil {
 			s.logger.Error("Failed to join movie after logon", map[string]interface{}{
-				"client":  clientIP,
+				"client":  connectionID,
 				"userID":  userID,
 				"movieID": movieID,
 				"error":   err.Error(),
@@ -114,7 +145,7 @@ func (s *LogonService) HandleLogon(clientIP string, msg *smus.MUSMessage) (*smus
 	}
 
 	s.logger.Info("Logon successful", map[string]interface{}{
-		"client":     clientIP,
+		"client":     connectionID,
 		"userID":     userID,
 		"movieID":    movieID,
 		"user_level": userLevel,
@@ -123,10 +154,10 @@ func (s *LogonService) HandleLogon(clientIP string, msg *smus.MUSMessage) (*smus
 	return NewResponse("Logon", "System", []string{userID}, smus.ErrNoError, lingo.NewLVoid()), nil
 }
 
-func (s *LogonService) validateUserCredentials(user *ports.User, password, clientIP, userID string) *smus.MUSMessage {
+func (s *SystemService) validateUserCredentials(user *ports.User, password, connectionID, userID string) *smus.MUSMessage {
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		s.logger.Info("Logon failed: invalid password", map[string]interface{}{
-			"client": clientIP,
+			"client": connectionID,
 			"userID": userID,
 		})
 		return NewResponse("Logon", "System", []string{userID}, smus.ErrInvalidPassword, lingo.NewLVoid())
@@ -135,7 +166,7 @@ func (s *LogonService) validateUserCredentials(user *ports.User, password, clien
 	ban, err := s.db.GetActiveBanByUserID(user.ID)
 	if err == nil && ban != nil {
 		s.logger.Info("Logon failed: user is banned", map[string]interface{}{
-			"client": clientIP,
+			"client": connectionID,
 			"userID": userID,
 			"reason": ban.Reason,
 		})
@@ -145,7 +176,7 @@ func (s *LogonService) validateUserCredentials(user *ports.User, password, clien
 	return nil
 }
 
-func (s *LogonService) extractCredentials(content lingo.LValue) (movieID, userID, password string, err error) {
+func (s *SystemService) extractCredentials(content lingo.LValue) (movieID, userID, password string, err error) {
 	if content == nil {
 		return "", "", "", ports.ErrInvalidCredentials
 	}
@@ -160,18 +191,17 @@ func (s *LogonService) extractCredentials(content lingo.LValue) (movieID, userID
 	}
 }
 
-func (s *LogonService) extractFromList(list *lingo.LList) (string, string, string, error) {
+func (s *SystemService) extractFromList(list *lingo.LList) (string, string, string, error) {
 	if len(list.Values) < 3 {
 		return "", "", "", ports.ErrInvalidCredentials
 	}
-	// [movieID, userID, password]
-	movieID := extractStringValue(list.Values[0])
-	userID := extractStringValue(list.Values[1])
-	password := extractStringValue(list.Values[2])
+	movieID := lingo.StringValue(list.Values[0])
+	userID := lingo.StringValue(list.Values[1])
+	password := lingo.StringValue(list.Values[2])
 	return movieID, userID, password, nil
 }
 
-func (s *LogonService) extractFromPropList(plist *lingo.LPropList) (string, string, string, error) {
+func (s *SystemService) extractFromPropList(plist *lingo.LPropList) (string, string, string, error) {
 	userVal, err := plist.GetElement("userID")
 	if err != nil {
 		return "", "", "", err
@@ -180,21 +210,13 @@ func (s *LogonService) extractFromPropList(plist *lingo.LPropList) (string, stri
 	if err != nil {
 		return "", "", "", err
 	}
-	userID := extractStringValue(userVal)
-	password := extractStringValue(passVal)
+	userID := lingo.StringValue(userVal)
+	password := lingo.StringValue(passVal)
 
-	// movieID is optional in proplist
 	var movieID string
 	if movieVal, err := plist.GetElement("movieID"); err == nil {
-		movieID = extractStringValue(movieVal)
+		movieID = lingo.StringValue(movieVal)
 	}
 
 	return movieID, userID, password, nil
-}
-
-func extractStringValue(v lingo.LValue) string {
-	if s, ok := v.(*lingo.LString); ok {
-		return s.Value
-	}
-	return v.String()
 }

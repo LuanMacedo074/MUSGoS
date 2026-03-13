@@ -12,13 +12,14 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func setupLogonService(db *testutil.MockDBAdapter, authMode string) *mus.LogonService {
+func setupSystemService(db *testutil.MockDBAdapter, authMode string) *mus.SystemService {
 	logger := &testutil.MockLogger{}
-	cipher := &testutil.MockCipher{}
 	sessionStore := testutil.NewMockSessionStore()
 	sessionStore.RegisterConnection("client-1", "192.168.1.1")
 	movieManager := mus.NewMovieManager(sessionStore, logger)
-	return mus.NewLogonService(db, sessionStore, cipher, logger, movieManager, authMode, 40)
+	groupManager := mus.NewGroupManager(sessionStore, logger)
+	connWriter := &testutil.MockConnectionWriter{}
+	return mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, authMode, 40)
 }
 
 func hashPassword(password string) string {
@@ -26,7 +27,7 @@ func hashPassword(password string) string {
 	return string(hash)
 }
 
-func buildLogonMsgWithList(userID, password string) *smus.MUSMessage {
+func buildLogonMsg(userID, password string) *smus.MUSMessage {
 	list := lingo.NewLList()
 	list.Values = []lingo.LValue{
 		lingo.NewLString("movieID"),
@@ -34,8 +35,12 @@ func buildLogonMsgWithList(userID, password string) *smus.MUSMessage {
 		lingo.NewLString(password),
 	}
 	return &smus.MUSMessage{
-		Subject:    smus.MUSMsgHeaderString{Length: 5, Value: "Logon"},
-		SenderID:   smus.MUSMsgHeaderString{Length: len(userID), Value: userID},
+		Subject:  smus.MUSMsgHeaderString{Length: 5, Value: "Logon"},
+		SenderID: smus.MUSMsgHeaderString{Length: len(userID), Value: userID},
+		RecptID: smus.MUSMsgHeaderStringList{
+			Count:   1,
+			Strings: []smus.MUSMsgHeaderString{{Length: 6, Value: "System"}},
+		},
 		MsgContent: list,
 	}
 }
@@ -45,23 +50,27 @@ func buildLogonMsgWithPropList(userID, password string) *smus.MUSMessage {
 	plist.AddElement(lingo.NewLSymbol("userID"), lingo.NewLString(userID))
 	plist.AddElement(lingo.NewLSymbol("password"), lingo.NewLString(password))
 	return &smus.MUSMessage{
-		Subject:    smus.MUSMsgHeaderString{Length: 5, Value: "Logon"},
-		SenderID:   smus.MUSMsgHeaderString{Length: len(userID), Value: userID},
+		Subject:  smus.MUSMsgHeaderString{Length: 5, Value: "Logon"},
+		SenderID: smus.MUSMsgHeaderString{Length: len(userID), Value: userID},
+		RecptID: smus.MUSMsgHeaderStringList{
+			Count:   1,
+			Strings: []smus.MUSMsgHeaderString{{Length: 6, Value: "System"}},
+		},
 		MsgContent: plist,
 	}
 }
 
-func TestLogonService_Success_LList(t *testing.T) {
+func TestSystemService_Logon_Success_LList(t *testing.T) {
 	db := &testutil.MockDBAdapter{
 		GetUserFunc: func(username string) (*ports.User, error) {
 			return &ports.User{ID: 1, Username: "testuser", PasswordHash: hashPassword("secret")}, nil
 		},
 	}
 
-	svc := setupLogonService(db, "strict")
-	msg := buildLogonMsgWithList("testuser", "secret")
+	svc := setupSystemService(db, "strict")
+	msg := buildLogonMsg("testuser", "secret")
 
-	resp, err := svc.HandleLogon("client-1", msg)
+	resp, err := svc.Handle("client-1", msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -73,17 +82,17 @@ func TestLogonService_Success_LList(t *testing.T) {
 	}
 }
 
-func TestLogonService_Success_LPropList(t *testing.T) {
+func TestSystemService_Logon_Success_LPropList(t *testing.T) {
 	db := &testutil.MockDBAdapter{
 		GetUserFunc: func(username string) (*ports.User, error) {
 			return &ports.User{ID: 1, Username: "testuser", PasswordHash: hashPassword("secret")}, nil
 		},
 	}
 
-	svc := setupLogonService(db, "strict")
+	svc := setupSystemService(db, "strict")
 	msg := buildLogonMsgWithPropList("testuser", "secret")
 
-	resp, err := svc.HandleLogon("client-1", msg)
+	resp, err := svc.Handle("client-1", msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -92,13 +101,13 @@ func TestLogonService_Success_LPropList(t *testing.T) {
 	}
 }
 
-func TestLogonService_UserNotFound(t *testing.T) {
+func TestSystemService_Logon_UserNotFound(t *testing.T) {
 	db := &testutil.MockDBAdapter{}
 
-	svc := setupLogonService(db, "strict")
-	msg := buildLogonMsgWithList("unknown", "secret")
+	svc := setupSystemService(db, "strict")
+	msg := buildLogonMsg("unknown", "secret")
 
-	resp, err := svc.HandleLogon("client-1", msg)
+	resp, err := svc.Handle("client-1", msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -107,17 +116,17 @@ func TestLogonService_UserNotFound(t *testing.T) {
 	}
 }
 
-func TestLogonService_BadPassword(t *testing.T) {
+func TestSystemService_Logon_BadPassword(t *testing.T) {
 	db := &testutil.MockDBAdapter{
 		GetUserFunc: func(username string) (*ports.User, error) {
 			return &ports.User{ID: 1, Username: "testuser", PasswordHash: hashPassword("correct")}, nil
 		},
 	}
 
-	svc := setupLogonService(db, "strict")
-	msg := buildLogonMsgWithList("testuser", "wrong")
+	svc := setupSystemService(db, "strict")
+	msg := buildLogonMsg("testuser", "wrong")
 
-	resp, err := svc.HandleLogon("client-1", msg)
+	resp, err := svc.Handle("client-1", msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -126,13 +135,13 @@ func TestLogonService_BadPassword(t *testing.T) {
 	}
 }
 
-func TestLogonService_NoneMode_AcceptsAnyUser(t *testing.T) {
+func TestSystemService_Logon_NoneMode_AcceptsAnyUser(t *testing.T) {
 	db := &testutil.MockDBAdapter{}
 
-	svc := setupLogonService(db, "none")
-	msg := buildLogonMsgWithList("randomuser", "nopass")
+	svc := setupSystemService(db, "none")
+	msg := buildLogonMsg("randomuser", "nopass")
 
-	resp, err := svc.HandleLogon("client-1", msg)
+	resp, err := svc.Handle("client-1", msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -144,13 +153,13 @@ func TestLogonService_NoneMode_AcceptsAnyUser(t *testing.T) {
 	}
 }
 
-func TestLogonService_OpenMode_AcceptsUnknownUser(t *testing.T) {
+func TestSystemService_Logon_OpenMode_AcceptsUnknownUser(t *testing.T) {
 	db := &testutil.MockDBAdapter{}
 
-	svc := setupLogonService(db, "open")
-	msg := buildLogonMsgWithList("newplayer", "nopass")
+	svc := setupSystemService(db, "open")
+	msg := buildLogonMsg("newplayer", "nopass")
 
-	resp, err := svc.HandleLogon("client-1", msg)
+	resp, err := svc.Handle("client-1", msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -162,17 +171,17 @@ func TestLogonService_OpenMode_AcceptsUnknownUser(t *testing.T) {
 	}
 }
 
-func TestLogonService_OpenMode_ValidatesExistingUser(t *testing.T) {
+func TestSystemService_Logon_OpenMode_ValidatesExistingUser(t *testing.T) {
 	db := &testutil.MockDBAdapter{
 		GetUserFunc: func(username string) (*ports.User, error) {
 			return &ports.User{ID: 1, Username: "testuser", PasswordHash: hashPassword("correct")}, nil
 		},
 	}
 
-	svc := setupLogonService(db, "open")
-	msg := buildLogonMsgWithList("testuser", "wrong")
+	svc := setupSystemService(db, "open")
+	msg := buildLogonMsg("testuser", "wrong")
 
-	resp, err := svc.HandleLogon("client-1", msg)
+	resp, err := svc.Handle("client-1", msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -181,17 +190,17 @@ func TestLogonService_OpenMode_ValidatesExistingUser(t *testing.T) {
 	}
 }
 
-func TestLogonService_OpenMode_CorrectPassword(t *testing.T) {
+func TestSystemService_Logon_OpenMode_CorrectPassword(t *testing.T) {
 	db := &testutil.MockDBAdapter{
 		GetUserFunc: func(username string) (*ports.User, error) {
 			return &ports.User{ID: 1, Username: "testuser", PasswordHash: hashPassword("secret")}, nil
 		},
 	}
 
-	svc := setupLogonService(db, "open")
-	msg := buildLogonMsgWithList("testuser", "secret")
+	svc := setupSystemService(db, "open")
+	msg := buildLogonMsg("testuser", "secret")
 
-	resp, err := svc.HandleLogon("client-1", msg)
+	resp, err := svc.Handle("client-1", msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -200,19 +209,20 @@ func TestLogonService_OpenMode_CorrectPassword(t *testing.T) {
 	}
 }
 
-func TestLogonService_Success_JoinsMovie(t *testing.T) {
+func TestSystemService_Logon_JoinsMovie(t *testing.T) {
 	db := &testutil.MockDBAdapter{}
 
 	logger := &testutil.MockLogger{}
-	cipher := &testutil.MockCipher{}
 	sessionStore := testutil.NewMockSessionStore()
 	sessionStore.RegisterConnection("client-1", "192.168.1.1")
 	movieManager := mus.NewMovieManager(sessionStore, logger)
-	svc := mus.NewLogonService(db, sessionStore, cipher, logger, movieManager, "none", 40)
+	groupManager := mus.NewGroupManager(sessionStore, logger)
+	connWriter := &testutil.MockConnectionWriter{}
+	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, "none", 40)
 
-	msg := buildLogonMsgWithList("testuser", "nopass")
+	msg := buildLogonMsg("testuser", "nopass")
 
-	resp, err := svc.HandleLogon("client-1", msg)
+	resp, err := svc.Handle("client-1", msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -220,7 +230,6 @@ func TestLogonService_Success_JoinsMovie(t *testing.T) {
 		t.Fatalf("ErrCode = %d, want %d", resp.ErrCode, smus.ErrNoError)
 	}
 
-	// Verify user joined the movie room (movieID = "movieID" from buildLogonMsgWithList)
 	members, err := sessionStore.GetRoomMembers("movie:movieID")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -237,7 +246,7 @@ func TestLogonService_Success_JoinsMovie(t *testing.T) {
 	}
 }
 
-func TestLogonService_BannedUser(t *testing.T) {
+func TestSystemService_Logon_BannedUser(t *testing.T) {
 	db := &testutil.MockDBAdapter{
 		GetUserFunc: func(username string) (*ports.User, error) {
 			return &ports.User{ID: 1, Username: "testuser", PasswordHash: hashPassword("secret")}, nil
@@ -247,14 +256,68 @@ func TestLogonService_BannedUser(t *testing.T) {
 		},
 	}
 
-	svc := setupLogonService(db, "strict")
-	msg := buildLogonMsgWithList("testuser", "secret")
+	svc := setupSystemService(db, "strict")
+	msg := buildLogonMsg("testuser", "secret")
 
-	resp, err := svc.HandleLogon("client-1", msg)
+	resp, err := svc.Handle("client-1", msg)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if resp.ErrCode != smus.ErrConnectionRefused {
 		t.Errorf("ErrCode = %d, want %d", resp.ErrCode, smus.ErrConnectionRefused)
+	}
+}
+
+func TestSystemService_Logon_RemapsClientID(t *testing.T) {
+	db := &testutil.MockDBAdapter{}
+
+	var remappedOld, remappedNew string
+	connWriter := &testutil.MockConnectionWriter{
+		RemapFn: func(oldID, newID string) {
+			remappedOld = oldID
+			remappedNew = newID
+		},
+	}
+
+	logger := &testutil.MockLogger{}
+	sessionStore := testutil.NewMockSessionStore()
+	sessionStore.RegisterConnection("client-1", "192.168.1.1")
+	movieManager := mus.NewMovieManager(sessionStore, logger)
+	groupManager := mus.NewGroupManager(sessionStore, logger)
+	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, "none", 40)
+
+	msg := buildLogonMsg("testuser", "nopass")
+
+	resp, err := svc.Handle("client-1", msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.ErrCode != smus.ErrNoError {
+		t.Fatalf("ErrCode = %d, want %d", resp.ErrCode, smus.ErrNoError)
+	}
+
+	if remappedOld != "client-1" || remappedNew != "testuser" {
+		t.Errorf("RemapClientID(%q, %q), want (%q, %q)", remappedOld, remappedNew, "client-1", "testuser")
+	}
+}
+
+func TestSystemService_UnknownCommand(t *testing.T) {
+	svc := setupSystemService(&testutil.MockDBAdapter{}, "none")
+	msg := &smus.MUSMessage{
+		Subject:  smus.MUSMsgHeaderString{Length: 7, Value: "unknown"},
+		SenderID: smus.MUSMsgHeaderString{Length: 5, Value: "user1"},
+		RecptID: smus.MUSMsgHeaderStringList{
+			Count:   1,
+			Strings: []smus.MUSMsgHeaderString{{Length: 6, Value: "System"}},
+		},
+		MsgContent: lingo.NewLVoid(),
+	}
+
+	resp, err := svc.Handle("client-1", msg)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp != nil {
+		t.Error("expected nil response for unknown system command")
 	}
 }

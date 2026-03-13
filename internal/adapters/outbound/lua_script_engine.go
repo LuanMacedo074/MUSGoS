@@ -18,14 +18,16 @@ type LuaScriptEngine struct {
 	logger        ports.Logger
 	scriptTimeout time.Duration
 	publisher     ports.QueuePublisher
+	sender        ports.MessageSender
 }
 
-func NewLuaScriptEngine(scriptsDir string, logger ports.Logger, scriptTimeoutSeconds int, publisher ports.QueuePublisher) *LuaScriptEngine {
+func NewLuaScriptEngine(scriptsDir string, logger ports.Logger, scriptTimeoutSeconds int, publisher ports.QueuePublisher, sender ports.MessageSender) *LuaScriptEngine {
 	return &LuaScriptEngine{
 		scriptsDir:    scriptsDir,
 		logger:        logger,
 		scriptTimeout: time.Duration(scriptTimeoutSeconds) * time.Second,
 		publisher:     publisher,
+		sender:        sender,
 	}
 }
 
@@ -101,6 +103,27 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 				e.logger.Error("mus.publish failed", map[string]interface{}{
 					"topic": topic,
 					"error": err.Error(),
+				})
+			}
+		}
+		return 0
+	}))
+
+	musMod.RawSetString("sendMessage", L.NewFunction(func(L *lua.LState) int {
+		recipientID := L.CheckString(1)
+		if recipientID == "" {
+			L.ArgError(1, "recipientID must not be empty")
+			return 0
+		}
+		subject := L.CheckString(2)
+		content := L.Get(3)
+		lingoContent := lingo.LuaToLValue(content)
+		if e.sender != nil {
+			if err := e.sender.SendMessage(msg.SenderID, recipientID, subject, lingoContent); err != nil {
+				e.logger.Error("mus.sendMessage failed", map[string]interface{}{
+					"recipientID": recipientID,
+					"subject":     subject,
+					"error":       err.Error(),
 				})
 			}
 		}

@@ -26,6 +26,9 @@ Análise comparativa com [OpenSMUS 1.02](https://sourceforge.net/p/opensmus/code
 | #All Encryption | `mus_message.go` | `MUSMessage.java` (full-packet decrypt) |
 | Movie (Room) Manager | `movie.go` | `MUSMovie.java` |
 | Group Manager | `group.go` | `MUSGroup.java` |
+| Connection Pool | `conn_pool.go` | — |
+| Message Dispatcher | `mus/dispatcher.go` | `MUSDispatcher.java` |
+| Message Sender | `mus/sender.go` | `MUSUser.send()` + `MUSGroup.deliver()` |
 
 ## O que falta
 
@@ -38,9 +41,9 @@ Análise comparativa com [OpenSMUS 1.02](https://sourceforge.net/p/opensmus/code
 | ~~3~~ | ~~**Logon Handler**~~ | ~~`MUSLogonMessage.java`~~ | ~~Processar logon: extrair movieID, userID, password; validar; responder~~ ✅ FEITO |
 | ~~4~~ | ~~**Movie (Room) Manager**~~ | ~~`MUSMovie.java`~~ | ~~Gerenciar movies — criar, adicionar/remover usuários, listar groups~~ ✅ FEITO |
 | ~~5~~ | ~~**Group Manager**~~ | ~~`MUSGroup.java`~~ | ~~`@AllUsers` auto-join, join/leave, broadcast~~ ✅ FEITO |
-| 6 | **Message Dispatcher** | `MUSDispatcher.java` | Roteamento central por subject/recipient |
-| 7 | **Group Messaging** | `MUSGroup.deliver()` | Broadcast para todos os membros de um group |
-| 8 | **User-to-User Messaging** | `MUSUser.send()` | Envio direto entre usuários |
+| ~~6~~ | ~~**Message Dispatcher**~~ | ~~`MUSDispatcher.java`~~ | ~~Roteamento central por recipient~~ ✅ FEITO (`mus/dispatcher.go`) |
+| ~~7~~ | ~~**Group Messaging**~~ | ~~`MUSGroup.deliver()`~~ | ~~Broadcast para todos os membros de um group~~ ✅ FEITO (`mus/sender.go`) |
+| ~~8~~ | ~~**User-to-User Messaging**~~ | ~~`MUSUser.send()`~~ | ~~Envio direto entre usuários~~ ✅ FEITO (`mus/sender.go`) |
 
 ### Prioridade MÉDIA — servidor funciona sem, mas é incompleto
 
@@ -61,7 +64,7 @@ Análise comparativa com [OpenSMUS 1.02](https://sourceforge.net/p/opensmus/code
 | 16 | UDP support | `MUSUDPListener.java` | Transporte UDP para baixa latência |
 | 17 | Email sending | `MUSEmail.java` | Envio de emails SMTP |
 | 18 | Kill timers | `MUSKillServerTimer.java`, `MUSKillUserTimer.java` | Timers de shutdown/desconexão |
-| 19 | User levels / permissions | user level cache no `MUSDispatcher` | Controle de acesso por nível (DB pronto, falta enforcement no dispatcher) |
+| 19 | User levels / permissions | user level cache no `MUSDispatcher` | Controle de acesso por nível (DB pronto, falta enforcement nos System Commands — item 9) |
 | 20 | Ban system | `MUSDBDispatcher.ban/revokeBan` | Banimento de usuários (DB pronto, verificação no logon implementada nos modos `strict`/`open`) |
 
 ## Fluxo de conexão (referência OpenSMUS)
@@ -106,9 +109,9 @@ Cliente Shockwave                         Servidor
 2. Response Builder ─────── ✅ FEITO (LValue.GetBytes() + MUSMessage.GetBytes())
 3. Logon Handler ────────── ✅ FEITO (LogonService com 3 modos: none/open/strict)
 4. Movie + Group Manager ── ✅ FEITO (movie sessions + group sessions)
-5. Message Dispatcher ───── roteia por recipient/subject
-6. Group Messaging ──────── broadcast para group
-7. User-to-User ─────────── envio direto
+5. Message Dispatcher ───── ✅ FEITO (Dispatcher roteia por primeiro recipient)
+6. Group Messaging ──────── ✅ FEITO (Sender broadcast via ConnPool)
+7. User-to-User ─────────── ✅ FEITO (Sender direto via ConnPool)
 ```
 
 Resultado: cliente conecta → autentica → entra em sala → troca mensagens.

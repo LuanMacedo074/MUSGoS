@@ -10,22 +10,16 @@ import (
 type SMUSHandler struct {
 	logger       ports.Logger
 	cipher       ports.Cipher
-	scriptEngine ports.ScriptEngine
-	logonService *mus.LogonService
-	movieManager *mus.MovieManager
-	groupManager *mus.GroupManager
-	queue        ports.QueuePublisher
+	dispatcher   *mus.Dispatcher
+	allEncrypted bool
 }
 
-func NewSMUSHandler(logger ports.Logger, cipher ports.Cipher, scriptEngine ports.ScriptEngine, logonService *mus.LogonService, movieManager *mus.MovieManager, groupManager *mus.GroupManager, queue ports.QueuePublisher) *SMUSHandler {
+func NewSMUSHandler(logger ports.Logger, cipher ports.Cipher, dispatcher *mus.Dispatcher, allEncrypted bool) *SMUSHandler {
 	return &SMUSHandler{
 		logger:       logger,
 		cipher:       cipher,
-		scriptEngine: scriptEngine,
-		logonService: logonService,
-		movieManager: movieManager,
-		groupManager: groupManager,
-		queue:        queue,
+		dispatcher:   dispatcher,
+		allEncrypted: allEncrypted,
 	}
 }
 
@@ -35,7 +29,6 @@ func (h *SMUSHandler) HandleRawMessage(clientID string, data []byte) ([]byte, er
 		"bytes":  len(data),
 	})
 
-	// Parse mensagem com descriptografia automática
 	msg, err := smus.ParseMUSMessageWithDecryption(data, h.cipher)
 	if err != nil {
 		h.logger.Error("Failed to parse SMUS message", map[string]interface{}{
@@ -70,66 +63,16 @@ func (h *SMUSHandler) HandleRawMessage(clientID string, data []byte) ([]byte, er
 		"parsed": msg.String(),
 	})
 
-	// Handle Logon messages
-	if msg.Subject.Value == "Logon" && h.logonService != nil {
-		response, err := h.logonService.HandleLogon(clientID, msg)
-		if err != nil {
-			h.logger.Error("Logon handling failed", map[string]interface{}{
-				"client": clientID,
-				"error":  err.Error(),
-			})
-			return nil, err
-		}
-		return response.GetBytes(), nil
+	response, err := h.dispatcher.Dispatch(clientID, msg)
+	if err != nil {
+		return nil, err
 	}
-
-	// Route to script engine when recipient is "system.script"
-	if h.scriptEngine != nil && h.hasRecipient(msg, "system.script") {
-		scriptName := msg.Subject.Value
-		if !h.scriptEngine.HasScript(scriptName) {
-			h.logger.Warn("Script not found", map[string]interface{}{
-				"client": clientID,
-				"script": scriptName,
-			})
-			return nil, nil
+	if response != nil {
+		responseBytes := response.GetBytes()
+		if h.allEncrypted && h.cipher != nil {
+			responseBytes = h.cipher.Encrypt(responseBytes)
 		}
-
-		scriptMsg := &ports.ScriptMessage{
-			Subject:  scriptName,
-			SenderID: msg.SenderID.Value,
-			Content:  msg.MsgContent,
-		}
-
-		result, err := h.scriptEngine.Execute(scriptMsg)
-		if err != nil {
-			h.logger.Error("Script execution failed", map[string]interface{}{
-				"client": clientID,
-				"script": scriptName,
-				"error":  err.Error(),
-			})
-			return nil, nil
-		}
-
-		h.logger.Debug("Script executed", map[string]interface{}{
-			"client": clientID,
-			"script": scriptName,
-			"result": fmt.Sprintf("%v", result.Content),
-		})
-
-		if result.Content != nil {
-			resp := mus.NewResponse(scriptName, "system.script", []string{msg.SenderID.Value}, smus.ErrNoError, result.Content)
-			return resp.GetBytes(), nil
-		}
+		return responseBytes, nil
 	}
-
 	return nil, nil
-}
-
-func (h *SMUSHandler) hasRecipient(msg *smus.MUSMessage, target string) bool {
-	for _, r := range msg.RecptID.Strings {
-		if r.Value == target {
-			return true
-		}
-	}
-	return false
 }

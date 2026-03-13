@@ -25,18 +25,17 @@ type TCPServer struct {
 	wg             sync.WaitGroup
 	messageHandler ports.MessageHandler
 	sessionStore   ports.SessionStore
-	mu             sync.Mutex
-	conns          map[net.Conn]struct{}
+	pool           *ConnPool
 }
 
-func NewTCPServer(cfg TCPServerConfig, logger ports.Logger, handler ports.MessageHandler, sessionStore ports.SessionStore) *TCPServer {
+func NewTCPServer(cfg TCPServerConfig, handler ports.MessageHandler, pool *ConnPool, logger ports.Logger, sessionStore ports.SessionStore) *TCPServer {
 	return &TCPServer{
 		config:         cfg,
+		messageHandler: handler,
+		pool:           pool,
 		logger:         logger,
 		shutdown:       make(chan bool),
-		messageHandler: handler,
 		sessionStore:   sessionStore,
-		conns:          make(map[net.Conn]struct{}),
 	}
 }
 
@@ -83,16 +82,21 @@ func (s *TCPServer) Start(ready chan struct{}) error {
 func (s *TCPServer) handleConnection(conn net.Conn) {
 	defer s.wg.Done()
 
-	s.mu.Lock()
-	s.conns[conn] = struct{}{}
-	s.mu.Unlock()
-	defer func() {
-		s.mu.Lock()
-		delete(s.conns, conn)
-		s.mu.Unlock()
-	}()
-
 	clientIP := conn.RemoteAddr().String()
+
+	s.pool.Register(conn, clientIP)
+
+	defer func() {
+		currentID := s.pool.Unregister(conn)
+
+		if err := s.sessionStore.UnregisterConnection(currentID); err != nil {
+			s.logger.Error("Failed to unregister connection", map[string]interface{}{
+				"client": currentID,
+				"error":  err.Error(),
+			})
+		}
+		conn.Close()
+	}()
 
 	if err := s.sessionStore.RegisterConnection(clientIP, clientIP); err != nil {
 		s.logger.Error("Failed to register connection", map[string]interface{}{
@@ -100,16 +104,6 @@ func (s *TCPServer) handleConnection(conn net.Conn) {
 			"error":  err.Error(),
 		})
 	}
-
-	defer func() {
-		if err := s.sessionStore.UnregisterConnection(clientIP); err != nil {
-			s.logger.Error("Failed to unregister connection", map[string]interface{}{
-				"client": clientIP,
-				"error":  err.Error(),
-			})
-		}
-		conn.Close()
-	}()
 
 	if tcpConn, ok := conn.(*net.TCPConn); ok {
 		tcpConn.SetNoDelay(s.config.TCPNoDelay)
@@ -136,30 +130,33 @@ func (s *TCPServer) handleConnection(conn net.Conn) {
 		}
 
 		if n > 0 {
+			currentID := s.pool.CurrentID(conn)
+
 			s.logger.Info("TCP Packet Capture", map[string]interface{}{
-				"client": clientIP,
+				"client": currentID,
 				"offset": fmt.Sprintf("0x%04X", totalBytes),
 				"bytes":  n,
 			})
 
 			s.logger.Debug("Processing message", map[string]interface{}{
-				"client": clientIP,
+				"client": currentID,
 				"bytes":  n,
 			})
 
-			response, err := s.messageHandler.HandleRawMessage(clientIP, buffer[:n])
+			response, err := s.messageHandler.HandleRawMessage(currentID, buffer[:n])
 			if err != nil {
 				s.logger.Error("Message handler error", map[string]interface{}{
-					"client": clientIP,
+					"client": currentID,
 					"error":  err.Error(),
 				})
 			}
 
 			if len(response) > 0 {
-				_, writeErr := conn.Write(response)
-				if writeErr != nil {
+				// Re-fetch ID — may have been remapped during HandleRawMessage (e.g. Logon)
+				writeID := s.pool.CurrentID(conn)
+				if writeErr := s.pool.WriteToClient(writeID, response); writeErr != nil {
 					s.logger.Error("Failed to send response", map[string]interface{}{
-						"client": clientIP,
+						"client": currentID,
 						"error":  writeErr.Error(),
 					})
 					break
@@ -170,8 +167,9 @@ func (s *TCPServer) handleConnection(conn net.Conn) {
 		}
 	}
 
+	finalID := s.pool.CurrentID(conn)
 	s.logger.Info("Connection closed", map[string]interface{}{
-		"client":      clientIP,
+		"client":      finalID,
 		"total_bytes": totalBytes,
 	})
 }
@@ -184,11 +182,7 @@ func (s *TCPServer) Shutdown() {
 		s.listener.Close()
 	}
 
-	s.mu.Lock()
-	for conn := range s.conns {
-		conn.Close()
-	}
-	s.mu.Unlock()
+	s.pool.CloseAll()
 
 	s.wg.Wait()
 	s.logger.Info("TCP server shutdown complete")

@@ -106,6 +106,16 @@ func FromRawBytes(rawBytes []byte, offset int) LValue {
 	return newVal
 }
 
+// StringValue extracts the raw string from an LValue.
+// If the value is an LString, returns its Value directly (without quotes).
+// Otherwise falls back to the general String() representation.
+func StringValue(v LValue) string {
+	if s, ok := v.(*LString); ok {
+		return s.Value
+	}
+	return v.String()
+}
+
 func GetLValue(val interface{}) LValue {
 	switch v := val.(type) {
 	case int:

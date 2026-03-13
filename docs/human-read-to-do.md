@@ -33,107 +33,39 @@ Suporta extração de credenciais de `LList` (legado) e `LPropList` (moderno). I
 
 ---
 
-### 4. Movie (Room) Manager
+### ~~4. Movie (Room) Manager~~ ✅ FEITO
 
-**OpenSMUS:** `MUSMovie.java`
-
-No protocolo MUS, um "Movie" é o equivalente a uma **sala** ou **lobby**. Quando o cliente faz logon, ele especifica em qual movie quer entrar. Se o movie não existe, o servidor cria um novo. Se já existe, o usuário é adicionado.
-
-Responsabilidades do Movie Manager:
-- **Criar movies** sob demanda (quando o primeiro usuário entra)
-- **Adicionar/remover usuários** do movie
-- **Gerenciar groups** dentro do movie (cada movie tem seus próprios groups)
-- **Controlar limites** de conexão (máximo de usuários por movie)
-- **Destruir movies** vazios (quando o último usuário sai)
-- **Notificar desconexão** para os groups dentro do movie
-
-No OpenSMUS, o Movie também é dono do `MUSDispatcher` — cada movie tem seu próprio dispatcher para rotear mensagens entre os usuários daquele movie.
-
-**O que implementar:** Um struct `Movie` que mantém a lista de usuários e groups, com métodos para add/remove user, add/remove group, e limpeza automática. Provavelmente um `MovieManager` para gerenciar o mapa de movies ativos.
+Implementado em `internal/adapters/inbound/mus/movie.go` — `MovieManager` gerencia movies (salas) sob demanda. Cria movie automaticamente quando o primeiro usuário entra, remove quando o último sai. Auto-join `@AllUsers` group no JoinMovie. Integrado ao `SystemService` para join automático durante o Logon.
 
 ---
 
-### 5. Group Manager
+### ~~5. Group Manager~~ ✅ FEITO
 
-**OpenSMUS:** `MUSGroup.java`
-
-Groups são **sub-divisões dentro de um Movie**. Quando um usuário entra em um movie, ele automaticamente é adicionado ao group `@AllUsers`. Depois, pode criar ou entrar em outros groups.
-
-Groups servem para:
-- **Broadcast** — enviar uma mensagem para todos os membros de um group de uma vez
-- **Segmentação** — separar usuários em sub-salas (ex: mesa de jogo, equipes, espectadores)
-- **Atributos** — groups podem ter atributos customizados (metadados)
-
-O prefixo `@` distingue groups de usuários. Quando o recipient de uma mensagem começa com `@`, o dispatcher sabe que deve rotear para o group, não para um usuário individual.
-
-Operações:
-- `join` — entrar no group
-- `leave` — sair do group
-- `deliver` — broadcast para todos os membros
-- `getAttribute/setAttribute` — ler/escrever metadados do group
-- Remover group automaticamente quando fica vazio (se não for persistente)
-
-**O que implementar:** Um struct `Group` com lista de membros e métodos de join/leave/broadcast. O `@AllUsers` deve ser criado automaticamente com cada Movie.
+Implementado em `internal/adapters/inbound/mus/group.go` — `GroupManager` gerencia groups dentro de movies. `@AllUsers` é criado automaticamente pelo MovieManager. Join/leave via SessionStore rooms. Prefixo `@` distingue groups de usuários no roteamento.
 
 ---
 
-### 6. Message Dispatcher
+### ~~6. Message Dispatcher~~ ✅ FEITO
 
-**OpenSMUS:** `MUSDispatcher.java`
+Implementado em `internal/adapters/inbound/mus/dispatcher.go`. Roteia pelo primeiro recipient da mensagem:
+- `"System"` → `SystemService` (Logon, futuros system commands)
+- `"system.script"` → `ScriptEngine` (subject = nome do script)
+- `"@GroupName"` → `Sender.SendMessage()` broadcast para o group
+- `"userName"` → `Sender.SendMessage()` envio direto
 
-O dispatcher é o **coração do roteamento**. Quando uma mensagem chega, ele analisa o `recipientID` e o `subject` para decidir o que fazer:
-
-**Roteamento por recipient:**
-- `"system"` → comando do sistema (subject determina qual)
-- `"@GroupName"` → broadcast para o group
-- `"userName"` → mensagem direta para o usuário
-- `"@MovieName"` → cross-movie (enviar para outro movie)
-
-**Roteamento por subject (comandos system):**
-- `system.server.getVersion` → retorna versão do servidor
-- `system.server.getUserCount` → retorna total de usuários
-- `system.group.join` → entrar em um group
-- `system.group.leave` → sair de um group
-- `system.group.getUsers` → listar membros de um group
-- `system.user.delete` → desconectar um usuário
-
-No OpenSMUS, o dispatcher pode funcionar de forma **síncrona** (processa na hora) ou **assíncrona** (coloca numa fila e processa em thread separada).
-
-Também é no dispatcher que scripts server-side são chamados — antes e depois de processar cada mensagem, o dispatcher verifica se há scripts registrados e os executa.
-
-**O que implementar:** Um serviço `Dispatcher` que recebe uma `MUSMessage` já parseada e a roteia para o destino correto. Para o MVP, o roteamento síncrono é suficiente.
+O `SMUSHandler` delega toda a lógica de roteamento para o Dispatcher.
 
 ---
 
-### 7. Group Messaging (Broadcast)
+### ~~7. Group Messaging (Broadcast)~~ ✅ FEITO
 
-**OpenSMUS:** `MUSGroup.deliver()`
-
-Quando uma mensagem é enviada para `@NomeDoGroup`, o servidor precisa entregá-la para **todos os membros** daquele group. É o mecanismo mais usado em aplicações multiusuário — chat, jogos em tempo real, atualizações de estado.
-
-O fluxo é:
-1. Usuário A envia mensagem com `recipientID = "@Sala1"`
-2. Dispatcher identifica que `@Sala1` é um group
-3. Group.deliver() itera sobre todos os membros
-4. Para cada membro, serializa a mensagem e envia pelo socket TCP
-
-No OpenSMUS, o sender original é preservado no campo `senderID` da mensagem, então quem recebe sabe quem mandou.
-
-**O que implementar:** Método `Deliver` no Group que itera pelos membros e chama `Send` em cada um. O TCP server precisa manter referência aos writers de cada conexão para poder enviar dados de volta.
+Implementado em `internal/adapters/inbound/mus/sender.go` — `deliverToGroup()`. Serializa a mensagem uma única vez com o groupRef como recipient (conforme spec OpenSMUS), depois entrega a todos os membros do group via `ConnectionWriter`. Membros são resolvidos pelo SessionStore (room `movie:{movieID}:group:{groupName}`).
 
 ---
 
-### 8. User-to-User Messaging
+### ~~8. User-to-User Messaging~~ ✅ FEITO
 
-**OpenSMUS:** `MUSUser.send()`
-
-Além de broadcast para groups, o protocolo MUS suporta mensagens diretas. Quando o `recipientID` não começa com `@` e não é `"system"`, ele é tratado como um nome de usuário.
-
-O dispatcher procura o usuário pelo nome dentro do movie, e entrega a mensagem diretamente no socket dele.
-
-Se o destinatário não existe, o servidor responde com erro `InvalidMessageRecipient` ao remetente.
-
-**O que implementar:** Lógica no dispatcher para resolver `recipientID` como nome de usuário, encontrar a conexão correspondente e enviar a mensagem.
+Implementado em `internal/adapters/inbound/mus/sender.go` — `SendMessage()`. Quando o recipientID não começa com `@`, envia diretamente via `ConnectionWriter.WriteToClient()`. O ConnPool (`conn_pool.go`) gerencia o mapeamento clientID→conn com per-conn write mutex para thread safety.
 
 ---
 
@@ -284,13 +216,12 @@ A fundação do sistema de scripting Lua está implementada:
 - **`ports.ScriptEngine`** — interface agnóstica ao protocolo (`HasScript`, `Execute`)
 - **`LuaScriptEngine`** — implementação com gopher-lua, VM sandboxed (sem `os`/`io`/`debug`)
 - **Conversão bidirecional** LValue ↔ Lua (`lua_convert.go`)
-- **APIs disponíveis nos scripts:** `mus.getSender()`, `mus.getContent()`, `mus.response()`
+- **APIs disponíveis nos scripts:** `mus.getSender()`, `mus.getContent()`, `mus.response()`, `mus.publish()`, `mus.sendMessage()`
 - **Roteamento** — scripts são invocados quando o `recipient` da mensagem é `"system.script"` (padrão OpenSMUS). O `subject` da mensagem é usado como nome do script. O handler busca `external/scripts/{subject}.lua` e o executa.
 - **Script exemplo:** `external/scripts/echo.lua`
 
 **O que falta (evolução futura):**
 - APIs de banco (`mus.db.getPlayerAttribute`, `mus.db.setPlayerAttribute`, etc.)
-- `mus.sendMessage()` para enviar mensagens a outros clientes
 - Event hooks (`userLogOn`, `userLogOff`, `groupJoin`, `groupLeave`)
 - Hot reload de scripts sem restart
 - Pool de VMs Lua para performance
@@ -348,7 +279,7 @@ O nível é armazenado no banco e cacheado em memória para performance. O OpenS
   - `open` → nível do DB se o usuário existe, senão `DEFAULT_USER_LEVEL`
   - `strict` → nível do DB
 - ✅ Console usa `DEFAULT_USER_LEVEL` ao criar usuários
-- ❌ Enforcement no dispatcher (verificar `#userLevel` da sessão antes de executar comandos) — depende do dispatcher (item 6)
+- ❌ Enforcement nos System Commands (verificar `#userLevel` da sessão antes de executar comandos) — depende de System Commands (item 9)
 
 ---
 
@@ -372,10 +303,10 @@ Permite banir usuários por IP ou nome, com duração configurável. Bans são v
    Lua Scripting (fundação) ── ✅ FEITO (ScriptEngine + LValue↔Lua)
 2. Response Builder ─────── ✅ FEITO (LValue.GetBytes() + MUSMessage.GetBytes())
 3. Logon Handler ────────── ✅ FEITO (LogonService com 3 modos: none/open/strict)
-4. Movie + Group Manager ── cria movie, auto-join @AllUsers
-5. Message Dispatcher ───── roteia por recipient/subject
-6. Group Messaging ──────── broadcast para group
-7. User-to-User ─────────── envio direto
+4. Movie + Group Manager ── ✅ FEITO (movie sessions + group sessions)
+5. Message Dispatcher ───── ✅ FEITO (Dispatcher roteia por primeiro recipient)
+6. Group Messaging ──────── ✅ FEITO (Sender broadcast via ConnPool)
+7. User-to-User ─────────── ✅ FEITO (Sender direto via ConnPool)
 ```
 
 Resultado: cliente conecta → autentica → entra em sala → troca mensagens.

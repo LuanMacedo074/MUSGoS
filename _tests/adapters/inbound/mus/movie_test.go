@@ -43,7 +43,7 @@ func TestMovieManager_JoinMovie_AutoJoinsAllUsers(t *testing.T) {
 	}
 
 	// Check user is in @AllUsers group room
-	members, err := sessionStore.GetRoomMembers("lobby:@@AllUsers")
+	members, err := sessionStore.GetRoomMembers("lobby:@AllUsers")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestMovieManager_LeaveMovie_LeavesAllGroups(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	members, _ := sessionStore.GetRoomMembers("lobby:@@AllUsers")
+	members, _ := sessionStore.GetRoomMembers("lobby:@AllUsers")
 	if len(members) != 0 {
 		t.Errorf("after leave, @AllUsers members = %v, want []", members)
 	}

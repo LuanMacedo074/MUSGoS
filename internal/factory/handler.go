@@ -8,13 +8,27 @@ import (
 	"fsos-server/internal/domain/ports"
 )
 
-func NewHandler(protocol string, log ports.Logger, cipher ports.Cipher, scriptEngine ports.ScriptEngine, db ports.DBAdapter, sessionStore ports.SessionStore, queue ports.QueuePublisher, authMode string, defaultUserLevel int) (ports.MessageHandler, error) {
+func NewHandler(
+	protocol string,
+	log ports.Logger,
+	cipher ports.Cipher,
+	scriptEngine ports.ScriptEngine,
+	db ports.DBAdapter,
+	sessionStore ports.SessionStore,
+	queue ports.QueuePublisher,
+	connWriter ports.ConnectionWriter,
+	sender *mus.Sender,
+	authMode string,
+	defaultUserLevel int,
+	allEncrypted bool,
+) (ports.MessageHandler, error) {
 	switch protocol {
 	case "smus":
 		movieManager := mus.NewMovieManager(sessionStore, log)
 		groupManager := mus.NewGroupManager(sessionStore, log)
-		logonService := mus.NewLogonService(db, sessionStore, cipher, log, movieManager, authMode, defaultUserLevel)
-		return inbound.NewSMUSHandler(log, cipher, scriptEngine, logonService, movieManager, groupManager, queue), nil
+		systemService := mus.NewSystemService(db, sessionStore, cipher, log, movieManager, groupManager, connWriter, authMode, defaultUserLevel)
+		dispatcher := mus.NewDispatcher(log, scriptEngine, systemService, sender, queue)
+		return inbound.NewSMUSHandler(log, cipher, dispatcher, allEncrypted), nil
 	default:
 		return nil, fmt.Errorf("unsupported protocol: %s", protocol)
 	}

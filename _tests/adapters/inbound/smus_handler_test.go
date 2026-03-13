@@ -6,6 +6,7 @@ import (
 
 	"fsos-server/_tests/testutil"
 	"fsos-server/internal/adapters/inbound"
+	"fsos-server/internal/adapters/inbound/mus"
 	"fsos-server/internal/domain/ports"
 	"fsos-server/internal/domain/types/lingo"
 )
@@ -52,11 +53,21 @@ func hdrString(s string) []byte {
 	return buf
 }
 
+func newSMUSTestDispatcher(scriptEngine ports.ScriptEngine, connWriter ports.ConnectionWriter) *mus.Dispatcher {
+	logger := &testutil.MockLogger{}
+	sessionStore := testutil.NewMockSessionStore()
+	sender := mus.NewSender(connWriter, sessionStore, logger, nil, false)
+	systemService := mus.NewSystemService(nil, sessionStore, nil, logger, nil, nil, connWriter, "none", 40)
+	return mus.NewDispatcher(logger, scriptEngine, systemService, sender, nil)
+}
+
 func TestSMUSHandler_HandleRawMessage_Valid(t *testing.T) {
 	logger := &testutil.MockLogger{}
 	cipher := &testutil.MockCipher{}
+	connWriter := &testutil.MockConnectionWriter{}
 
-	handler := inbound.NewSMUSHandler(logger, cipher, nil, nil, nil, nil, nil)
+	dispatcher := newSMUSTestDispatcher(nil, connWriter)
+	handler := inbound.NewSMUSHandler(logger, cipher, dispatcher, false)
 	raw := buildValidSMUSMessage("Test", "user1", []string{"user2"})
 
 	_, err := handler.HandleRawMessage("client-1", raw)
@@ -64,7 +75,6 @@ func TestSMUSHandler_HandleRawMessage_Valid(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Logger should have been called
 	if len(logger.Messages) == 0 {
 		t.Error("expected logger to receive calls")
 	}
@@ -73,8 +83,10 @@ func TestSMUSHandler_HandleRawMessage_Valid(t *testing.T) {
 func TestSMUSHandler_HandleRawMessage_Invalid(t *testing.T) {
 	logger := &testutil.MockLogger{}
 	cipher := &testutil.MockCipher{}
+	connWriter := &testutil.MockConnectionWriter{}
 
-	handler := inbound.NewSMUSHandler(logger, cipher, nil, nil, nil, nil, nil)
+	dispatcher := newSMUSTestDispatcher(nil, connWriter)
+	handler := inbound.NewSMUSHandler(logger, cipher, dispatcher, false)
 
 	_, err := handler.HandleRawMessage("client-1", []byte{0xFF, 0xFF})
 	if err == nil {
@@ -85,6 +97,7 @@ func TestSMUSHandler_HandleRawMessage_Invalid(t *testing.T) {
 func TestSMUSHandler_SystemScript_ExecutesScript(t *testing.T) {
 	logger := &testutil.MockLogger{}
 	cipher := &testutil.MockCipher{}
+	connWriter := &testutil.MockConnectionWriter{}
 
 	var executedSubject string
 	scriptEngine := &testutil.MockScriptEngine{
@@ -97,7 +110,8 @@ func TestSMUSHandler_SystemScript_ExecutesScript(t *testing.T) {
 		},
 	}
 
-	handler := inbound.NewSMUSHandler(logger, cipher, scriptEngine, nil, nil, nil, nil)
+	dispatcher := newSMUSTestDispatcher(scriptEngine, connWriter)
+	handler := inbound.NewSMUSHandler(logger, cipher, dispatcher, false)
 	raw := buildValidSMUSMessage("QueryCreate", "user1", []string{"system.script"})
 
 	resp, err := handler.HandleRawMessage("client-1", raw)
@@ -115,6 +129,7 @@ func TestSMUSHandler_SystemScript_ExecutesScript(t *testing.T) {
 func TestSMUSHandler_SystemScript_NoScript(t *testing.T) {
 	logger := &testutil.MockLogger{}
 	cipher := &testutil.MockCipher{}
+	connWriter := &testutil.MockConnectionWriter{}
 
 	scriptEngine := &testutil.MockScriptEngine{
 		HasScriptFunc: func(subject string) bool {
@@ -122,7 +137,8 @@ func TestSMUSHandler_SystemScript_NoScript(t *testing.T) {
 		},
 	}
 
-	handler := inbound.NewSMUSHandler(logger, cipher, scriptEngine, nil, nil, nil, nil)
+	dispatcher := newSMUSTestDispatcher(scriptEngine, connWriter)
+	handler := inbound.NewSMUSHandler(logger, cipher, dispatcher, false)
 	raw := buildValidSMUSMessage("NonExistent", "user1", []string{"system.script"})
 
 	resp, err := handler.HandleRawMessage("client-1", raw)
@@ -137,6 +153,7 @@ func TestSMUSHandler_SystemScript_NoScript(t *testing.T) {
 func TestSMUSHandler_NonSystemScript_DoesNotExecute(t *testing.T) {
 	logger := &testutil.MockLogger{}
 	cipher := &testutil.MockCipher{}
+	connWriter := &testutil.MockConnectionWriter{}
 
 	executed := false
 	scriptEngine := &testutil.MockScriptEngine{
@@ -149,7 +166,8 @@ func TestSMUSHandler_NonSystemScript_DoesNotExecute(t *testing.T) {
 		},
 	}
 
-	handler := inbound.NewSMUSHandler(logger, cipher, scriptEngine, nil, nil, nil, nil)
+	dispatcher := newSMUSTestDispatcher(scriptEngine, connWriter)
+	handler := inbound.NewSMUSHandler(logger, cipher, dispatcher, false)
 	raw := buildValidSMUSMessage("QueryCreate", "user1", []string{"someuser"})
 
 	_, err := handler.HandleRawMessage("client-1", raw)

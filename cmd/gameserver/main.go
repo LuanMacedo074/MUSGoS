@@ -9,6 +9,7 @@ import (
 	"fsos-server/external/migrations"
 	"fsos-server/external/queues"
 	"fsos-server/internal/adapters/inbound"
+	"fsos-server/internal/adapters/inbound/mus"
 	"fsos-server/internal/config"
 	"fsos-server/internal/domain/ports"
 	"fsos-server/internal/factory"
@@ -86,7 +87,14 @@ func main() {
 		"type": cfg.QueueType,
 	})
 
-	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout, queue)
+	// 1. ConnPool — standalone, no dependencies
+	pool := inbound.NewConnPool()
+
+	// 2. Sender — uses pool as ConnectionWriter
+	sender := mus.NewSender(pool, sessionStore, gameLogger, cipher, cfg.AllEncrypted)
+
+	// 3. ScriptEngine — can send messages via Sender
+	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout, queue, sender)
 	gameLogger.Info("Script engine initialized", map[string]interface{}{
 		"scripts_path": cfg.ScriptsPath,
 	})
@@ -102,7 +110,8 @@ func main() {
 		})
 	}
 
-	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine, dbResult.Adapter, sessionStore, queue, cfg.AuthMode, cfg.DefaultUserLevel)
+	// 4. Handler — Dispatcher receives ScriptEngine + Sender + pool
+	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine, dbResult.Adapter, sessionStore, queue, pool, sender, cfg.AuthMode, cfg.DefaultUserLevel, cfg.AllEncrypted)
 	if err != nil {
 		gameLogger.Fatal("Failed to initialize protocol handler", map[string]interface{}{
 			"error": err,
@@ -112,12 +121,13 @@ func main() {
 		"type": cfg.Protocol,
 	})
 
+	// 5. TCPServer — fully constructed, no SetHandler
 	server := inbound.NewTCPServer(inbound.TCPServerConfig{
 		Port:           cfg.Port,
 		ServerIP:       cfg.ServerIP,
 		MaxMessageSize: cfg.MaxMessageSize,
 		TCPNoDelay:     cfg.TCPNoDelay,
-	}, gameLogger, handler, sessionStore)
+	}, handler, pool, gameLogger, sessionStore)
 
 	serverReady := make(chan struct{})
 	go func() {

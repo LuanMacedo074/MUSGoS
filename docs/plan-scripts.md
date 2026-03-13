@@ -1,6 +1,6 @@
 # Server-Side Scripting — Lua via gopher-lua
 
-> **Status:** Fundação implementada. ScriptEngine funcional com `getSender()`, `getContent()`, `response()`. APIs de DB e messaging pendentes.
+> **Status:** Fundação implementada. ScriptEngine funcional com `getSender()`, `getContent()`, `response()`, `publish()`, `sendMessage()`. APIs de DB pendentes.
 
 ## Contexto
 
@@ -97,9 +97,10 @@ APIs implementadas:
 - ✅ `mus.getSender()` — ID do cliente que enviou
 - ✅ `mus.getContent()` — conteúdo da mensagem (LValue convertido para tabela Lua)
 - ✅ `mus.response(table)` — monta resposta para o client
+- ✅ `mus.publish(topic, content)` — publica mensagem na message queue
+- ✅ `mus.sendMessage(recipientID, subject, content)` — envia mensagem para outro client via `MessageSender` (valida que recipientID não é vazio)
 
 APIs planejadas:
-- `mus.sendMessage(recipientID, subject, content)` — envia mensagem para outro client
 - `mus.db.getPlayerAttribute(userID, attr)` — lê atributo do jogador
 - `mus.db.setPlayerAttribute(userID, attr, value)` — grava atributo do jogador
 - `mus.db.getApplicationAttribute(attr)` — lê atributo global da app

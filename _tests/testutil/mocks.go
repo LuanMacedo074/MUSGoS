@@ -383,4 +383,56 @@ func (m *MockDBAdapter) RevokeBan(banID int64) error          { return nil }
 func (m *MockDBAdapter) CreateTable(def ports.Table) error    { return nil }
 func (m *MockDBAdapter) DropTable(name string) error          { return nil }
 func (m *MockDBAdapter) CreateIndex(def ports.Index) error    { return nil }
-func (m *MockDBAdapter) Close() error                         { return nil }
+func (m *MockDBAdapter) Close() error { return nil }
+
+// MockConnectionWriter implements ports.ConnectionWriter, recording writes for assertions.
+type MockConnectionWriter struct {
+	mu      sync.Mutex
+	Writes  []WriteCall
+	RemapFn func(oldID, newID string)
+}
+
+type WriteCall struct {
+	ClientID string
+	Data     []byte
+}
+
+func (m *MockConnectionWriter) WriteToClient(clientID string, data []byte) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	copied := make([]byte, len(data))
+	copy(copied, data)
+	m.Writes = append(m.Writes, WriteCall{ClientID: clientID, Data: copied})
+	return nil
+}
+
+func (m *MockConnectionWriter) RemapClientID(oldID, newID string) {
+	if m.RemapFn != nil {
+		m.RemapFn(oldID, newID)
+	}
+}
+
+// MockMessageSender implements ports.MessageSender, recording calls for assertions.
+type MockMessageSender struct {
+	mu    sync.Mutex
+	Calls []SendMessageCall
+}
+
+type SendMessageCall struct {
+	SenderID    string
+	RecipientID string
+	Subject     string
+	Content     lingo.LValue
+}
+
+func (m *MockMessageSender) SendMessage(senderID, recipientID, subject string, content lingo.LValue) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.Calls = append(m.Calls, SendMessageCall{
+		SenderID:    senderID,
+		RecipientID: recipientID,
+		Subject:     subject,
+		Content:     content,
+	})
+	return nil
+}
