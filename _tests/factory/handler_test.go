@@ -15,7 +15,7 @@ func TestNewHandler_SMUS(t *testing.T) {
 	connWriter := &testutil.MockConnectionWriter{}
 	sender := mus.NewSender(connWriter, sessionStore, logger, nil, false)
 
-	handler, err := factory.NewHandler("smus", logger, cipher, nil, nil, sessionStore, nil, connWriter, sender, "open", 40, false)
+	handler, err := factory.NewHandler("smus", logger, cipher, nil, nil, sessionStore, nil, connWriter, sender, "open", 40, false, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -28,7 +28,7 @@ func TestNewHandler_Unknown(t *testing.T) {
 	logger := &testutil.MockLogger{}
 	cipher := &testutil.MockCipher{}
 
-	_, err := factory.NewHandler("http", logger, cipher, nil, nil, nil, nil, nil, nil, "open", 40, false)
+	_, err := factory.NewHandler("http", logger, cipher, nil, nil, nil, nil, nil, nil, "open", 40, false, nil)
 	if err == nil {
 		t.Error("expected error for unknown protocol")
 	}

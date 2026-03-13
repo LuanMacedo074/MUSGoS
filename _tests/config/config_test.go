@@ -138,6 +138,37 @@ func TestLoadServerConfig_CustomValues(t *testing.T) {
 	}
 }
 
+func TestLoadServerConfig_CommandLevels_Defaults(t *testing.T) {
+	cfg := config.LoadServerConfig()
+
+	if cfg.CommandLevels == nil {
+		t.Fatal("CommandLevels should not be nil")
+	}
+	if cfg.CommandLevels["system.user.delete"] != 80 {
+		t.Errorf("system.user.delete = %d, want 80", cfg.CommandLevels["system.user.delete"])
+	}
+	if cfg.CommandLevels["system.server.getVersion"] != 20 {
+		t.Errorf("system.server.getVersion = %d, want 20", cfg.CommandLevels["system.server.getVersion"])
+	}
+	if cfg.CommandLevels["DBAdmin.createUser"] != 80 {
+		t.Errorf("DBAdmin.createUser = %d, want 80", cfg.CommandLevels["DBAdmin.createUser"])
+	}
+}
+
+func TestLoadServerConfig_CommandLevels_EnvOverride(t *testing.T) {
+	t.Setenv("USERLEVEL_SYSTEM_USER_DELETE", "100")
+	t.Setenv("USERLEVEL_SYSTEM_SERVER_GETVERSION", "0")
+
+	cfg := config.LoadServerConfig()
+
+	if cfg.CommandLevels["system.user.delete"] != 100 {
+		t.Errorf("system.user.delete = %d, want 100", cfg.CommandLevels["system.user.delete"])
+	}
+	if cfg.CommandLevels["system.server.getVersion"] != 0 {
+		t.Errorf("system.server.getVersion = %d, want 0", cfg.CommandLevels["system.server.getVersion"])
+	}
+}
+
 func TestLoadServerConfig_PartialOverride(t *testing.T) {
 	// Only override some vars, rest should be defaults
 	t.Setenv("APPLICATION_NAME", "CustomApp")

@@ -1,6 +1,7 @@
 package mus
 
 import (
+	"errors"
 	"fmt"
 	"fsos-server/internal/domain/ports"
 	"fsos-server/internal/domain/types/lingo"
@@ -8,6 +9,8 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+type handlerFunc func(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error)
 
 type SystemService struct {
 	db               ports.DBAdapter
@@ -19,6 +22,8 @@ type SystemService struct {
 	connWriter       ports.ConnectionWriter
 	authMode         string
 	defaultUserLevel int
+	commandLevels    map[string]int
+	handlers         map[string]handlerFunc
 }
 
 func NewSystemService(
@@ -31,8 +36,9 @@ func NewSystemService(
 	connWriter ports.ConnectionWriter,
 	authMode string,
 	defaultUserLevel int,
+	commandLevels map[string]int,
 ) *SystemService {
-	return &SystemService{
+	s := &SystemService{
 		db:               db,
 		sessionStore:     sessionStore,
 		cipher:           cipher,
@@ -42,20 +48,62 @@ func NewSystemService(
 		connWriter:       connWriter,
 		authMode:         authMode,
 		defaultUserLevel: defaultUserLevel,
+		commandLevels:    commandLevels,
 	}
+
+	s.handlers = map[string]handlerFunc{
+		"Logon":                        s.handleLogon,
+		"system.server.getVersion":     s.handleServerGetVersion,
+		"system.server.getTime":        s.handleServerGetTime,
+		"system.server.getUserCount":   s.handleServerGetUserCount,
+		"system.server.getMovieCount":  s.handleServerGetMovieCount,
+		"system.server.getMovies":      s.handleServerGetMovies,
+		"system.movie.getUserCount":    s.handleMovieGetUserCount,
+		"system.movie.getGroups":       s.handleMovieGetGroups,
+		"system.movie.getGroupCount":   s.handleMovieGetGroupCount,
+		"system.group.join":            s.handleGroupJoin,
+		"system.group.leave":           s.handleGroupLeave,
+		"system.group.getUsers":        s.handleGroupGetUsers,
+		"system.group.getUserCount":    s.handleGroupGetUserCount,
+		"system.group.setAttribute":    s.handleGroupSetAttribute,
+		"system.group.getAttribute":    s.handleGroupGetAttribute,
+		"system.group.deleteAttribute": s.handleGroupDeleteAttribute,
+		"system.group.getAttributeNames": s.handleGroupGetAttributeNames,
+		"system.user.getAddress":       s.handleUserGetAddress,
+		"system.user.getGroups":        s.handleUserGetGroups,
+		"system.user.delete":           s.handleUserDelete,
+		// DBPlayer
+		"DBPlayer.getAttribute":      s.handleDBPlayerGetAttribute,
+		"DBPlayer.setAttribute":      s.handleDBPlayerSetAttribute,
+		"DBPlayer.deleteAttribute":   s.handleDBPlayerDeleteAttribute,
+		"DBPlayer.getAttributeNames": s.handleDBPlayerGetAttributeNames,
+		// DBApplication
+		"DBApplication.getAttribute":      s.handleDBApplicationGetAttribute,
+		"DBApplication.setAttribute":      s.handleDBApplicationSetAttribute,
+		"DBApplication.deleteAttribute":   s.handleDBApplicationDeleteAttribute,
+		"DBApplication.getAttributeNames": s.handleDBApplicationGetAttributeNames,
+		// DBAdmin
+		"DBAdmin.createApplication": s.handleDBAdminCreateApplication,
+		"DBAdmin.deleteApplication": s.handleDBAdminDeleteApplication,
+		"DBAdmin.createUser":        s.handleDBAdminCreateUser,
+		"DBAdmin.deleteUser":        s.handleDBAdminDeleteUser,
+		"DBAdmin.getUserCount":      s.handleDBAdminGetUserCount,
+		"DBAdmin.ban":               s.handleDBAdminBan,
+		"DBAdmin.revokeBan":         s.handleDBAdminRevokeBan,
+	}
+
+	return s
 }
 
 func (s *SystemService) Handle(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
-	switch msg.Subject.Value {
-	case "Logon":
-		return s.handleLogon(senderID, msg)
-	default:
-		s.logger.Warn("Unknown system command", map[string]interface{}{
-			"subject":  msg.Subject.Value,
-			"senderID": senderID,
-		})
-		return nil, nil
+	if handler, ok := s.handlers[msg.Subject.Value]; ok {
+		return handler(senderID, msg)
 	}
+	s.logger.Warn("Unknown system command", map[string]interface{}{
+		"subject":  msg.Subject.Value,
+		"senderID": senderID,
+	})
+	return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidServerCommand, lingo.NewLVoid()), nil
 }
 
 func (s *SystemService) handleLogon(connectionID string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
@@ -141,6 +189,9 @@ func (s *SystemService) handleLogon(connectionID string, msg *smus.MUSMessage) (
 				"movieID": movieID,
 				"error":   err.Error(),
 			})
+		} else {
+			// Cache movieID for O(1) lookup
+			s.sessionStore.SetUserAttribute(userID, "#movieID", lingo.NewLString(movieID))
 		}
 	}
 
@@ -199,6 +250,75 @@ func (s *SystemService) extractFromList(list *lingo.LList) (string, string, stri
 	userID := lingo.StringValue(list.Values[1])
 	password := lingo.StringValue(list.Values[2])
 	return movieID, userID, password, nil
+}
+
+func (s *SystemService) getUserMovieID(userID string) (string, error) {
+	val, err := s.sessionStore.GetUserAttribute(userID, "#movieID")
+	if err != nil {
+		return "", fmt.Errorf("user %q is not in any movie", userID)
+	}
+	if str, ok := val.(*lingo.LString); ok && str.Value != "" {
+		return str.Value, nil
+	}
+	return "", fmt.Errorf("user %q is not in any movie", userID)
+}
+
+func (s *SystemService) getUserLevel(userID string) int {
+	val, err := s.sessionStore.GetUserAttribute(userID, "#userLevel")
+	if err != nil {
+		return 0
+	}
+	return int(val.ToInteger())
+}
+
+func (s *SystemService) checkCommandLevel(senderID, command string) bool {
+	requiredLevel, ok := s.commandLevels[command]
+	if !ok {
+		return false
+	}
+	return s.getUserLevel(senderID) >= requiredLevel
+}
+
+// handleDBCommand is a generic helper for DB command handlers that follow the pattern:
+// check permissions → parse proplist → extract required fields → execute action → return response.
+func (s *SystemService) handleDBCommand(senderID string, msg *smus.MUSMessage,
+	requiredFields []string,
+	action func(fields map[string]lingo.LValue) (lingo.LValue, error),
+) (*smus.MUSMessage, error) {
+	if !s.checkCommandLevel(senderID, msg.Subject.Value) {
+		return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidServerCommand, lingo.NewLVoid()), nil
+	}
+	fields := make(map[string]lingo.LValue, len(requiredFields))
+	if len(requiredFields) > 0 {
+		plist, ok := msg.MsgContent.(*lingo.LPropList)
+		if !ok {
+			return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidMessageFormat, lingo.NewLVoid()), nil
+		}
+		for _, name := range requiredFields {
+			val, err := plist.GetElement(name)
+			if err != nil {
+				return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidMessageFormat, lingo.NewLVoid()), nil
+			}
+			fields[name] = val
+		}
+	}
+	result, err := action(fields)
+	if err != nil {
+		return NewResponse(msg.Subject.Value, "System", []string{senderID}, dbErrorCode(err), lingo.NewLVoid()), nil
+	}
+	return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrNoError, result), nil
+}
+
+// dbErrorCode maps domain errors to MUS protocol error codes.
+func dbErrorCode(err error) int32 {
+	switch {
+	case errors.Is(err, ports.ErrUserNotFound):
+		return smus.ErrDatabaseUserIDNotFound
+	case errors.Is(err, ports.ErrBanNotFound):
+		return smus.ErrDatabaseDataNotFound
+	default:
+		return smus.ErrServerInternalError
+	}
 }
 
 func (s *SystemService) extractFromPropList(plist *lingo.LPropList) (string, string, string, error) {

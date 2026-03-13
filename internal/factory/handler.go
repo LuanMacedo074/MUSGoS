@@ -21,12 +21,13 @@ func NewHandler(
 	authMode string,
 	defaultUserLevel int,
 	allEncrypted bool,
+	commandLevels map[string]int,
 ) (ports.MessageHandler, error) {
 	switch protocol {
 	case "smus":
 		movieManager := mus.NewMovieManager(sessionStore, log)
 		groupManager := mus.NewGroupManager(sessionStore, log)
-		systemService := mus.NewSystemService(db, sessionStore, cipher, log, movieManager, groupManager, connWriter, authMode, defaultUserLevel)
+		systemService := mus.NewSystemService(db, sessionStore, cipher, log, movieManager, groupManager, connWriter, authMode, defaultUserLevel, commandLevels)
 		dispatcher := mus.NewDispatcher(log, scriptEngine, systemService, sender, queue)
 		return inbound.NewSMUSHandler(log, cipher, dispatcher, allEncrypted), nil
 	default:

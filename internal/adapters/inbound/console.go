@@ -58,6 +58,10 @@ func (c *Console) execute(line string) {
 	switch strings.ToLower(cmd) {
 	case "create user":
 		c.createUser(parts[2:])
+	case "ban user":
+		c.banUser(parts[2:])
+	case "revoke ban":
+		c.revokeBan(parts[2:])
 	case "help":
 		c.help()
 	case "quit", "exit":
@@ -93,10 +97,73 @@ func (c *Console) createUser(args []string) {
 	})
 }
 
+func (c *Console) banUser(args []string) {
+	if len(args) < 1 {
+		fmt.Println("Usage: ban user <username> [reason]")
+		return
+	}
+
+	username := args[0]
+	reason := "banned via console"
+	if len(args) > 1 {
+		reason = strings.Join(args[1:], " ")
+	}
+
+	user, err := c.db.GetUser(username)
+	if err != nil {
+		fmt.Printf("Error: user '%s' not found.\n", username)
+		return
+	}
+
+	if err := c.db.CreateBan(&user.ID, nil, reason, nil); err != nil {
+		fmt.Printf("Error banning user: %v\n", err)
+		return
+	}
+
+	fmt.Printf("User '%s' banned. Reason: %s\n", username, reason)
+	c.logger.Info("User banned via console", map[string]interface{}{
+		"username": username,
+		"reason":   reason,
+	})
+}
+
+func (c *Console) revokeBan(args []string) {
+	if len(args) < 1 {
+		fmt.Println("Usage: revoke ban <username>")
+		return
+	}
+
+	username := args[0]
+
+	user, err := c.db.GetUser(username)
+	if err != nil {
+		fmt.Printf("Error: user '%s' not found.\n", username)
+		return
+	}
+
+	ban, err := c.db.GetActiveBanByUserID(user.ID)
+	if err != nil {
+		fmt.Printf("Error: no active ban for user '%s'.\n", username)
+		return
+	}
+
+	if err := c.db.RevokeBan(ban.ID); err != nil {
+		fmt.Printf("Error revoking ban: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Ban revoked for user '%s'.\n", username)
+	c.logger.Info("Ban revoked via console", map[string]interface{}{
+		"username": username,
+	})
+}
+
 func (c *Console) help() {
 	fmt.Println("Available commands:")
 	fmt.Println("  create user <username> <password>  - Create a new user")
-	fmt.Println("  help                               - Show this help")
+	fmt.Println("  ban user <username> [reason]        - Ban a user")
+	fmt.Println("  revoke ban <username>               - Revoke active ban for a user")
+	fmt.Println("  help                                - Show this help")
 }
 
 func hashPassword(password string) (string, error) {

@@ -19,7 +19,7 @@ func setupSystemService(db *testutil.MockDBAdapter, authMode string) *mus.System
 	movieManager := mus.NewMovieManager(sessionStore, logger)
 	groupManager := mus.NewGroupManager(sessionStore, logger)
 	connWriter := &testutil.MockConnectionWriter{}
-	return mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, authMode, 40)
+	return mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, authMode, 40, nil)
 }
 
 func hashPassword(password string) string {
@@ -218,7 +218,7 @@ func TestSystemService_Logon_JoinsMovie(t *testing.T) {
 	movieManager := mus.NewMovieManager(sessionStore, logger)
 	groupManager := mus.NewGroupManager(sessionStore, logger)
 	connWriter := &testutil.MockConnectionWriter{}
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, "none", 40)
+	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, "none", 40, nil)
 
 	msg := buildLogonMsg("testuser", "nopass")
 
@@ -284,7 +284,7 @@ func TestSystemService_Logon_RemapsClientID(t *testing.T) {
 	sessionStore.RegisterConnection("client-1", "192.168.1.1")
 	movieManager := mus.NewMovieManager(sessionStore, logger)
 	groupManager := mus.NewGroupManager(sessionStore, logger)
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, "none", 40)
+	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, "none", 40, nil)
 
 	msg := buildLogonMsg("testuser", "nopass")
 
@@ -317,7 +317,10 @@ func TestSystemService_UnknownCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resp != nil {
-		t.Error("expected nil response for unknown system command")
+	if resp == nil {
+		t.Fatal("expected non-nil response for unknown system command")
+	}
+	if resp.ErrCode != smus.ErrInvalidServerCommand {
+		t.Errorf("ErrCode = %d, want %d", resp.ErrCode, smus.ErrInvalidServerCommand)
 	}
 }

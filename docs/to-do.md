@@ -23,7 +23,7 @@ Análise comparativa com [OpenSMUS 1.02](https://sourceforge.net/p/opensmus/code
 | Migrations | `migration_runner.go` | — |
 | Error Codes | `mus_error_code.go` | `MUSErrorCode.java` |
 | Users & Bans (DB) | `sqlite_db.go` + migration | `MUSSQLConnection.java` (user/ban tables) |
-| #All Encryption | `mus_message.go` | `MUSMessage.java` (full-packet decrypt) |
+| #All Encryption | `mus_message.go`, `smus_handler.go`, `sender.go` | `MUSMessage.java` (full-packet encrypt/decrypt) |
 | Movie (Room) Manager | `movie.go` | `MUSMovie.java` |
 | Group Manager | `group.go` | `MUSGroup.java` |
 | Connection Pool | `conn_pool.go` | — |
@@ -49,8 +49,8 @@ Análise comparativa com [OpenSMUS 1.02](https://sourceforge.net/p/opensmus/code
 
 | # | Componente | OpenSMUS equivalente | Descrição |
 |---|---|---|---|
-| 9 | **System Commands** | `MUSDispatcher.handleSystemMsg()` | `system.server.*`, `system.group.*`, `system.user.*` |
-| 10 | **DB Dispatcher** | `MUSDBDispatcher.java` | Comandos `DBPlayer.*`, `DBApplication.*`, `DBAdmin.*` |
+| ~~9~~ | ~~**System Commands**~~ | ~~`MUSDispatcher.handleSystemMsg()`~~ | ~~`system.server.*`, `system.group.*`, `system.user.*`~~ ✅ FEITO |
+| ~~10~~ | ~~**DB Dispatcher**~~ | ~~`MUSDBDispatcher.java`~~ | ~~Comandos `DBPlayer.*`, `DBApplication.*`, `DBAdmin.*`~~ ✅ FEITO |
 | ~~11~~ | ~~**User Send Queue**~~ | ~~`MUSUserSendQueue.java`~~ | ~~Fila assíncrona por usuário~~ ✅ Substituído pelo sistema de queue genérico (memory/redis/rabbitmq) |
 | ~~12~~ | ~~**Group Send Queue**~~ | ~~`MUSGroupSendQueue.java`~~ | ~~Fila assíncrona por group~~ ✅ Substituído pelo sistema de queue genérico |
 | 13 | **Idle Check** | `MUSIdleCheck.java` | Desconexão de usuários inativos |
@@ -60,12 +60,12 @@ Análise comparativa com [OpenSMUS 1.02](https://sourceforge.net/p/opensmus/code
 
 | # | Componente | OpenSMUS equivalente | Descrição |
 |---|---|---|---|
-| ~~15~~ | ~~**Server-side scripting (fundação)**~~ | ~~`ServerSideScript.java`, `MUSScriptMap.java`~~ | ~~ScriptEngine + LValue↔Lua + echo.lua (APIs DB pendentes)~~ |
+| ~~15~~ | ~~**Server-side scripting**~~ | ~~`ServerSideScript.java`, `MUSScriptMap.java`~~ | ~~ScriptEngine + LValue↔Lua + DB APIs + server APIs~~ ✅ FEITO |
 | 16 | UDP support | `MUSUDPListener.java` | Transporte UDP para baixa latência |
 | 17 | Email sending | `MUSEmail.java` | Envio de emails SMTP |
 | 18 | Kill timers | `MUSKillServerTimer.java`, `MUSKillUserTimer.java` | Timers de shutdown/desconexão |
-| 19 | User levels / permissions | user level cache no `MUSDispatcher` | Controle de acesso por nível (DB pronto, falta enforcement nos System Commands — item 9) |
-| 20 | Ban system | `MUSDBDispatcher.ban/revokeBan` | Banimento de usuários (DB pronto, verificação no logon implementada nos modos `strict`/`open`) |
+| ~~19~~ | ~~User levels / permissions~~ | ~~user level cache no `MUSDispatcher`~~ | ~~Controle de acesso por nível~~ ✅ FEITO (deny-by-default via `commandLevels` map) |
+| ~~20~~ | ~~Ban system~~ | ~~`MUSDBDispatcher.ban/revokeBan`~~ | ~~Banimento de usuários~~ ✅ FEITO (DB + logon check + `DBAdmin.ban`/`revokeBan`) |
 
 ## Fluxo de conexão (referência OpenSMUS)
 

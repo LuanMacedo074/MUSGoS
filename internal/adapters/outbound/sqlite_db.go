@@ -516,6 +516,11 @@ func (s *SQLiteDB) hasCompositePK(def ports.Table) bool {
 }
 
 
+// QueryBuilder returns a generic query builder for this database.
+func (s *SQLiteDB) QueryBuilder() ports.QueryBuilder {
+	return NewSQLiteQueryBuilder(s.db)
+}
+
 // --- Close ---
 
 func (s *SQLiteDB) Close() error {

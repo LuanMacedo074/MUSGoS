@@ -116,6 +116,25 @@ func StringValue(v LValue) string {
 	return v.String()
 }
 
+// ExtractString extracts a string from an LValue that is expected to carry
+// a string argument. It accepts LString, LSymbol, or the first element of
+// an LList. Returns an error when the value cannot be interpreted as a string.
+func ExtractString(v LValue) (string, error) {
+	switch t := v.(type) {
+	case *LString:
+		return t.Value, nil
+	case *LSymbol:
+		return t.Value, nil
+	case *LList:
+		if len(t.Values) > 0 {
+			return ExtractString(t.Values[0])
+		}
+		return "", fmt.Errorf("empty list: cannot extract string")
+	default:
+		return "", fmt.Errorf("cannot extract string from %T", v)
+	}
+}
+
 func GetLValue(val interface{}) LValue {
 	switch v := val.(type) {
 	case int:

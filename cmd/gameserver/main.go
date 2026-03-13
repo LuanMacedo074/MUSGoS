@@ -93,8 +93,8 @@ func main() {
 	// 2. Sender — uses pool as ConnectionWriter
 	sender := mus.NewSender(pool, sessionStore, gameLogger, cipher, cfg.AllEncrypted)
 
-	// 3. ScriptEngine — can send messages via Sender
-	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout, queue, sender)
+	// 3. ScriptEngine — can send messages via Sender + access DB + server info
+	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout, queue, sender, dbResult.Adapter, dbResult.QueryBuilder, sessionStore)
 	gameLogger.Info("Script engine initialized", map[string]interface{}{
 		"scripts_path": cfg.ScriptsPath,
 	})
@@ -111,7 +111,7 @@ func main() {
 	}
 
 	// 4. Handler — Dispatcher receives ScriptEngine + Sender + pool
-	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine, dbResult.Adapter, sessionStore, queue, pool, sender, cfg.AuthMode, cfg.DefaultUserLevel, cfg.AllEncrypted)
+	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine, dbResult.Adapter, sessionStore, queue, pool, sender, cfg.AuthMode, cfg.DefaultUserLevel, cfg.AllEncrypted, cfg.CommandLevels)
 	if err != nil {
 		gameLogger.Fatal("Failed to initialize protocol handler", map[string]interface{}{
 			"error": err,

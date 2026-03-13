@@ -11,6 +11,7 @@ import (
 type DatabaseResult struct {
 	Adapter         ports.DBAdapter
 	MigrationRunner *services.MigrationRunner
+	QueryBuilder    ports.QueryBuilder
 }
 
 func NewDatabase(dbType, dbPath string, migrations []ports.Migration) (*DatabaseResult, error) {
@@ -26,6 +27,7 @@ func NewDatabase(dbType, dbPath string, migrations []ports.Migration) (*Database
 		return &DatabaseResult{
 			Adapter:         db,
 			MigrationRunner: runner,
+			QueryBuilder:    db.QueryBuilder(),
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported database type: %s", dbType)

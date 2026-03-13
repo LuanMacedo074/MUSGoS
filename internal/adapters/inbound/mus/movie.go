@@ -126,6 +126,9 @@ func (mm *MovieManager) LeaveMovie(movieID, userID string) error {
 		mm.sessionStore.LeaveRoom(roomName, userID)
 	}
 
+	// Clear cached movieID attribute
+	mm.sessionStore.DeleteUserAttribute(userID, "#movieID")
+
 	// Leave the movie room
 	if err := mm.sessionStore.LeaveRoom(movieRoomName(movieID), userID); err != nil {
 		mm.mu.Unlock()

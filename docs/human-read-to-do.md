@@ -75,67 +75,32 @@ O servidor funciona sem esses itens, mas fica incompleto para uso real.
 
 ---
 
-### 9. System Commands
+### ~~9. System Commands~~ ✅ FEITO
 
 **OpenSMUS:** `MUSDispatcher.handleSystemMsg()`
 
-Comandos enviados para o recipient `"system"` são operações administrativas e de consulta. O `subject` da mensagem determina qual comando executar.
+Implementado em `system_service_*.go` com handler map (`map[string]handlerFunc`) para roteamento por subject. Todos os comandos system do protocolo MUS estão implementados:
 
-Principais categorias:
+- **Server:** `getVersion`, `getTime`, `getUserCount`, `getMovieCount`, `getMovies`
+- **Movie:** `getUserCount`, `getGroups`, `getGroupCount`
+- **Group:** `join`, `leave`, `getUsers`, `getUserCount`, `setAttribute`/`getAttribute`/`deleteAttribute`/`getAttributeNames`
+- **User:** `getAddress`, `getGroups`, `delete` (com cleanup de sessão — `LeaveAllRooms` + `UnregisterConnection` antes do disconnect)
 
-**Server:**
-- `system.server.getVersion` — retorna a versão do servidor
-- `system.server.getTime` — retorna o timestamp atual
-- `system.server.getUserCount` — total de usuários conectados
-- `system.server.getMovieCount` — total de movies ativos
-- `system.server.getMovies` — lista de movies
-
-**Movie:**
-- `system.movie.getUserCount` — usuários no movie atual
-- `system.movie.getGroups` — groups no movie atual
-- `system.movie.getGroupCount` — total de groups
-
-**Group:**
-- `system.group.join` — entrar em um group
-- `system.group.leave` — sair de um group
-- `system.group.getUsers` — listar membros
-- `system.group.getUserCount` — total de membros
-- `system.group.setAttribute` / `getAttribute` — metadados do group
-
-**User:**
-- `system.user.getAddress` — IP do usuário
-- `system.user.getGroups` — groups do usuário
-- `system.user.delete` — desconectar usuário
-
-Muitos desses comandos requerem verificação de **user level** — apenas administradores podem executar comandos destrutivos como `shutdown`, `disable`, `delete`.
-
-**O que implementar:** Um handler de system commands que faz switch no subject e executa a operação correspondente. Para MVP, os mais importantes são `group.join`, `group.leave`, `group.getUsers`.
+Permissões via `checkCommandLevel` com deny-by-default: comandos não mapeados no `commandLevels` são rejeitados.
 
 ---
 
-### 10. DB Dispatcher
+### ~~10. DB Dispatcher~~ ✅ FEITO
 
 **OpenSMUS:** `MUSDBDispatcher.java`
 
-O protocolo MUS tem um sistema de banco de dados integrado. Clientes podem ler e escrever dados persistentes através de mensagens com subjects especiais:
+Implementado via `handleDBCommand` helper genérico em `system_service.go`, com handlers em `system_service_db_*.go`:
 
-**DBPlayer** (atributos por jogador por aplicação):
-- `DBPlayer.getAttribute` — ler atributo do jogador
-- `DBPlayer.setAttribute` — salvar atributo do jogador
-- `DBPlayer.deleteAttribute` — apagar atributo
-- `DBPlayer.getAttributeNames` — listar atributos
+- **DBPlayer:** `getAttribute`, `setAttribute`, `deleteAttribute`, `getAttributeNames`
+- **DBApplication:** `getAttribute`, `setAttribute`, `deleteAttribute`, `getAttributeNames`
+- **DBAdmin:** `createUser` (bcrypt), `deleteUser`, `createApplication`, `deleteApplication`, `getUserCount`, `ban`, `revokeBan`
 
-**DBApplication** (atributos globais da aplicação):
-- `DBApplication.getAttribute/setAttribute/deleteAttribute/getAttributeNames`
-
-**DBAdmin** (administração):
-- `DBAdmin.createUser/deleteUser` — gerenciar usuários
-- `DBAdmin.createApplication/deleteApplication` — gerenciar aplicações
-- `DBAdmin.ban/revokeBan` — banimento
-
-Nós já temos o SQLite adapter com suporte a application attributes e player attributes. O que falta é o **dispatcher** que recebe as mensagens DB e chama os métodos corretos do `DBAdapter`.
-
-**O que implementar:** Um handler que interpreta subjects `DBPlayer.*`, `DBApplication.*`, `DBAdmin.*` e traduz para chamadas no `ports.DBAdapter`.
+Cada handler usa o helper genérico que faz: check permissions → parse proplist → extract fields → execute action → map errors. `dbErrorCode` mapeia erros de domínio para códigos do protocolo MUS (`ErrUserNotFound` → `ErrDatabaseUserIDNotFound`, etc.) usando `errors.Is`.
 
 ---
 
@@ -207,21 +172,22 @@ Nice to have. O servidor opera sem eles.
 
 ---
 
-### ~~15. Server-Side Scripting (fundação)~~ ✅ FEITO
+### ~~15. Server-Side Scripting~~ ✅ FEITO
 
 **OpenSMUS:** `ServerSideScript.java`, `MUSScriptMap.java`
 
-A fundação do sistema de scripting Lua está implementada:
+Sistema de scripting Lua completo:
 
 - **`ports.ScriptEngine`** — interface agnóstica ao protocolo (`HasScript`, `Execute`)
 - **`LuaScriptEngine`** — implementação com gopher-lua, VM sandboxed (sem `os`/`io`/`debug`)
 - **Conversão bidirecional** LValue ↔ Lua (`lua_convert.go`)
 - **APIs disponíveis nos scripts:** `mus.getSender()`, `mus.getContent()`, `mus.response()`, `mus.publish()`, `mus.sendMessage()`
-- **Roteamento** — scripts são invocados quando o `recipient` da mensagem é `"system.script"` (padrão OpenSMUS). O `subject` da mensagem é usado como nome do script. O handler busca `external/scripts/{subject}.lua` e o executa.
-- **Script exemplo:** `external/scripts/echo.lua`
+- **APIs de banco (`lua_db_module.go`):** `mus.db.getPlayerAttribute`, `mus.db.setPlayerAttribute`, `mus.db.createUser` (com bcrypt), `mus.db.ban`, `mus.db.revokeBan`, etc.
+- **Query builder (`lua_db_module.go`):** `mus.db.table("name"):where(...):get()` para queries arbitrárias em tabelas customizadas
+- **APIs de servidor (`lua_server_module.go`):** informações e operações do servidor
+- **Roteamento** — scripts são invocados quando o `recipient` da mensagem é `"system.script"` (padrão OpenSMUS). O `subject` da mensagem é usado como nome do script.
 
-**O que falta (evolução futura):**
-- APIs de banco (`mus.db.getPlayerAttribute`, `mus.db.setPlayerAttribute`, etc.)
+**Evolução futura:**
 - Event hooks (`userLogOn`, `userLogOff`, `groupJoin`, `groupLeave`)
 - Hot reload de scripts sem restart
 - Pool de VMs Lua para performance
@@ -260,36 +226,30 @@ Implementação simples com `time.AfterFunc` em Go.
 
 ---
 
-### 19. User Levels / Permissions (DB ✅, sessão ✅, enforcement pendente)
+### ~~19. User Levels / Permissions~~ ✅ FEITO
 
 **OpenSMUS:** cache de user levels no `MUSDispatcher`
 
-Cada usuário tem um nível numérico (0-100). Comandos system verificam o nível antes de executar:
-- Nível 20+ pode ver informações do servidor
-- Nível 80+ pode executar comandos administrativos
-- Nível 100 é superadmin
-
-O nível é armazenado no banco e cacheado em memória para performance. O OpenSMUS permite configurar o nível mínimo por comando.
-
-**Status:**
-- ✅ Tabela `users` com `user_level` — `CreateUser`, `UpdateUserLevel` implementados
-- ✅ `DEFAULT_USER_LEVEL` configurável via env var (default: 20, mesmo do original Multiuser.cfg)
-- ✅ User level atribuído na sessão (`#userLevel`) durante o logon:
-  - `none` → `DEFAULT_USER_LEVEL`
-  - `open` → nível do DB se o usuário existe, senão `DEFAULT_USER_LEVEL`
-  - `strict` → nível do DB
+Implementado end-to-end:
+- ✅ Tabela `users` com `user_level` — `CreateUser`, `UpdateUserLevel`
+- ✅ `DEFAULT_USER_LEVEL` configurável via env var (default: 20)
+- ✅ User level atribuído na sessão (`#userLevel`) durante o logon
 - ✅ Console usa `DEFAULT_USER_LEVEL` ao criar usuários
-- ❌ Enforcement nos System Commands (verificar `#userLevel` da sessão antes de executar comandos) — depende de System Commands (item 9)
+- ✅ `checkCommandLevel` com deny-by-default: comandos devem estar mapeados no `commandLevels` (map configurável), senão são rejeitados
+- ✅ `COMMAND_LEVELS` configurável via env var
 
 ---
 
-### 20. Ban System (DB ✅, verificação no logon ✅)
+### ~~20. Ban System~~ ✅ FEITO
 
 **OpenSMUS:** `MUSDBDispatcher.ban/revokeBan`
 
-Permite banir usuários por IP ou nome, com duração configurável. Bans são verificados durante o logon — se o usuário está banido, a conexão é recusada com erro.
-
-**Status:** Tabela `bans` com suporte a ban por user_id e/ou IP, expiração temporal e ban permanente. CRUD implementado (`CreateBan`, `GetActiveBanByUserID`, `GetActiveBanByIP`, `RevokeBan`). Verificação no logon implementada nos modos `strict` e `open` do `LogonService`.
+Implementado end-to-end:
+- ✅ Tabela `bans` com suporte a ban por user_id e/ou IP, expiração temporal e ban permanente
+- ✅ CRUD: `CreateBan`, `GetActiveBanByUserID`, `GetActiveBanByIP`, `RevokeBan`
+- ✅ Verificação no logon nos modos `strict` e `open`
+- ✅ Comandos `DBAdmin.ban` e `DBAdmin.revokeBan` via protocolo MUS
+- ✅ `mus.db.ban()` e `mus.db.revokeBan()` via Lua scripts
 
 ---
 

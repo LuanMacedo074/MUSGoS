@@ -329,45 +329,110 @@ func (m *MockMessageQueue) Close() error {
 	return nil
 }
 
-// MockDBAdapter implements ports.DBAdapter with configurable behavior for user/ban lookups.
+// MockDBAdapter implements ports.DBAdapter with configurable behavior.
 type MockDBAdapter struct {
-	GetUserFunc            func(username string) (*ports.User, error)
-	GetActiveBanByUserIDFunc func(userID int64) (*ports.Ban, error)
+	GetUserFunc                    func(username string) (*ports.User, error)
+	GetActiveBanByUserIDFunc       func(userID int64) (*ports.Ban, error)
+	CreateApplicationFunc          func(appName string) error
+	DeleteApplicationFunc          func(appName string) error
+	SetApplicationAttributeFunc    func(appName, attrName string, value lingo.LValue) error
+	GetApplicationAttributeFunc    func(appName, attrName string) (lingo.LValue, error)
+	GetApplicationAttributeNamesFunc func(appName string) ([]string, error)
+	DeleteApplicationAttributeFunc func(appName, attrName string) error
+	SetPlayerAttributeFunc         func(appName, userID, attrName string, value lingo.LValue) error
+	GetPlayerAttributeFunc         func(appName, userID, attrName string) (lingo.LValue, error)
+	GetPlayerAttributeNamesFunc    func(appName, userID string) ([]string, error)
+	DeletePlayerAttributeFunc      func(appName, userID, attrName string) error
+	CreateUserFunc                 func(username, passwordHash string, userLevel int) error
+	DeleteUserFunc                 func(username string) error
+	CreateBanFunc                  func(userID *int64, ipAddress *string, reason string, expiresAt *time.Time) error
+	RevokeBanFunc                  func(banID int64) error
 }
 
-func (m *MockDBAdapter) CreateApplication(appName string) error { return nil }
-func (m *MockDBAdapter) DeleteApplication(appName string) error { return nil }
+func (m *MockDBAdapter) CreateApplication(appName string) error {
+	if m.CreateApplicationFunc != nil {
+		return m.CreateApplicationFunc(appName)
+	}
+	return nil
+}
+func (m *MockDBAdapter) DeleteApplication(appName string) error {
+	if m.DeleteApplicationFunc != nil {
+		return m.DeleteApplicationFunc(appName)
+	}
+	return nil
+}
 func (m *MockDBAdapter) SetApplicationAttribute(appName, attrName string, value lingo.LValue) error {
+	if m.SetApplicationAttributeFunc != nil {
+		return m.SetApplicationAttributeFunc(appName, attrName, value)
+	}
 	return nil
 }
 func (m *MockDBAdapter) GetApplicationAttribute(appName, attrName string) (lingo.LValue, error) {
+	if m.GetApplicationAttributeFunc != nil {
+		return m.GetApplicationAttributeFunc(appName, attrName)
+	}
 	return lingo.NewLVoid(), nil
 }
 func (m *MockDBAdapter) GetApplicationAttributeNames(appName string) ([]string, error) {
+	if m.GetApplicationAttributeNamesFunc != nil {
+		return m.GetApplicationAttributeNamesFunc(appName)
+	}
 	return nil, nil
 }
-func (m *MockDBAdapter) DeleteApplicationAttribute(appName, attrName string) error { return nil }
+func (m *MockDBAdapter) DeleteApplicationAttribute(appName, attrName string) error {
+	if m.DeleteApplicationAttributeFunc != nil {
+		return m.DeleteApplicationAttributeFunc(appName, attrName)
+	}
+	return nil
+}
 func (m *MockDBAdapter) SetPlayerAttribute(appName, userID, attrName string, value lingo.LValue) error {
+	if m.SetPlayerAttributeFunc != nil {
+		return m.SetPlayerAttributeFunc(appName, userID, attrName, value)
+	}
 	return nil
 }
 func (m *MockDBAdapter) GetPlayerAttribute(appName, userID, attrName string) (lingo.LValue, error) {
+	if m.GetPlayerAttributeFunc != nil {
+		return m.GetPlayerAttributeFunc(appName, userID, attrName)
+	}
 	return lingo.NewLVoid(), nil
 }
 func (m *MockDBAdapter) GetPlayerAttributeNames(appName, userID string) ([]string, error) {
+	if m.GetPlayerAttributeNamesFunc != nil {
+		return m.GetPlayerAttributeNamesFunc(appName, userID)
+	}
 	return nil, nil
 }
-func (m *MockDBAdapter) DeletePlayerAttribute(appName, userID, attrName string) error { return nil }
-func (m *MockDBAdapter) CreateUser(username, passwordHash string, userLevel int) error { return nil }
+func (m *MockDBAdapter) DeletePlayerAttribute(appName, userID, attrName string) error {
+	if m.DeletePlayerAttributeFunc != nil {
+		return m.DeletePlayerAttributeFunc(appName, userID, attrName)
+	}
+	return nil
+}
+func (m *MockDBAdapter) CreateUser(username, passwordHash string, userLevel int) error {
+	if m.CreateUserFunc != nil {
+		return m.CreateUserFunc(username, passwordHash, userLevel)
+	}
+	return nil
+}
 func (m *MockDBAdapter) GetUser(username string) (*ports.User, error) {
 	if m.GetUserFunc != nil {
 		return m.GetUserFunc(username)
 	}
 	return nil, ports.ErrUserNotFound
 }
-func (m *MockDBAdapter) DeleteUser(username string) error                  { return nil }
+func (m *MockDBAdapter) DeleteUser(username string) error {
+	if m.DeleteUserFunc != nil {
+		return m.DeleteUserFunc(username)
+	}
+	return nil
+}
 func (m *MockDBAdapter) UpdateUserLevel(username string, level int) error  { return nil }
 func (m *MockDBAdapter) UpdateUserPassword(username, passwordHash string) error { return nil }
 func (m *MockDBAdapter) CreateBan(userID *int64, ipAddress *string, reason string, expiresAt *time.Time) error {
+	if m.CreateBanFunc != nil {
+		return m.CreateBanFunc(userID, ipAddress, reason, expiresAt)
+	}
 	return nil
 }
 func (m *MockDBAdapter) GetActiveBanByUserID(userID int64) (*ports.Ban, error) {
@@ -379,7 +444,12 @@ func (m *MockDBAdapter) GetActiveBanByUserID(userID int64) (*ports.Ban, error) {
 func (m *MockDBAdapter) GetActiveBanByIP(ipAddress string) (*ports.Ban, error) {
 	return nil, ports.ErrBanNotFound
 }
-func (m *MockDBAdapter) RevokeBan(banID int64) error          { return nil }
+func (m *MockDBAdapter) RevokeBan(banID int64) error {
+	if m.RevokeBanFunc != nil {
+		return m.RevokeBanFunc(banID)
+	}
+	return nil
+}
 func (m *MockDBAdapter) CreateTable(def ports.Table) error    { return nil }
 func (m *MockDBAdapter) DropTable(name string) error          { return nil }
 func (m *MockDBAdapter) CreateIndex(def ports.Index) error    { return nil }
@@ -403,6 +473,10 @@ func (m *MockConnectionWriter) WriteToClient(clientID string, data []byte) error
 	copied := make([]byte, len(data))
 	copy(copied, data)
 	m.Writes = append(m.Writes, WriteCall{ClientID: clientID, Data: copied})
+	return nil
+}
+
+func (m *MockConnectionWriter) DisconnectClient(clientID string) error {
 	return nil
 }
 

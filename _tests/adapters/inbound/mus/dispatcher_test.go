@@ -15,7 +15,7 @@ func newTestDispatcher(scriptEngine ports.ScriptEngine) (*mus.Dispatcher, *testu
 	sessionStore := testutil.NewMockSessionStore()
 	connWriter := &testutil.MockConnectionWriter{}
 	sender := mus.NewSender(connWriter, sessionStore, logger, nil, false)
-	systemService := mus.NewSystemService(nil, sessionStore, nil, logger, nil, nil, connWriter, "none", 40)
+	systemService := mus.NewSystemService(nil, sessionStore, nil, logger, nil, nil, connWriter, "none", 40, nil)
 	dispatcher := mus.NewDispatcher(logger, scriptEngine, systemService, sender, nil)
 	return dispatcher, connWriter, sessionStore
 }

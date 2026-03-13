@@ -73,6 +73,16 @@ func (p *ConnPool) RemapClientID(oldID, newID string) {
 	p.connToID[conn] = newID
 }
 
+func (p *ConnPool) DisconnectClient(clientID string) error {
+	p.mu.Lock()
+	conn, ok := p.clients[clientID]
+	p.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("client %q not connected", clientID)
+	}
+	return conn.Close()
+}
+
 func (p *ConnPool) CloseAll() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
