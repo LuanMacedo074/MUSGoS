@@ -12,7 +12,8 @@ import (
 )
 
 type RedisSessionStore struct {
-	client    *redis.Client
+	client    redis.Cmdable
+	closer    func() error
 	keyPrefix string
 	connTTL   time.Duration
 }
@@ -34,9 +35,19 @@ func NewRedisSessionStore(addr, password string, db int, keyPrefix string, connT
 
 	return &RedisSessionStore{
 		client:    client,
+		closer:    client.Close,
 		keyPrefix: keyPrefix,
 		connTTL:   time.Duration(connTTL) * time.Second,
 	}, nil
+}
+
+func NewRedisSessionStoreWithClient(client redis.Cmdable, keyPrefix string, connTTL int) *RedisSessionStore {
+	return &RedisSessionStore{
+		client:    client,
+		closer:    func() error { return nil },
+		keyPrefix: keyPrefix,
+		connTTL:   time.Duration(connTTL) * time.Second,
+	}
 }
 
 // --- Key helpers ---
@@ -126,7 +137,7 @@ func (r *RedisSessionStore) GetAllConnections() ([]ports.ConnectionInfo, error) 
 	}
 
 	if len(clientIDs) == 0 {
-		return nil, nil
+		return []ports.ConnectionInfo{}, nil
 	}
 
 	pipe := r.client.Pipeline()
@@ -261,6 +272,6 @@ func (r *RedisSessionStore) LeaveAllRooms(clientID string) error {
 // --- Close ---
 
 func (r *RedisSessionStore) Close() error {
-	return r.client.Close()
+	return r.closer()
 }
 

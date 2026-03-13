@@ -1,6 +1,11 @@
 package config
 
-import "os"
+import (
+	"log"
+	"os"
+
+	"github.com/joho/godotenv"
+)
 
 type RedisConfig struct {
 	Host      string
@@ -28,6 +33,10 @@ type ServerConfig struct {
 }
 
 func LoadServerConfig() ServerConfig {
+	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
+		log.Printf("Warning: error loading .env file: %v", err)
+	}
+
 	return ServerConfig{
 		ApplicationName: getEnv("APPLICATION_NAME", "SMUS-SERVER"),
 		Port:            getEnv("PORT", "1199"),
@@ -40,7 +49,7 @@ func LoadServerConfig() ServerConfig {
 		Protocol:      getEnv("PROTOCOL", "smus"),
 		DatabaseType:     getEnv("DATABASE_TYPE", "sqlite"),
 		DatabasePath:     getEnv("DATABASE_PATH", "data/musgo.db"),
-		SessionStoreType: getEnv("SESSION_STORE_TYPE", "redis"),
+		SessionStoreType: getEnv("SESSION_STORE_TYPE", "memory"),
 		Redis: RedisConfig{
 			Host:      getEnv("REDIS_HOST", "localhost"),
 			Port:      getEnv("REDIS_PORT", "6379"),

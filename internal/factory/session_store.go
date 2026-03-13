@@ -11,6 +11,8 @@ import (
 
 func NewSessionStore(storeType string, redisCfg config.RedisConfig) (ports.SessionStore, error) {
 	switch storeType {
+	case "memory":
+		return outbound.NewMemorySessionStore(), nil
 	case "redis":
 		db, err := strconv.Atoi(redisCfg.DB)
 		if err != nil {

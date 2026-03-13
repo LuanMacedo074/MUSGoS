@@ -37,7 +37,7 @@ func TestLoadServerConfig_Defaults(t *testing.T) {
 		"CipherType":      {cfg.CipherType, "blowfish"},
 		"EncryptionKey":    {cfg.EncryptionKey, "NO_ENCRYPTION_KEY"},
 		"Protocol":         {cfg.Protocol, "smus"},
-		"SessionStoreType": {cfg.SessionStoreType, "redis"},
+		"SessionStoreType": {cfg.SessionStoreType, "memory"},
 		"RedisHost":        {cfg.Redis.Host, "localhost"},
 		"RedisPort":        {cfg.Redis.Port, "6379"},
 		"RedisPassword":    {cfg.Redis.Password, ""},
