@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"fsos-server/internal/crypto"
-	"fsos-server/internal/types/lingo"
+	"fsos-server/internal/domain/ports"
+	"fsos-server/internal/domain/types/lingo"
 )
 
 // header padrão do MUS, vem em todas as messagem
@@ -28,7 +28,7 @@ func ParseMUSMessage(rawmsg []byte) (*MUSMessage, error) {
 	return ParseMUSMessageWithDecryption(rawmsg, nil)
 }
 
-func ParseMUSMessageWithDecryption(rawmsg []byte, decrypt *crypto.Blowfish) (*MUSMessage, error) {
+func ParseMUSMessageWithDecryption(rawmsg []byte, decrypt ports.Cipher) (*MUSMessage, error) {
 	if len(rawmsg) < 14 {
 		return nil, errors.New("message too short")
 	}
@@ -80,7 +80,7 @@ func ParseMUSMessageWithDecryption(rawmsg []byte, decrypt *crypto.Blowfish) (*MU
 		remainingBytes := rawmsg[readPtr:]
 		content := remainingBytes
 
-		if msg.Subject.Value == "Logon" {
+		if msg.Subject.Value == "Logon" && decrypt != nil {
 			content = decrypt.Decrypt(remainingBytes)
 		}
 

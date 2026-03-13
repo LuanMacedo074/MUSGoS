@@ -1,41 +1,57 @@
 package main
 
 import (
-	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
 
-	"fsos-server/internal/crypto"
-	"fsos-server/internal/handlers"
-	"fsos-server/internal/protocol"
-	"fsos-server/internal/utilities/logger"
+	"fsos-server/internal/adapters/inbound"
+	"fsos-server/internal/config"
+	"fsos-server/internal/factory"
 )
 
 func main() {
-	var port = flag.String("port", getEnv("PORT", "1199"), "TCP port to listen on")
-	var logLevel = flag.String("log-level", getEnv("LOG_LEVEL", "INFO"), "Log level (DEBUG, INFO, WARN, ERROR)")
-	var encryptionKey = flag.String("encryption_key", getEnv("ENCRYPTION_KEY", "NO_ENCRYPTION_KEY"), "Key to SMUS Encryption")
-	flag.Parse()
+	cfg := config.LoadServerConfig()
 
-	gameLogger := logger.New("FSOS-SERVER", parseLogLevel(*logLevel))
-	gameLogger.Info("Starting FSOS Game Server...")
+	gameLogger, err := factory.NewLogger(cfg.LoggerType, cfg.ApplicationName, factory.ParseLogLevel(cfg.LogLevel), cfg.LogPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to initialize logger: %v\n", err)
+		os.Exit(1)
+	}
 
+	gameLogger.Info("Starting " + cfg.ApplicationName + "...")
 	gameLogger.Info("Server configuration", map[string]interface{}{
-		"port":          *port,
-		"log_level":     *logLevel,
-		"env":           getEnv("ENVIRONMENT", "development"),
-		"encryptionKey": *encryptionKey,
+		"port":      cfg.Port,
+		"log_level": cfg.LogLevel,
+		"logger":    cfg.LoggerType,
+		"log_path":  cfg.LogPath,
+		"cipher":    cfg.CipherType,
+		"protocol":  cfg.Protocol,
+		"env":       cfg.Environment,
 	})
 
-	blowfish := crypto.NewBlowfish(*encryptionKey)
-	blowfish.SetKey()
-	smusHandler := handlers.NewSMUSHandler(gameLogger, blowfish)
-	server := protocol.NewTCPServer(*port, gameLogger, smusHandler)
-
-	gameLogger.Info("Blowfish parser initialized", map[string]interface{}{
-		"key": blowfish.StrKey,
+	cipher, err := factory.NewCipher(cfg.CipherType, cfg.EncryptionKey)
+	if err != nil {
+		gameLogger.Fatal("Failed to initialize cipher", map[string]interface{}{
+			"error": err,
+		})
+	}
+	gameLogger.Info("Cipher initialized", map[string]interface{}{
+		"type": cfg.CipherType,
 	})
+
+	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher)
+	if err != nil {
+		gameLogger.Fatal("Failed to initialize protocol handler", map[string]interface{}{
+			"error": err,
+		})
+	}
+	gameLogger.Info("Protocol handler initialized", map[string]interface{}{
+		"type": cfg.Protocol,
+	})
+
+	server := inbound.NewTCPServer(cfg.Port, gameLogger, handler)
 
 	go func() {
 		if err := server.Start(); err != nil {
@@ -51,26 +67,4 @@ func main() {
 	<-c
 	gameLogger.Info("Shutting down server...")
 	server.Shutdown()
-}
-
-func getEnv(key, fallback string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-	return fallback
-}
-
-func parseLogLevel(level string) logger.LogLevel {
-	switch level {
-	case "DEBUG":
-		return logger.LogLevel(logger.DEBUG)
-	case "INFO":
-		return logger.LogLevel(logger.INFO)
-	case "WARN":
-		return logger.LogLevel(logger.WARN)
-	case "ERROR":
-		return logger.LogLevel(logger.ERROR)
-	default:
-		return logger.LogLevel(logger.INFO)
-	}
 }

@@ -1,4 +1,4 @@
-package crypto
+package outbound
 
 //Este código é um de-para (port/adaptação) da implementação original em C do projeto orignal da macromedia.
 //Gostaria de expressar meus sinceros agradecimentos ao Mauricio Piacentini (mauricio@tabuleiro.com), autor original do OpenSMUS, cujo trabalho serviu como base fundamental para esta implementação.
@@ -288,10 +288,10 @@ const (
 	kNoCrypt
 )
 
-var BlowfishRounds = 16
+const BlowfishRounds = 16
 
 type Blowfish struct {
-	StrKey        string
+	strKey        string
 	key           []byte
 	initBoxes     Boxes
 	state         uint32
@@ -302,7 +302,7 @@ type Blowfish struct {
 func NewBlowfish(keyStr string) *Blowfish {
 	b := &Blowfish{
 		key:           []byte(keyStr),
-		StrKey:        keyStr,
+		strKey:        keyStr,
 		initBoxes:     initBoxes,
 		state:         uint32(0),
 		lastOperation: kNoCrypt,
@@ -354,7 +354,7 @@ func (b *Blowfish) SetKey() {
 	b.clearState()
 }
 
-func BlowfishEncode(LL *uint32, R uint32, S []uint32, P uint32) {
+func blowfishEncode(LL *uint32, R uint32, S []uint32, P uint32) {
 	*LL ^= P
 	*LL ^= (((S[R>>24] +
 		S[0x0100+((R>>16)&0xff)]) ^
@@ -371,43 +371,43 @@ func (b *Blowfish) DoCrypto(data []uint32, encrypt int) {
 	if encrypt != 0 {
 		l ^= p[0]
 
-		BlowfishEncode(&r, l, s, p[1])
-		BlowfishEncode(&l, r, s, p[2])
-		BlowfishEncode(&r, l, s, p[3])
-		BlowfishEncode(&l, r, s, p[4])
-		BlowfishEncode(&r, l, s, p[5])
-		BlowfishEncode(&l, r, s, p[6])
-		BlowfishEncode(&r, l, s, p[7])
-		BlowfishEncode(&l, r, s, p[8])
-		BlowfishEncode(&r, l, s, p[9])
-		BlowfishEncode(&l, r, s, p[10])
-		BlowfishEncode(&r, l, s, p[11])
-		BlowfishEncode(&l, r, s, p[12])
-		BlowfishEncode(&r, l, s, p[13])
-		BlowfishEncode(&l, r, s, p[14])
-		BlowfishEncode(&r, l, s, p[15])
-		BlowfishEncode(&l, r, s, p[16])
+		blowfishEncode(&r, l, s, p[1])
+		blowfishEncode(&l, r, s, p[2])
+		blowfishEncode(&r, l, s, p[3])
+		blowfishEncode(&l, r, s, p[4])
+		blowfishEncode(&r, l, s, p[5])
+		blowfishEncode(&l, r, s, p[6])
+		blowfishEncode(&r, l, s, p[7])
+		blowfishEncode(&l, r, s, p[8])
+		blowfishEncode(&r, l, s, p[9])
+		blowfishEncode(&l, r, s, p[10])
+		blowfishEncode(&r, l, s, p[11])
+		blowfishEncode(&l, r, s, p[12])
+		blowfishEncode(&r, l, s, p[13])
+		blowfishEncode(&l, r, s, p[14])
+		blowfishEncode(&r, l, s, p[15])
+		blowfishEncode(&l, r, s, p[16])
 
 		r ^= p[BlowfishRounds+1]
 
 	} else {
 		l ^= p[BlowfishRounds+1]
-		BlowfishEncode(&r, l, s, p[16])
-		BlowfishEncode(&l, r, s, p[15])
-		BlowfishEncode(&r, l, s, p[14])
-		BlowfishEncode(&l, r, s, p[13])
-		BlowfishEncode(&r, l, s, p[12])
-		BlowfishEncode(&l, r, s, p[11])
-		BlowfishEncode(&r, l, s, p[10])
-		BlowfishEncode(&l, r, s, p[9])
-		BlowfishEncode(&r, l, s, p[8])
-		BlowfishEncode(&l, r, s, p[7])
-		BlowfishEncode(&r, l, s, p[6])
-		BlowfishEncode(&l, r, s, p[5])
-		BlowfishEncode(&r, l, s, p[4])
-		BlowfishEncode(&l, r, s, p[3])
-		BlowfishEncode(&r, l, s, p[2])
-		BlowfishEncode(&l, r, s, p[1])
+		blowfishEncode(&r, l, s, p[16])
+		blowfishEncode(&l, r, s, p[15])
+		blowfishEncode(&r, l, s, p[14])
+		blowfishEncode(&l, r, s, p[13])
+		blowfishEncode(&r, l, s, p[12])
+		blowfishEncode(&l, r, s, p[11])
+		blowfishEncode(&r, l, s, p[10])
+		blowfishEncode(&l, r, s, p[9])
+		blowfishEncode(&r, l, s, p[8])
+		blowfishEncode(&l, r, s, p[7])
+		blowfishEncode(&r, l, s, p[6])
+		blowfishEncode(&l, r, s, p[5])
+		blowfishEncode(&r, l, s, p[4])
+		blowfishEncode(&l, r, s, p[3])
+		blowfishEncode(&r, l, s, p[2])
+		blowfishEncode(&l, r, s, p[1])
 		r ^= p[0]
 	}
 

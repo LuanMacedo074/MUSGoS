@@ -1,4 +1,4 @@
-package protocol
+package inbound
 
 import (
 	"bufio"
@@ -7,23 +7,19 @@ import (
 	"net"
 	"sync"
 
-	"fsos-server/internal/utilities/logger"
+	"fsos-server/internal/domain/ports"
 )
-
-type MessageHandler interface {
-	HandleRawMessage(clientID string, data []byte) ([]byte, error)
-}
 
 type TCPServer struct {
 	port           string
 	listener       net.Listener
-	logger         *logger.Logger
+	logger         ports.Logger
 	shutdown       chan bool
 	wg             sync.WaitGroup
-	messageHandler MessageHandler
+	messageHandler ports.MessageHandler
 }
 
-func NewTCPServer(port string, logger *logger.Logger, handler MessageHandler) *TCPServer {
+func NewTCPServer(port string, logger ports.Logger, handler ports.MessageHandler) *TCPServer {
 	return &TCPServer{
 		port:           port,
 		logger:         logger,

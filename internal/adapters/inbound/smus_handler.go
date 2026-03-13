@@ -1,21 +1,20 @@
-package handlers
+package inbound
 
 import (
 	"fmt"
-	"fsos-server/internal/crypto"
-	"fsos-server/internal/types/smus"
-	"fsos-server/internal/utilities/logger"
+	"fsos-server/internal/domain/ports"
+	"fsos-server/internal/domain/types/smus"
 )
 
 type SMUSHandler struct {
-	logger  *logger.Logger
-	encrypt *crypto.Blowfish
+	logger ports.Logger
+	cipher ports.Cipher
 }
 
-func NewSMUSHandler(logger *logger.Logger, encrypt *crypto.Blowfish) *SMUSHandler {
+func NewSMUSHandler(logger ports.Logger, cipher ports.Cipher) *SMUSHandler {
 	return &SMUSHandler{
-		logger:  logger,
-		encrypt: encrypt,
+		logger: logger,
+		cipher: cipher,
 	}
 }
 
@@ -26,7 +25,7 @@ func (h *SMUSHandler) HandleRawMessage(clientID string, data []byte) ([]byte, er
 	})
 
 	// Parse mensagem com descriptografia automática
-	msg, err := smus.ParseMUSMessageWithDecryption(data, h.encrypt)
+	msg, err := smus.ParseMUSMessageWithDecryption(data, h.cipher)
 	if err != nil {
 		h.logger.Error("Failed to parse SMUS message", map[string]interface{}{
 			"client": clientID,
