@@ -60,3 +60,56 @@ func (s *SystemService) handleUserDelete(senderID string, msg *smus.MUSMessage) 
 
 	return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrNoError, lingo.NewLVoid()), nil
 }
+
+func (s *SystemService) handleUserSetKillTimer(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
+	if !s.checkCommandLevel(senderID, msg.Subject.Value) {
+		return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidServerCommand, lingo.NewLVoid()), nil
+	}
+
+	if s.timerManager == nil {
+		return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrServerInternalError, lingo.NewLVoid()), nil
+	}
+
+	plist, ok := msg.MsgContent.(*lingo.LPropList)
+	if !ok {
+		return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidMessageFormat, lingo.NewLVoid()), nil
+	}
+
+	userVal, err := plist.GetElement("userID")
+	if err != nil {
+		return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidMessageFormat, lingo.NewLVoid()), nil
+	}
+	targetUserID := lingo.StringValue(userVal)
+
+	minutesVal, err := plist.GetElement("minutes")
+	if err != nil {
+		return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidMessageFormat, lingo.NewLVoid()), nil
+	}
+	minutes := int(minutesVal.ToInteger())
+	if minutes <= 0 {
+		return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidMessageFormat, lingo.NewLVoid()), nil
+	}
+
+	s.timerManager.SetUserKillTimer(targetUserID, minutes)
+
+	return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrNoError, lingo.NewLVoid()), nil
+}
+
+func (s *SystemService) handleUserCancelKillTimer(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
+	if !s.checkCommandLevel(senderID, msg.Subject.Value) {
+		return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidServerCommand, lingo.NewLVoid()), nil
+	}
+
+	if s.timerManager == nil {
+		return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrServerInternalError, lingo.NewLVoid()), nil
+	}
+
+	targetUserID, err := lingo.ExtractString(msg.MsgContent)
+	if err != nil {
+		return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidMessageFormat, lingo.NewLVoid()), nil
+	}
+
+	s.timerManager.CancelUserKillTimer(targetUserID)
+
+	return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrNoError, lingo.NewLVoid()), nil
+}

@@ -79,7 +79,8 @@ func (r *RedisSessionStore) RegisterConnection(clientID, ip string) error {
 	connKey := r.connKey(clientID)
 
 	pipe := r.client.Pipeline()
-	pipe.HSet(ctx, connKey, "ip", ip, "connected_at", time.Now().UTC().Format(time.RFC3339))
+	now := time.Now().UTC().Format(time.RFC3339)
+	pipe.HSet(ctx, connKey, "ip", ip, "connected_at", now, "last_activity", now)
 	if r.connTTL > 0 {
 		pipe.Expire(ctx, connKey, r.connTTL)
 	}
@@ -122,10 +123,12 @@ func (r *RedisSessionStore) GetConnection(clientID string) (*ports.ConnectionInf
 	}
 
 	connectedAt, _ := time.Parse(time.RFC3339, result["connected_at"])
+	lastActivity, _ := time.Parse(time.RFC3339, result["last_activity"])
 	return &ports.ConnectionInfo{
-		ClientID:    clientID,
-		IP:          result["ip"],
-		ConnectedAt: connectedAt,
+		ClientID:       clientID,
+		IP:             result["ip"],
+		ConnectedAt:    connectedAt,
+		LastActivityAt: lastActivity,
 	}, nil
 }
 
@@ -161,13 +164,20 @@ func (r *RedisSessionStore) GetAllConnections() ([]ports.ConnectionInfo, error) 
 			continue
 		}
 		connectedAt, _ := time.Parse(time.RFC3339, result["connected_at"])
+		lastActivity, _ := time.Parse(time.RFC3339, result["last_activity"])
 		conns = append(conns, ports.ConnectionInfo{
-			ClientID:    id,
-			IP:          result["ip"],
-			ConnectedAt: connectedAt,
+			ClientID:       id,
+			IP:             result["ip"],
+			ConnectedAt:    connectedAt,
+			LastActivityAt: lastActivity,
 		})
 	}
 	return conns, nil
+}
+
+func (r *RedisSessionStore) UpdateLastActivity(clientID string) error {
+	ctx := context.Background()
+	return r.client.HSet(ctx, r.connKey(clientID), "last_activity", time.Now().UTC().Format(time.RFC3339)).Err()
 }
 
 func (r *RedisSessionStore) IsConnected(clientID string) (bool, error) {

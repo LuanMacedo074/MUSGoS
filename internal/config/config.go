@@ -54,6 +54,10 @@ type ServerConfig struct {
 	QueueRedis       RedisConfig
 	RabbitMQ         RabbitMQConfig
 	CommandLevels    map[string]int
+	IdleTimeout      int
+	UDPPort          string
+	CacheType        string
+	CacheRedis       RedisConfig
 }
 
 var defaultCommandLevels = map[string]int{
@@ -98,6 +102,13 @@ var defaultCommandLevels = map[string]int{
 	"DBAdmin.getUserCount":      80,
 	"DBAdmin.ban":               80,
 	"DBAdmin.revokeBan":         80,
+	// Email
+	"system.server.sendEmail": 80,
+	// Kill Timers
+	"system.server.setKillTimer":    80,
+	"system.server.cancelKillTimer": 80,
+	"system.user.setKillTimer":      80,
+	"system.user.cancelKillTimer":   80,
 }
 
 func LoadServerConfig() ServerConfig {
@@ -153,6 +164,16 @@ func LoadServerConfig() ServerConfig {
 		},
 	}
 
+	cfg.IdleTimeout = getEnvInt("IDLE_TIMEOUT", 0)
+	cfg.UDPPort = getEnv("UDP_PORT", "")
+	cfg.CacheType = getEnv("CACHE_TYPE", "memory")
+	cfg.CacheRedis = RedisConfig{
+		Host:      getEnv("CACHE_REDIS_HOST", "localhost"),
+		Port:      getEnv("CACHE_REDIS_PORT", "6379"),
+		Password:  getEnv("CACHE_REDIS_PASSWORD", ""),
+		DB:        getEnv("CACHE_REDIS_DB", "2"),
+		KeyPrefix: getEnv("CACHE_REDIS_KEY_PREFIX", "musgoc"),
+	}
 	cfg.CommandLevels = loadCommandLevels()
 
 	return cfg

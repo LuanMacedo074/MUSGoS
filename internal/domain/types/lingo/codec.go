@@ -32,6 +32,30 @@ func MarshalLValue(value LValue) ([]byte, error) {
 	case *LList:
 		raw, err = json.Marshal(v.GetBytes())
 		sv = StoredLValue{Type: "list", Value: raw}
+	case *LPoint:
+		raw, err = json.Marshal(v.GetBytes())
+		sv = StoredLValue{Type: "point", Value: raw}
+	case *LRect:
+		raw, err = json.Marshal(v.GetBytes())
+		sv = StoredLValue{Type: "rect", Value: raw}
+	case *LColor:
+		raw, err = json.Marshal(v.GetBytes())
+		sv = StoredLValue{Type: "color", Value: raw}
+	case *LDate:
+		raw, err = json.Marshal(v.GetBytes())
+		sv = StoredLValue{Type: "date", Value: raw}
+	case *L3dVector:
+		raw, err = json.Marshal(v.GetBytes())
+		sv = StoredLValue{Type: "3dvector", Value: raw}
+	case *L3dTransform:
+		raw, err = json.Marshal(v.GetBytes())
+		sv = StoredLValue{Type: "3dtransform", Value: raw}
+	case *LPicture:
+		raw, err = json.Marshal(v.GetBytes())
+		sv = StoredLValue{Type: "picture", Value: raw}
+	case *LMedia:
+		raw, err = json.Marshal(v.GetBytes())
+		sv = StoredLValue{Type: "media", Value: raw}
 	default:
 		sv = StoredLValue{Type: "void"}
 	}
@@ -74,7 +98,9 @@ func UnmarshalLValue(data []byte) (LValue, error) {
 			return NewLVoid(), err
 		}
 		return NewLSymbol(v), nil
-	case "proplist", "list":
+	// Binary types are stored as raw GetBytes() output. The type field in the JSON wrapper
+	// is informational — FromRawBytes reads the actual type from the first 2 bytes of the binary data.
+	case "proplist", "list", "point", "rect", "color", "date", "3dvector", "3dtransform", "picture", "media":
 		var b []byte
 		if err := json.Unmarshal(sv.Value, &b); err != nil {
 			return NewLVoid(), err

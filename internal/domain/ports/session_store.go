@@ -7,9 +7,10 @@ import (
 )
 
 type ConnectionInfo struct {
-	ClientID    string
-	IP          string
-	ConnectedAt time.Time
+	ClientID       string
+	IP             string
+	ConnectedAt    time.Time
+	LastActivityAt time.Time
 }
 
 type SessionStore interface {
@@ -19,6 +20,7 @@ type SessionStore interface {
 	GetConnection(clientID string) (*ConnectionInfo, error)
 	GetAllConnections() ([]ConnectionInfo, error)
 	IsConnected(clientID string) (bool, error)
+	UpdateLastActivity(clientID string) error
 
 	// Session attributes (ephemeral per clientID)
 	SetUserAttribute(clientID, attrName string, value lingo.LValue) error

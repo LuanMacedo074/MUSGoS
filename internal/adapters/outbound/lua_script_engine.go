@@ -22,9 +22,10 @@ type LuaScriptEngine struct {
 	db            ports.DBAdapter
 	queryBuilder  ports.QueryBuilder
 	sessionStore  ports.SessionStore
+	cache         ports.Cache
 }
 
-func NewLuaScriptEngine(scriptsDir string, logger ports.Logger, scriptTimeoutSeconds int, publisher ports.QueuePublisher, sender ports.MessageSender, db ports.DBAdapter, queryBuilder ports.QueryBuilder, sessionStore ports.SessionStore) *LuaScriptEngine {
+func NewLuaScriptEngine(scriptsDir string, logger ports.Logger, scriptTimeoutSeconds int, publisher ports.QueuePublisher, sender ports.MessageSender, db ports.DBAdapter, queryBuilder ports.QueryBuilder, sessionStore ports.SessionStore, cache ports.Cache) *LuaScriptEngine {
 	return &LuaScriptEngine{
 		scriptsDir:    scriptsDir,
 		logger:        logger,
@@ -34,6 +35,7 @@ func NewLuaScriptEngine(scriptsDir string, logger ports.Logger, scriptTimeoutSec
 		db:            db,
 		queryBuilder:  queryBuilder,
 		sessionStore:  sessionStore,
+		cache:         cache,
 	}
 }
 
@@ -144,6 +146,11 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 	// Register mus.server module
 	if e.sessionStore != nil {
 		registerServerModule(L, musMod, e.sessionStore)
+	}
+
+	// Register mus.cache module
+	if e.cache != nil {
+		registerCacheModule(L, musMod, e.cache)
 	}
 
 	L.SetGlobal("mus", musMod)

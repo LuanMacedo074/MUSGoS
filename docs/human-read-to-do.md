@@ -132,37 +132,35 @@ Uma goroutine dedicada consome a fila e distribui para as send queues individuai
 
 ---
 
-### 13. Idle Check
+### ~~13. Idle Check~~ ✅ FEITO
 
 **OpenSMUS:** `MUSIdleCheck.java`
 
-Um timer periódico que verifica a última atividade de cada conexão. Se um usuário ficar inativo por mais tempo que o limite configurado (idle timeout), ele é desconectado automaticamente.
-
-Isso evita conexões fantasma (cliente crashou sem enviar disconnect, rede caiu, etc.) que consumiriam recursos indefinidamente.
-
-No OpenSMUS, o `checkIdle()` é chamado periodicamente e compara `lastActivityTime` com o timestamp atual.
-
-**O que implementar:** Uma goroutine com ticker que varre as conexões ativas e desconecta as inativas. O Redis session store já tem TTL nas conexões, mas o idle check no nível de aplicação é mais granular.
+Implementado em `internal/adapters/inbound/idle_checker.go`:
+- `IdleChecker` com goroutine + ticker que varre conexões periodicamente
+- `LastActivityAt` adicionado ao `ConnectionInfo` e atualizado após cada mensagem processada com sucesso no TCP server
+- `UpdateLastActivity(clientID)` adicionado à interface `SessionStore` e implementado em ambos os stores (memory e Redis)
+- Configurável via `IDLE_TIMEOUT` env var (em segundos, 0 = desabilitado)
+- Intervalo de verificação = timeout/2 (mínimo 30s)
+- Ao detectar conexão idle: `LeaveAllRooms` → `UnregisterConnection` → `DisconnectClient`
 
 ---
 
-### 14. Lingo Types Faltantes
+### ~~14. Lingo Types Faltantes~~ ✅ FEITO
 
 **OpenSMUS:** `LPoint, LRect, LColor, LDate, L3dVector, L3dTransform, LPicture`
 
-Esses tipos existem no protocolo mas são raramente usados em cenários básicos:
+Todos os 7 tipos implementados em `internal/domain/types/lingo/`:
 
-- **LPoint** — coordenada (x, y) como dois inteiros de 32 bits
-- **LRect** — retângulo (left, top, right, bottom) como quatro inteiros
-- **LColor** — cor RGB como três bytes
-- **LDate** — data/hora
-- **LPicture** — imagem bitmap serializada
-- **L3dVector** — vetor 3D (x, y, z) como três floats
-- **L3dTransform** — matriz de transformação 3D (4x4)
+- **LPicture** (Vt=5) — dados binários com prefixo de 4 bytes de comprimento
+- **LPoint** (Vt=8) — coordenadas `LocH, LocV` como LValues tipados (LInteger ou LFloat), parsados recursivamente via `FromRawBytes`
+- **LRect** (Vt=9) — `Left, Top, Right, Bottom` como LValues tipados, parsados recursivamente
+- **LColor** (Vt=18) — RGB (3 bytes + 1 padding)
+- **LDate** (Vt=19) — 8 bytes opacos
+- **L3dVector** (Vt=22) — `X, Y, Z` como float32 big-endian
+- **L3dTransform** (Vt=23) — matriz 4x4 de float32 (16 elementos, 64 bytes)
 
-Para um chat ou jogo 2D simples, esses tipos quase nunca aparecem. Mas aplicações 3D do Shockwave (como mundos virtuais) os usam extensivamente.
-
-**O que implementar:** Structs que implementam `LValue` para cada tipo. Os mais prováveis de serem necessários primeiro são `LPoint` e `LRect`.
+Integração completa: `FromRawBytes` switch, `codec.go` (JSON marshal/unmarshal), `lua_convert.go` (conversão bidirecional Lua).
 
 ---
 
@@ -194,35 +192,54 @@ Sistema de scripting Lua completo:
 
 ---
 
-### 16. UDP Support
+### ~~16. UDP Support~~ ✅ FEITO
 
 **OpenSMUS:** `MUSUDPListener.java`
 
-Além de TCP, o protocolo MUS suporta UDP para mensagens de baixa latência (posição de jogadores, animações). O cliente negocia a porta UDP durante o logon.
-
-UDP é útil para dados onde perder um pacote é aceitável (posição atualiza a cada frame), mas a maioria das aplicações funciona apenas com TCP.
+Implementado em `internal/adapters/inbound/udp_server.go`:
+- `UDPServer` com `net.ListenUDP`, loop de leitura, e dispatch para o mesmo `MessageHandler` do TCP
+- Stateless — não usa ConnPool. Cliente faz logon via TCP primeiro, depois pode enviar mensagens via UDP
+- Configurável via `UDP_PORT` env var (vazio = desabilitado)
+- Respostas enviadas de volta via `WriteToUDP` para o endereço do remetente
 
 ---
 
-### 17. Email Sending
+### ~~17. Email Sending~~ ✅ FEITO (interface only)
 
 **OpenSMUS:** `MUSEmail.java`
 
-O comando `system.server.sendEmail` permite enviar emails SMTP. Usado para recuperação de senha, notificações, etc. O conteúdo da mensagem é um PropList com campos: sender, recipient, subject, SMTPhost, data.
-
-Funcionalidade nicho — a maioria dos deployments não usa.
+Implementado:
+- **Port:** `ports.EmailSender` interface + `ports.EmailMessage` struct em `internal/domain/ports/email.go`
+- **Handler:** `system.server.sendEmail` em `system_service_server.go` — extrai campos do PropList (sender, recipient, subject, SMTPhost, data), delega para `EmailSender`
+- **Permissão:** level 80 (admin)
+- **Sem implementação concreta** — `emailSender` é passado como `nil` no factory. Para ativar, basta implementar `ports.EmailSender` e injetar via factory.
 
 ---
 
-### 18. Kill Timers
+### ~~18. Kill Timers~~ ✅ FEITO
 
 **OpenSMUS:** `MUSKillServerTimer.java`, `MUSKillUserTimer.java`
 
-Timers agendados para:
-- **Kill server** — desligar o servidor após X tempo (manutenção programada)
-- **Kill user** — desconectar um usuário após X tempo (punição temporária, timeout de sessão)
+Implementado:
+- **Port:** `ports.TimerManager` interface em `internal/domain/ports/timer.go`
+- **Implementação:** `inbound.TimerManager` em `internal/adapters/inbound/timer_manager.go` — usa `time.AfterFunc`, mutex-protegido
+- **Server kill timer:** `SetServerKillTimer(minutes)` → `time.AfterFunc` que envia SIGTERM ao servidor
+- **User kill timer:** `SetUserKillTimer(clientID, minutes)` → `time.AfterFunc` que faz `LeaveAllRooms` + `UnregisterConnection` + `DisconnectClient`
+- **4 comandos:** `system.server.setKillTimer`, `system.server.cancelKillTimer`, `system.user.setKillTimer`, `system.user.cancelKillTimer` (todos level 80)
+- **Cleanup:** `Stop()` chamado no shutdown cancela todos os timers pendentes
 
-Implementação simples com `time.AfterFunc` em Go.
+---
+
+### 21. Cache ✅ FEITO
+
+Sistema de cache genérico com duas implementações:
+
+- **Port:** `ports.Cache` interface em `internal/domain/ports/cache.go` — `Get`, `Set` (com TTL), `Delete`, `Exists`, `Close`
+- **Memory:** `internal/adapters/outbound/memory_cache.go` — in-memory com suporte a TTL, mutex-protegido, cópias isoladas (sem mutation leak)
+- **Redis:** `internal/adapters/outbound/redis_cache.go` — Redis-backed com key prefix isolado, `NewRedisCacheWithClient` para testes
+- **Factory:** `internal/factory/cache.go` — `NewCache(cacheType, redisCfg)` seleciona implementação
+- **Config isolada:** `CACHE_TYPE` (memory/redis) + Redis independente (`CACHE_REDIS_HOST`, `CACHE_REDIS_PORT`, `CACHE_REDIS_PASSWORD`, `CACHE_REDIS_DB=2`, `CACHE_REDIS_KEY_PREFIX=musgoc`)
+- **Wired** em `main.go` — inicializado e disponível para uso futuro (scripts, session store, rate limiting, etc.)
 
 ---
 

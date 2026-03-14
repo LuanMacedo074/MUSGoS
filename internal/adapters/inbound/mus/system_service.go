@@ -24,6 +24,8 @@ type SystemService struct {
 	defaultUserLevel int
 	commandLevels    map[string]int
 	handlers         map[string]handlerFunc
+	emailSender      ports.EmailSender
+	timerManager     ports.TimerManager
 }
 
 func NewSystemService(
@@ -37,6 +39,8 @@ func NewSystemService(
 	authMode string,
 	defaultUserLevel int,
 	commandLevels map[string]int,
+	emailSender ports.EmailSender,
+	timerManager ports.TimerManager,
 ) *SystemService {
 	s := &SystemService{
 		db:               db,
@@ -49,6 +53,8 @@ func NewSystemService(
 		authMode:         authMode,
 		defaultUserLevel: defaultUserLevel,
 		commandLevels:    commandLevels,
+		emailSender:      emailSender,
+		timerManager:     timerManager,
 	}
 
 	s.handlers = map[string]handlerFunc{
@@ -90,6 +96,13 @@ func NewSystemService(
 		"DBAdmin.getUserCount":      s.handleDBAdminGetUserCount,
 		"DBAdmin.ban":               s.handleDBAdminBan,
 		"DBAdmin.revokeBan":         s.handleDBAdminRevokeBan,
+		// Email
+		"system.server.sendEmail": s.handleServerSendEmail,
+		// Kill Timers
+		"system.server.setKillTimer":    s.handleServerSetKillTimer,
+		"system.server.cancelKillTimer": s.handleServerCancelKillTimer,
+		"system.user.setKillTimer":      s.handleUserSetKillTimer,
+		"system.user.cancelKillTimer":   s.handleUserCancelKillTimer,
 	}
 
 	return s

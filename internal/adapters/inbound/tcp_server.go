@@ -149,6 +149,8 @@ func (s *TCPServer) handleConnection(conn net.Conn) {
 					"client": currentID,
 					"error":  err.Error(),
 				})
+			} else {
+				s.sessionStore.UpdateLastActivity(currentID)
 			}
 
 			if len(response) > 0 {

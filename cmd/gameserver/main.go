@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"fsos-server/external/migrations"
 	"fsos-server/external/queues"
@@ -87,14 +88,24 @@ func main() {
 		"type": cfg.QueueType,
 	})
 
+	cache, err := factory.NewCache(cfg.CacheType, cfg.CacheRedis)
+	if err != nil {
+		gameLogger.Fatal("Failed to initialize cache", map[string]interface{}{
+			"error": err,
+		})
+	}
+	defer cache.Close()
+	gameLogger.Info("Cache initialized", map[string]interface{}{
+		"type": cfg.CacheType,
+	})
 	// 1. ConnPool — standalone, no dependencies
 	pool := inbound.NewConnPool()
 
 	// 2. Sender — uses pool as ConnectionWriter
 	sender := mus.NewSender(pool, sessionStore, gameLogger, cipher, cfg.AllEncrypted)
 
-	// 3. ScriptEngine — can send messages via Sender + access DB + server info
-	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout, queue, sender, dbResult.Adapter, dbResult.QueryBuilder, sessionStore)
+	// 3. ScriptEngine — can send messages via Sender + access DB + server info + cache
+	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout, queue, sender, dbResult.Adapter, dbResult.QueryBuilder, sessionStore, cache)
 	gameLogger.Info("Script engine initialized", map[string]interface{}{
 		"scripts_path": cfg.ScriptsPath,
 	})
@@ -110,8 +121,18 @@ func main() {
 		})
 	}
 
-	// 4. Handler — Dispatcher receives ScriptEngine + Sender + pool
-	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine, dbResult.Adapter, sessionStore, queue, pool, sender, cfg.AuthMode, cfg.DefaultUserLevel, cfg.AllEncrypted, cfg.CommandLevels)
+	// 4. Signal channel for graceful shutdown
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	// 5. TimerManager
+	timerManager := inbound.NewTimerManager(sessionStore, pool, gameLogger, func() {
+		c <- syscall.SIGTERM
+	})
+	defer timerManager.Stop()
+
+	// 6. Handler — Dispatcher receives ScriptEngine + Sender + pool
+	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine, dbResult.Adapter, sessionStore, queue, pool, sender, cfg.AuthMode, cfg.DefaultUserLevel, cfg.AllEncrypted, cfg.CommandLevels, nil, timerManager)
 	if err != nil {
 		gameLogger.Fatal("Failed to initialize protocol handler", map[string]interface{}{
 			"error": err,
@@ -121,7 +142,7 @@ func main() {
 		"type": cfg.Protocol,
 	})
 
-	// 5. TCPServer — fully constructed, no SetHandler
+	// 7. TCPServer — fully constructed, no SetHandler
 	server := inbound.NewTCPServer(inbound.TCPServerConfig{
 		Port:           cfg.Port,
 		ServerIP:       cfg.ServerIP,
@@ -140,13 +161,43 @@ func main() {
 
 	<-serverReady
 
+	// 8. Idle Checker
+	if cfg.IdleTimeout > 0 {
+		idleChecker := inbound.NewIdleChecker(sessionStore, pool, gameLogger, time.Duration(cfg.IdleTimeout)*time.Second)
+		idleChecker.Start()
+		defer idleChecker.Stop()
+		gameLogger.Info("Idle checker enabled", map[string]interface{}{
+			"timeout_seconds": cfg.IdleTimeout,
+		})
+	}
+
+	// 9. UDP Server
+	var udpServer *inbound.UDPServer
+	if cfg.UDPPort != "" {
+		udpServer = inbound.NewUDPServer(inbound.UDPServerConfig{
+			Port:           cfg.UDPPort,
+			ServerIP:       cfg.ServerIP,
+			MaxMessageSize: cfg.MaxMessageSize,
+		}, handler, gameLogger)
+
+		udpReady := make(chan struct{})
+		go func() {
+			if err := udpServer.Start(udpReady); err != nil {
+				gameLogger.Fatal("Failed to start UDP server", map[string]interface{}{
+					"error": err,
+				})
+			}
+		}()
+		<-udpReady
+	}
+
 	console := inbound.NewConsole(dbResult.Adapter, gameLogger, os.Stdin, cfg.DefaultUserLevel)
 	go console.Run()
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-
 	<-c
 	gameLogger.Info("Shutting down server...")
+	if udpServer != nil {
+		udpServer.Shutdown()
+	}
 	server.Shutdown()
 }

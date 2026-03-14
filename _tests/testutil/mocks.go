@@ -115,10 +115,12 @@ func NewMockSessionStore() *MockSessionStore {
 func (m *MockSessionStore) RegisterConnection(clientID, ip string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	now := time.Now()
 	m.connections[clientID] = &ports.ConnectionInfo{
-		ClientID:    clientID,
-		IP:          ip,
-		ConnectedAt: time.Now(),
+		ClientID:       clientID,
+		IP:             ip,
+		ConnectedAt:    now,
+		LastActivityAt: now,
 	}
 	return nil
 }
@@ -155,6 +157,16 @@ func (m *MockSessionStore) GetAllConnections() ([]ports.ConnectionInfo, error) {
 		conns = append(conns, *c)
 	}
 	return conns, nil
+}
+
+func (m *MockSessionStore) UpdateLastActivity(clientID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if conn, ok := m.connections[clientID]; ok {
+		conn.LastActivityAt = time.Now()
+		m.connections[clientID] = conn
+	}
+	return nil
 }
 
 func (m *MockSessionStore) IsConnected(clientID string) (bool, error) {
@@ -484,6 +496,57 @@ func (m *MockConnectionWriter) RemapClientID(oldID, newID string) {
 	if m.RemapFn != nil {
 		m.RemapFn(oldID, newID)
 	}
+}
+
+// MockCache implements ports.Cache with in-memory storage.
+type MockCache struct {
+	mu      sync.RWMutex
+	entries map[string][]byte
+}
+
+func NewMockCache() *MockCache {
+	return &MockCache{
+		entries: make(map[string][]byte),
+	}
+}
+
+func (m *MockCache) Get(key string) ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	v, ok := m.entries[key]
+	if !ok {
+		return nil, nil
+	}
+	copied := make([]byte, len(v))
+	copy(copied, v)
+	return copied, nil
+}
+
+func (m *MockCache) Set(key string, value []byte, ttl time.Duration) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	copied := make([]byte, len(value))
+	copy(copied, value)
+	m.entries[key] = copied
+	return nil
+}
+
+func (m *MockCache) Delete(key string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.entries, key)
+	return nil
+}
+
+func (m *MockCache) Exists(key string) (bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	_, ok := m.entries[key]
+	return ok, nil
+}
+
+func (m *MockCache) Close() error {
+	return nil
 }
 
 // MockMessageSender implements ports.MessageSender, recording calls for assertions.

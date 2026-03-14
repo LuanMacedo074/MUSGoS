@@ -86,18 +86,24 @@ func FromRawBytes(rawBytes []byte, offset int) LValue {
 		newVal = &LFloat{BaseLValue: BaseLValue{ValueType: VtFloat}}
 	case VtList:
 		newVal = &LList{BaseLValue: BaseLValue{ValueType: VtList}}
+	case VtPicture:
+		newVal = &LPicture{BaseLValue: BaseLValue{ValueType: VtPicture}}
 	case VtMedia:
 		newVal = &LMedia{BaseLValue: BaseLValue{ValueType: VtMedia}}
-	// TODO: outros tipos
-	// - VtPicture (5)
-	// - VtPoint (8)
-	// - VtRect (9)
+	case VtPoint:
+		newVal = &LPoint{BaseLValue: BaseLValue{ValueType: VtPoint}}
+	case VtRect:
+		newVal = &LRect{BaseLValue: BaseLValue{ValueType: VtRect}}
 	case VtPropList:
 		newVal = &LPropList{BaseLValue: BaseLValue{ValueType: VtPropList}}
-	// - VtColor (18)
-	// - VtDate (19)
-	// - Vt3dVector (22)
-	// - Vt3dTransform (23)
+	case VtColor:
+		newVal = &LColor{BaseLValue: BaseLValue{ValueType: VtColor}}
+	case VtDate:
+		newVal = &LDate{BaseLValue: BaseLValue{ValueType: VtDate}}
+	case Vt3dVector:
+		newVal = &L3dVector{BaseLValue: BaseLValue{ValueType: Vt3dVector}}
+	case Vt3dTransform:
+		newVal = &L3dTransform{BaseLValue: BaseLValue{ValueType: Vt3dTransform}}
 	default:
 		newVal = NewLVoid()
 	}

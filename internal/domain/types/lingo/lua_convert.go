@@ -35,6 +35,42 @@ func LValueToLua(L *lua.LState, val LValue) lua.LValue {
 			tbl.RawSetString(key, LValueToLua(L, v.Values[i]))
 		}
 		return tbl
+	case *LPoint:
+		tbl := L.NewTable()
+		tbl.RawSetString("locH", LValueToLua(L, v.LocH))
+		tbl.RawSetString("locV", LValueToLua(L, v.LocV))
+		return tbl
+	case *LRect:
+		tbl := L.NewTable()
+		tbl.RawSetString("left", LValueToLua(L, v.Left))
+		tbl.RawSetString("top", LValueToLua(L, v.Top))
+		tbl.RawSetString("right", LValueToLua(L, v.Right))
+		tbl.RawSetString("bottom", LValueToLua(L, v.Bottom))
+		return tbl
+	case *LColor:
+		tbl := L.NewTable()
+		tbl.RawSetString("red", lua.LNumber(v.Red))
+		tbl.RawSetString("green", lua.LNumber(v.Green))
+		tbl.RawSetString("blue", lua.LNumber(v.Blue))
+		return tbl
+	case *LDate:
+		return lua.LString(string(v.Data[:]))
+	case *L3dVector:
+		tbl := L.NewTable()
+		tbl.RawSetString("x", lua.LNumber(v.X))
+		tbl.RawSetString("y", lua.LNumber(v.Y))
+		tbl.RawSetString("z", lua.LNumber(v.Z))
+		return tbl
+	case *L3dTransform:
+		tbl := L.NewTable()
+		for i := 0; i < 16; i++ {
+			tbl.Append(lua.LNumber(v.Matrix[i]))
+		}
+		return tbl
+	case *LPicture:
+		return lua.LString(string(v.Data))
+	case *LMedia:
+		return lua.LString(string(v.Data))
 	case *LVoid:
 		return lua.LNil
 	default:

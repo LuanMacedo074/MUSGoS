@@ -31,10 +31,12 @@ func (m *MemorySessionStore) RegisterConnection(clientID, ip string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	now := time.Now().UTC()
 	m.connections[clientID] = ports.ConnectionInfo{
-		ClientID:    clientID,
-		IP:          ip,
-		ConnectedAt: time.Now().UTC(),
+		ClientID:       clientID,
+		IP:             ip,
+		ConnectedAt:    now,
+		LastActivityAt: now,
 	}
 	return nil
 }
@@ -85,6 +87,17 @@ func (m *MemorySessionStore) GetAllConnections() ([]ports.ConnectionInfo, error)
 		conns = append(conns, conn)
 	}
 	return conns, nil
+}
+
+func (m *MemorySessionStore) UpdateLastActivity(clientID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if conn, ok := m.connections[clientID]; ok {
+		conn.LastActivityAt = time.Now().UTC()
+		m.connections[clientID] = conn
+	}
+	return nil
 }
 
 func (m *MemorySessionStore) IsConnected(clientID string) (bool, error) {

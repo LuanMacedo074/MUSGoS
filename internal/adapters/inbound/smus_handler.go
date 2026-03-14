@@ -63,7 +63,18 @@ func (h *SMUSHandler) HandleRawMessage(clientID string, data []byte) ([]byte, er
 		"parsed": msg.String(),
 	})
 
-	response, err := h.dispatcher.Dispatch(clientID, msg)
+	// For UDP connections, clientID is the remote address (not a session ID).
+	// Use the message's SenderID if populated — the user logged in via TCP
+	// and embedded their identity in the message.
+	// Keep clientID for Logon messages since the Logon handler needs the
+	// connection ID for session remap.
+	dispatchID := clientID
+	isLogon := msg.RecptID.Count > 0 && msg.RecptID.Strings[0].Value == "System" && msg.Subject.Value == "Logon"
+	if !isLogon && msg.SenderID.Value != "" {
+		dispatchID = msg.SenderID.Value
+	}
+
+	response, err := h.dispatcher.Dispatch(dispatchID, msg)
 	if err != nil {
 		return nil, err
 	}

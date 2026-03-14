@@ -29,6 +29,7 @@ Análise comparativa com [OpenSMUS 1.02](https://sourceforge.net/p/opensmus/code
 | Connection Pool | `conn_pool.go` | — |
 | Message Dispatcher | `mus/dispatcher.go` | `MUSDispatcher.java` |
 | Message Sender | `mus/sender.go` | `MUSUser.send()` + `MUSGroup.deliver()` |
+| Cache (memory/redis) | `memory_cache.go`, `redis_cache.go` | — |
 
 ## O que falta
 
@@ -53,17 +54,17 @@ Análise comparativa com [OpenSMUS 1.02](https://sourceforge.net/p/opensmus/code
 | ~~10~~ | ~~**DB Dispatcher**~~ | ~~`MUSDBDispatcher.java`~~ | ~~Comandos `DBPlayer.*`, `DBApplication.*`, `DBAdmin.*`~~ ✅ FEITO |
 | ~~11~~ | ~~**User Send Queue**~~ | ~~`MUSUserSendQueue.java`~~ | ~~Fila assíncrona por usuário~~ ✅ Substituído pelo sistema de queue genérico (memory/redis/rabbitmq) |
 | ~~12~~ | ~~**Group Send Queue**~~ | ~~`MUSGroupSendQueue.java`~~ | ~~Fila assíncrona por group~~ ✅ Substituído pelo sistema de queue genérico |
-| 13 | **Idle Check** | `MUSIdleCheck.java` | Desconexão de usuários inativos |
-| 14 | **Lingo Types faltantes** | `LPoint, LRect, LColor, LDate, L3dVector, L3dTransform, LPicture` | Tipos raramente usados |
+| ~~13~~ | ~~**Idle Check**~~ | ~~`MUSIdleCheck.java`~~ | ~~Desconexão de usuários inativos~~ ✅ FEITO |
+| ~~14~~ | ~~**Lingo Types faltantes**~~ | ~~`LPoint, LRect, LColor, LDate, L3dVector, L3dTransform, LPicture`~~ | ~~Todos os 7 tipos implementados~~ ✅ FEITO |
 
 ### Prioridade BAIXA — nice to have
 
 | # | Componente | OpenSMUS equivalente | Descrição |
 |---|---|---|---|
 | ~~15~~ | ~~**Server-side scripting**~~ | ~~`ServerSideScript.java`, `MUSScriptMap.java`~~ | ~~ScriptEngine + LValue↔Lua + DB APIs + server APIs~~ ✅ FEITO |
-| 16 | UDP support | `MUSUDPListener.java` | Transporte UDP para baixa latência |
-| 17 | Email sending | `MUSEmail.java` | Envio de emails SMTP |
-| 18 | Kill timers | `MUSKillServerTimer.java`, `MUSKillUserTimer.java` | Timers de shutdown/desconexão |
+| ~~16~~ | ~~UDP support~~ | ~~`MUSUDPListener.java`~~ | ~~Transporte UDP para baixa latência~~ ✅ FEITO |
+| ~~17~~ | ~~Email sending~~ | ~~`MUSEmail.java`~~ | ~~Interface (port) implementada, sem implementação concreta~~ ✅ FEITO |
+| ~~18~~ | ~~Kill timers~~ | ~~`MUSKillServerTimer.java`, `MUSKillUserTimer.java`~~ | ~~Timers de shutdown/desconexão~~ ✅ FEITO |
 | ~~19~~ | ~~User levels / permissions~~ | ~~user level cache no `MUSDispatcher`~~ | ~~Controle de acesso por nível~~ ✅ FEITO (deny-by-default via `commandLevels` map) |
 | ~~20~~ | ~~Ban system~~ | ~~`MUSDBDispatcher.ban/revokeBan`~~ | ~~Banimento de usuários~~ ✅ FEITO (DB + logon check + `DBAdmin.ban`/`revokeBan`) |
 
