@@ -153,6 +153,9 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 		registerCacheModule(L, musMod, e.cache)
 	}
 
+	// Register mus.time module
+	registerTimeModule(L, musMod)
+
 	L.SetGlobal("mus", musMod)
 
 	if err := L.DoFile(path); err != nil {

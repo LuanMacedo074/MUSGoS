@@ -42,7 +42,7 @@ func TestMigrationRunner_RunPending_AllNew(t *testing.T) {
 
 	runner := services.NewMigrationRunner(tracker, nil, []ports.Migration{m2, m1})
 
-	if err := runner.RunPending(); err != nil {
+	if _, err := runner.RunPending(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -73,7 +73,7 @@ func TestMigrationRunner_RunPending_SkipsApplied(t *testing.T) {
 
 	runner := services.NewMigrationRunner(tracker, nil, []ports.Migration{m1, m2})
 
-	if err := runner.RunPending(); err != nil {
+	if _, err := runner.RunPending(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -93,7 +93,7 @@ func TestMigrationRunner_RunPending_NoPending(t *testing.T) {
 
 	runner := services.NewMigrationRunner(tracker, nil, []ports.Migration{m1})
 
-	if err := runner.RunPending(); err != nil {
+	if _, err := runner.RunPending(); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -108,7 +108,7 @@ func TestMigrationRunner_RunPending_UpError(t *testing.T) {
 
 	runner := services.NewMigrationRunner(tracker, nil, []ports.Migration{m1})
 
-	err := runner.RunPending()
+	_, err := runner.RunPending()
 	if err == nil {
 		t.Fatal("expected error when migration fails")
 	}
@@ -122,7 +122,7 @@ func TestMigrationRunner_RunPending_Empty(t *testing.T) {
 	tracker := &fakeMigrationTracker{}
 	runner := services.NewMigrationRunner(tracker, nil, []ports.Migration{})
 
-	if err := runner.RunPending(); err != nil {
+	if _, err := runner.RunPending(); err != nil {
 		t.Fatalf("unexpected error with no migrations: %v", err)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -53,7 +54,8 @@ func main() {
 	}
 	defer dbResult.Adapter.Close()
 
-	if err := dbResult.MigrationRunner.RunPending(); err != nil {
+	migrationResult, err := dbResult.MigrationRunner.RunPending()
+	if err != nil {
 		dbResult.Adapter.Close()
 		gameLogger.Fatal("Failed to run migrations", map[string]interface{}{
 			"error": err,
@@ -63,6 +65,18 @@ func main() {
 		"type": cfg.DatabaseType,
 		"path": cfg.DatabasePath,
 	})
+	if len(migrationResult.Ran) > 0 {
+		gameLogger.Info("Migrations executed", map[string]interface{}{
+			"total":    migrationResult.Total,
+			"applied":  migrationResult.Applied + len(migrationResult.Ran),
+			"executed": migrationResult.Ran,
+		})
+	} else {
+		gameLogger.Info("Migrations up to date", map[string]interface{}{
+			"total":   migrationResult.Total,
+			"applied": migrationResult.Applied,
+		})
+	}
 
 	cipher, err := factory.NewCipher(cfg.CipherType, cfg.EncryptionKey)
 	if err != nil {
@@ -117,18 +131,29 @@ func main() {
 
 	// 4. ScriptEngine — can send messages via Sender + access DB + server info + cache
 	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout, queue, sender, dbResult.Adapter, dbResult.QueryBuilder, sessionStore, cache)
-	gameLogger.Info("Script engine initialized", map[string]interface{}{
-		"scripts_path": cfg.ScriptsPath,
-	})
+	if cfg.ScriptsPath != "" {
+		scripts, _ := filepath.Glob(filepath.Join(cfg.ScriptsPath, "*.lua"))
+		gameLogger.Info("Script engine initialized", map[string]interface{}{
+			"scripts_path":   cfg.ScriptsPath,
+			"scripts_loaded": len(scripts),
+		})
+	} else {
+		gameLogger.Info("Script engine disabled (no scripts path configured)")
+	}
 
+	var registeredTopics []string
 	for _, q := range queues.All {
 		topic := q.Topic
 		h := q.Handler
 		queue.Subscribe(topic, func(msg ports.QueueMessage) {
 			h(msg.Payload)
 		})
-		gameLogger.Debug("Registered queue consumer", map[string]interface{}{
-			"topic": topic,
+		registeredTopics = append(registeredTopics, topic)
+	}
+	if len(registeredTopics) > 0 {
+		gameLogger.Info("Queue consumers registered", map[string]interface{}{
+			"count":  len(registeredTopics),
+			"topics": registeredTopics,
 		})
 	}
 

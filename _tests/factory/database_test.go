@@ -49,7 +49,7 @@ func TestNewDatabase_RunsMigrations(t *testing.T) {
 	}
 	defer result.Adapter.Close()
 
-	if err := result.MigrationRunner.RunPending(); err != nil {
+	if _, err := result.MigrationRunner.RunPending(); err != nil {
 		t.Fatalf("RunPending failed: %v", err)
 	}
 

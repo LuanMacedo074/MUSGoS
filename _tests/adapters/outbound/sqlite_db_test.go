@@ -24,7 +24,7 @@ func newTestDB(t *testing.T) *outbound.SQLiteDB {
 	t.Cleanup(func() { db.Close() })
 
 	runner := services.NewMigrationRunner(db, db, migrations.All)
-	if err := runner.RunPending(); err != nil {
+	if _, err := runner.RunPending(); err != nil {
 		t.Fatalf("failed to run migrations: %v", err)
 	}
 
