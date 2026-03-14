@@ -27,14 +27,22 @@ func main() {
 
 	gameLogger.Info("Starting " + cfg.ApplicationName + "...")
 	gameLogger.Info("Server configuration", map[string]interface{}{
-		"port":      cfg.Port,
-		"log_level": cfg.LogLevel,
-		"logger":    cfg.LoggerType,
-		"log_path":  cfg.LogPath,
-		"cipher":    cfg.CipherType,
-		"protocol":  cfg.Protocol,
-		"auth_mode": cfg.AuthMode,
-		"env":       cfg.Environment,
+		"port":          cfg.Port,
+		"log_level":     cfg.LogLevel,
+		"logger":        cfg.LoggerType,
+		"log_path":      cfg.LogPath,
+		"cipher":        cfg.CipherType,
+		"protocol":      cfg.Protocol,
+		"auth_mode":     cfg.AuthMode,
+		"env":           cfg.Environment,
+		"database":      cfg.DatabaseType,
+		"session_store": cfg.SessionStoreType,
+		"cache":         cfg.CacheType,
+		"queue":         cfg.QueueType,
+		"udp_port":      cfg.UDPPort,
+		"rate_limit":    cfg.RateLimitRequests,
+		"metrics_port":  cfg.MetricsPort,
+		"idle_timeout":  cfg.IdleTimeout,
 	})
 
 	dbResult, err := factory.NewDatabase(cfg.DatabaseType, cfg.DatabasePath, migrations.All)
@@ -98,13 +106,16 @@ func main() {
 	gameLogger.Info("Cache initialized", map[string]interface{}{
 		"type": cfg.CacheType,
 	})
-	// 1. ConnPool — standalone, no dependencies
+	// 1. BanChecker — uses DB + Cache
+	banChecker := inbound.NewBanChecker(dbResult.Adapter, cache)
+
+	// 2. ConnPool — standalone, no dependencies
 	pool := inbound.NewConnPool()
 
-	// 2. Sender — uses pool as ConnectionWriter
+	// 3. Sender — uses pool as ConnectionWriter
 	sender := mus.NewSender(pool, sessionStore, gameLogger, cipher, cfg.AllEncrypted)
 
-	// 3. ScriptEngine — can send messages via Sender + access DB + server info + cache
+	// 4. ScriptEngine — can send messages via Sender + access DB + server info + cache
 	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout, queue, sender, dbResult.Adapter, dbResult.QueryBuilder, sessionStore, cache)
 	gameLogger.Info("Script engine initialized", map[string]interface{}{
 		"scripts_path": cfg.ScriptsPath,
@@ -121,17 +132,17 @@ func main() {
 		})
 	}
 
-	// 4. Signal channel for graceful shutdown
+	// 5. Signal channel for graceful shutdown
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
-	// 5. TimerManager
+	// 6. TimerManager
 	timerManager := inbound.NewTimerManager(sessionStore, pool, gameLogger, func() {
 		c <- syscall.SIGTERM
 	})
 	defer timerManager.Stop()
 
-	// 6. Handler — Dispatcher receives ScriptEngine + Sender + pool
+	// 7. Handler — Dispatcher receives ScriptEngine + Sender + pool
 	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine, dbResult.Adapter, sessionStore, queue, pool, sender, cfg.AuthMode, cfg.DefaultUserLevel, cfg.AllEncrypted, cfg.CommandLevels, nil, timerManager)
 	if err != nil {
 		gameLogger.Fatal("Failed to initialize protocol handler", map[string]interface{}{
@@ -142,13 +153,51 @@ func main() {
 		"type": cfg.Protocol,
 	})
 
-	// 7. TCPServer — fully constructed, no SetHandler
+	// 8. Rate Limiter (optional)
+	var rateLimiter ports.RateLimiter
+	if cfg.RateLimitRequests > 0 {
+		rl := inbound.NewRateLimiter(inbound.RateLimiterConfig{
+			MaxRequests: cfg.RateLimitRequests,
+			Window:      time.Duration(cfg.RateLimitWindow) * time.Second,
+		})
+		defer rl.Stop()
+		rateLimiter = rl
+		gameLogger.Info("Rate limiter enabled", map[string]interface{}{
+			"max_requests": cfg.RateLimitRequests,
+			"window_secs":  cfg.RateLimitWindow,
+		})
+	}
+
+	// 9. Metrics Server (optional)
+	var metrics ports.Metrics
+	if cfg.MetricsPort != "" {
+		ms := inbound.NewMetricsServer(cfg.MetricsPort, cfg.MetricsBindAddr, sessionStore, gameLogger)
+		go func() {
+			if err := ms.Start(); err != nil {
+				gameLogger.Error("Metrics server error", map[string]interface{}{
+					"error": err.Error(),
+				})
+			}
+		}()
+		defer ms.Shutdown()
+		metrics = ms
+	}
+
+	// 10. TCPServer — fully constructed
 	server := inbound.NewTCPServer(inbound.TCPServerConfig{
 		Port:           cfg.Port,
 		ServerIP:       cfg.ServerIP,
 		MaxMessageSize: cfg.MaxMessageSize,
 		TCPNoDelay:     cfg.TCPNoDelay,
-	}, handler, pool, gameLogger, sessionStore)
+	}, inbound.TCPServerDeps{
+		Handler:      handler,
+		Pool:         pool,
+		Logger:       gameLogger,
+		SessionStore: sessionStore,
+		BanChecker:   banChecker,
+		RateLimiter:  rateLimiter,
+		Metrics:      metrics,
+	})
 
 	serverReady := make(chan struct{})
 	go func() {
@@ -161,7 +210,7 @@ func main() {
 
 	<-serverReady
 
-	// 8. Idle Checker
+	// 11. Idle Checker
 	if cfg.IdleTimeout > 0 {
 		idleChecker := inbound.NewIdleChecker(sessionStore, pool, gameLogger, time.Duration(cfg.IdleTimeout)*time.Second)
 		idleChecker.Start()
@@ -171,14 +220,20 @@ func main() {
 		})
 	}
 
-	// 9. UDP Server
+	// 12. UDP Server
 	var udpServer *inbound.UDPServer
 	if cfg.UDPPort != "" {
 		udpServer = inbound.NewUDPServer(inbound.UDPServerConfig{
 			Port:           cfg.UDPPort,
 			ServerIP:       cfg.ServerIP,
 			MaxMessageSize: cfg.MaxMessageSize,
-		}, handler, gameLogger)
+		}, inbound.UDPServerDeps{
+			Handler:     handler,
+			Logger:      gameLogger,
+			BanChecker:  banChecker,
+			RateLimiter: rateLimiter,
+			Metrics:     metrics,
+		})
 
 		udpReady := make(chan struct{})
 		go func() {

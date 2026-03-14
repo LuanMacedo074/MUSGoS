@@ -13,20 +13,34 @@ type UDPServerConfig struct {
 	MaxMessageSize int
 }
 
+type UDPServerDeps struct {
+	Handler     ports.MessageHandler
+	Logger      ports.Logger
+	BanChecker  *BanChecker
+	RateLimiter ports.RateLimiter
+	Metrics     ports.Metrics
+}
+
 type UDPServer struct {
 	config         UDPServerConfig
 	conn           *net.UDPConn
-	logger         ports.Logger
 	shutdown       chan bool
+	logger         ports.Logger
 	messageHandler ports.MessageHandler
+	banChecker     *BanChecker
+	rateLimiter    ports.RateLimiter
+	metrics        ports.Metrics
 }
 
-func NewUDPServer(cfg UDPServerConfig, handler ports.MessageHandler, logger ports.Logger) *UDPServer {
+func NewUDPServer(cfg UDPServerConfig, deps UDPServerDeps) *UDPServer {
 	return &UDPServer{
 		config:         cfg,
-		messageHandler: handler,
-		logger:         logger,
+		messageHandler: deps.Handler,
+		logger:         deps.Logger,
 		shutdown:       make(chan bool),
+		banChecker:     deps.BanChecker,
+		rateLimiter:    deps.RateLimiter,
+		metrics:        deps.Metrics,
 	}
 }
 
@@ -72,6 +86,25 @@ func (s *UDPServer) Start(ready chan struct{}) error {
 }
 
 func (s *UDPServer) handlePacket(data []byte, addr *net.UDPAddr) {
+	clientIP := addr.IP.String()
+
+	if s.banChecker != nil && s.banChecker.IsIPBanned(clientIP) {
+		if s.metrics != nil {
+			s.metrics.IncrementBannedConns()
+		}
+		return
+	}
+
+	if s.rateLimiter != nil && !s.rateLimiter.Allow(clientIP) {
+		s.logger.Warn("UDP rate limit exceeded", map[string]interface{}{
+			"client": clientIP,
+		})
+		if s.metrics != nil {
+			s.metrics.IncrementRateLimited()
+		}
+		return
+	}
+
 	clientID := addr.String()
 
 	s.logger.Debug("UDP packet received", map[string]interface{}{
@@ -85,6 +118,11 @@ func (s *UDPServer) handlePacket(data []byte, addr *net.UDPAddr) {
 			"client": clientID,
 			"error":  err.Error(),
 		})
+		if s.metrics != nil {
+			s.metrics.IncrementErrors()
+		}
+	} else if s.metrics != nil {
+		s.metrics.IncrementMessages()
 	}
 
 	if len(response) > 0 {

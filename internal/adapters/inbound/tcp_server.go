@@ -17,25 +17,41 @@ type TCPServerConfig struct {
 	TCPNoDelay     bool
 }
 
-type TCPServer struct {
-	config         TCPServerConfig
-	listener       net.Listener
-	logger         ports.Logger
-	shutdown       chan bool
-	wg             sync.WaitGroup
-	messageHandler ports.MessageHandler
-	sessionStore   ports.SessionStore
-	pool           *ConnPool
+type TCPServerDeps struct {
+	Handler      ports.MessageHandler
+	Pool         *ConnPool
+	Logger       ports.Logger
+	SessionStore ports.SessionStore
+	BanChecker   *BanChecker
+	RateLimiter  ports.RateLimiter
+	Metrics      ports.Metrics
 }
 
-func NewTCPServer(cfg TCPServerConfig, handler ports.MessageHandler, pool *ConnPool, logger ports.Logger, sessionStore ports.SessionStore) *TCPServer {
+type TCPServer struct {
+	config       TCPServerConfig
+	listener     net.Listener
+	shutdown     chan bool
+	wg           sync.WaitGroup
+	handler      ports.MessageHandler
+	pool         *ConnPool
+	logger       ports.Logger
+	sessionStore ports.SessionStore
+	banChecker   *BanChecker
+	rateLimiter  ports.RateLimiter
+	metrics      ports.Metrics
+}
+
+func NewTCPServer(cfg TCPServerConfig, deps TCPServerDeps) *TCPServer {
 	return &TCPServer{
-		config:         cfg,
-		messageHandler: handler,
-		pool:           pool,
-		logger:         logger,
-		shutdown:       make(chan bool),
-		sessionStore:   sessionStore,
+		config:       cfg,
+		handler:      deps.Handler,
+		pool:         deps.Pool,
+		logger:       deps.Logger,
+		shutdown:     make(chan bool),
+		sessionStore: deps.SessionStore,
+		banChecker:   deps.BanChecker,
+		rateLimiter:  deps.RateLimiter,
+		metrics:      deps.Metrics,
 	}
 }
 
@@ -73,13 +89,33 @@ func (s *TCPServer) Start(ready chan struct{}) error {
 				}
 			}
 
+			host, _, err := net.SplitHostPort(conn.RemoteAddr().String())
+			if err != nil {
+				s.logger.Error("Failed to parse remote address", map[string]interface{}{
+					"error": err,
+				})
+				conn.Close()
+				continue
+			}
+
+			if s.banChecker != nil && s.banChecker.IsIPBanned(host) {
+				s.logger.Info("Connection rejected: IP is banned", map[string]interface{}{
+					"ip": host,
+				})
+				if s.metrics != nil {
+					s.metrics.IncrementBannedConns()
+				}
+				conn.Close()
+				continue
+			}
+
 			s.wg.Add(1)
-			go s.handleConnection(conn)
+			go s.handleConnection(conn, host)
 		}
 	}
 }
 
-func (s *TCPServer) handleConnection(conn net.Conn) {
+func (s *TCPServer) handleConnection(conn net.Conn, host string) {
 	defer s.wg.Done()
 
 	clientIP := conn.RemoteAddr().String()
@@ -132,6 +168,16 @@ func (s *TCPServer) handleConnection(conn net.Conn) {
 		if n > 0 {
 			currentID := s.pool.CurrentID(conn)
 
+			if s.rateLimiter != nil && !s.rateLimiter.Allow(host) {
+				s.logger.Warn("Rate limit exceeded", map[string]interface{}{
+					"client": currentID,
+				})
+				if s.metrics != nil {
+					s.metrics.IncrementRateLimited()
+				}
+				continue
+			}
+
 			s.logger.Info("TCP Packet Capture", map[string]interface{}{
 				"client": currentID,
 				"offset": fmt.Sprintf("0x%04X", totalBytes),
@@ -143,18 +189,23 @@ func (s *TCPServer) handleConnection(conn net.Conn) {
 				"bytes":  n,
 			})
 
-			response, err := s.messageHandler.HandleRawMessage(currentID, buffer[:n])
+			response, err := s.handler.HandleRawMessage(currentID, buffer[:n])
 			if err != nil {
 				s.logger.Error("Message handler error", map[string]interface{}{
 					"client": currentID,
 					"error":  err.Error(),
 				})
+				if s.metrics != nil {
+					s.metrics.IncrementErrors()
+				}
 			} else {
 				s.sessionStore.UpdateLastActivity(currentID)
+				if s.metrics != nil {
+					s.metrics.IncrementMessages()
+				}
 			}
 
 			if len(response) > 0 {
-				// Re-fetch ID — may have been remapped during HandleRawMessage (e.g. Logon)
 				writeID := s.pool.CurrentID(conn)
 				if writeErr := s.pool.WriteToClient(writeID, response); writeErr != nil {
 					s.logger.Error("Failed to send response", map[string]interface{}{

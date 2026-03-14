@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"fsos-server/internal/domain/ports"
@@ -359,6 +360,7 @@ type MockDBAdapter struct {
 	DeleteUserFunc                 func(username string) error
 	CreateBanFunc                  func(userID *int64, ipAddress *string, reason string, expiresAt *time.Time) error
 	RevokeBanFunc                  func(banID int64) error
+	GetActiveBanByIPFunc           func(ipAddress string) (*ports.Ban, error)
 }
 
 func (m *MockDBAdapter) CreateApplication(appName string) error {
@@ -454,6 +456,9 @@ func (m *MockDBAdapter) GetActiveBanByUserID(userID int64) (*ports.Ban, error) {
 	return nil, ports.ErrBanNotFound
 }
 func (m *MockDBAdapter) GetActiveBanByIP(ipAddress string) (*ports.Ban, error) {
+	if m.GetActiveBanByIPFunc != nil {
+		return m.GetActiveBanByIPFunc(ipAddress)
+	}
 	return nil, ports.ErrBanNotFound
 }
 func (m *MockDBAdapter) RevokeBan(banID int64) error {
@@ -573,3 +578,35 @@ func (m *MockMessageSender) SendMessage(senderID, recipientID, subject string, c
 	})
 	return nil
 }
+
+// MockRateLimiter implements ports.RateLimiter with configurable behavior.
+type MockRateLimiter struct {
+	AllowFunc  func(key string) bool
+	RemoveFunc func(key string)
+}
+
+func (m *MockRateLimiter) Allow(key string) bool {
+	if m.AllowFunc != nil {
+		return m.AllowFunc(key)
+	}
+	return true
+}
+
+func (m *MockRateLimiter) Remove(key string) {
+	if m.RemoveFunc != nil {
+		m.RemoveFunc(key)
+	}
+}
+
+// MockMetrics implements ports.Metrics with atomic counters.
+type MockMetrics struct {
+	Messages    atomic.Int64
+	Errors      atomic.Int64
+	RateLimited atomic.Int64
+	BannedConns atomic.Int64
+}
+
+func (m *MockMetrics) IncrementMessages()   { m.Messages.Add(1) }
+func (m *MockMetrics) IncrementErrors()      { m.Errors.Add(1) }
+func (m *MockMetrics) IncrementRateLimited() { m.RateLimited.Add(1) }
+func (m *MockMetrics) IncrementBannedConns() { m.BannedConns.Add(1) }

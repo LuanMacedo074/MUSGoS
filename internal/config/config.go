@@ -58,6 +58,10 @@ type ServerConfig struct {
 	UDPPort          string
 	CacheType        string
 	CacheRedis       RedisConfig
+	RateLimitRequests int
+	RateLimitWindow   int
+	MetricsPort       string
+	MetricsBindAddr   string
 }
 
 var defaultCommandLevels = map[string]int{
@@ -174,6 +178,10 @@ func LoadServerConfig() ServerConfig {
 		DB:        getEnv("CACHE_REDIS_DB", "2"),
 		KeyPrefix: getEnv("CACHE_REDIS_KEY_PREFIX", "musgoc"),
 	}
+	cfg.RateLimitRequests = getEnvInt("RATE_LIMIT_REQUESTS", 0)
+	cfg.RateLimitWindow = getEnvInt("RATE_LIMIT_WINDOW", 60)
+	cfg.MetricsPort = getEnv("METRICS_PORT", "")
+	cfg.MetricsBindAddr = getEnv("METRICS_BIND_ADDR", "127.0.0.1")
 	cfg.CommandLevels = loadCommandLevels()
 
 	return cfg

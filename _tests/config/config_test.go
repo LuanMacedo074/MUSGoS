@@ -169,6 +169,41 @@ func TestLoadServerConfig_CommandLevels_EnvOverride(t *testing.T) {
 	}
 }
 
+func TestLoadServerConfig_RateLimitDefaults(t *testing.T) {
+	cfg := config.LoadServerConfig()
+
+	if cfg.RateLimitRequests != 0 {
+		t.Errorf("RateLimitRequests = %d, want 0 (disabled)", cfg.RateLimitRequests)
+	}
+	if cfg.RateLimitWindow != 60 {
+		t.Errorf("RateLimitWindow = %d, want 60", cfg.RateLimitWindow)
+	}
+	if cfg.MetricsPort != "" {
+		t.Errorf("MetricsPort = %q, want empty (disabled)", cfg.MetricsPort)
+	}
+	if cfg.MetricsBindAddr != "127.0.0.1" {
+		t.Errorf("MetricsBindAddr = %q, want 127.0.0.1", cfg.MetricsBindAddr)
+	}
+}
+
+func TestLoadServerConfig_RateLimitCustom(t *testing.T) {
+	t.Setenv("RATE_LIMIT_REQUESTS", "100")
+	t.Setenv("RATE_LIMIT_WINDOW", "30")
+	t.Setenv("METRICS_PORT", "9090")
+
+	cfg := config.LoadServerConfig()
+
+	if cfg.RateLimitRequests != 100 {
+		t.Errorf("RateLimitRequests = %d, want 100", cfg.RateLimitRequests)
+	}
+	if cfg.RateLimitWindow != 30 {
+		t.Errorf("RateLimitWindow = %d, want 30", cfg.RateLimitWindow)
+	}
+	if cfg.MetricsPort != "9090" {
+		t.Errorf("MetricsPort = %q, want 9090", cfg.MetricsPort)
+	}
+}
+
 func TestLoadServerConfig_PartialOverride(t *testing.T) {
 	// Only override some vars, rest should be defaults
 	t.Setenv("APPLICATION_NAME", "CustomApp")
