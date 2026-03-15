@@ -593,3 +593,115 @@ func TestExecute_UUID_Unique(t *testing.T) {
 		t.Errorf("expected ok, got %q", strResult.Value)
 	}
 }
+
+func TestExecute_LogAllLevels(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "logtest", `
+		mus.log.debug("debug msg")
+		mus.log.info("info msg")
+		mus.log.warn("warn msg")
+		mus.log.error("error msg")
+		mus.log.fatal("fatal msg")
+		mus.response("ok")
+	`)
+
+	logger := &testutil.MockLogger{}
+	engine := outbound.NewLuaScriptEngine(dir, logger, 5, nil, nil, nil, nil, nil, nil)
+
+	result, err := engine.Execute(&ports.ScriptMessage{Subject: "logtest", SenderID: "u1", Content: lingo.NewLVoid()})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	strResult, ok := result.Content.(*lingo.LString)
+	if !ok {
+		t.Fatalf("expected *LString, got %T", result.Content)
+	}
+	if strResult.Value != "ok" {
+		t.Errorf("expected ok, got %q", strResult.Value)
+	}
+
+	expected := []struct {
+		level ports.LogLevel
+		msg   string
+	}{
+		{ports.DEBUG, "debug msg"},
+		{ports.INFO, "info msg"},
+		{ports.WARN, "warn msg"},
+		{ports.ERROR, "error msg"},
+		{ports.FATAL, "fatal msg"},
+	}
+
+	if len(logger.Messages) != len(expected) {
+		t.Fatalf("expected %d log entries, got %d", len(expected), len(logger.Messages))
+	}
+
+	for i, exp := range expected {
+		entry := logger.Messages[i]
+		if entry.Level != exp.level {
+			t.Errorf("entry[%d]: expected level %v, got %v", i, exp.level, entry.Level)
+		}
+		if entry.Msg != exp.msg {
+			t.Errorf("entry[%d]: expected msg %q, got %q", i, exp.msg, entry.Msg)
+		}
+	}
+}
+
+func TestExecute_LogWithFields(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "logfields", `
+		mus.log.info("player joined", { user = "alice", score = 100 })
+		mus.response("ok")
+	`)
+
+	logger := &testutil.MockLogger{}
+	engine := outbound.NewLuaScriptEngine(dir, logger, 5, nil, nil, nil, nil, nil, nil)
+
+	_, err := engine.Execute(&ports.ScriptMessage{Subject: "logfields", SenderID: "u1", Content: lingo.NewLVoid()})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(logger.Messages) != 1 {
+		t.Fatalf("expected 1 log entry, got %d", len(logger.Messages))
+	}
+
+	entry := logger.Messages[0]
+	if entry.Level != ports.INFO {
+		t.Errorf("expected INFO level, got %v", entry.Level)
+	}
+	if entry.Msg != "player joined" {
+		t.Errorf("expected msg %q, got %q", "player joined", entry.Msg)
+	}
+	if entry.Fields == nil {
+		t.Fatal("expected fields, got nil")
+	}
+	if entry.Fields["user"] != "alice" {
+		t.Errorf("expected user=alice, got %v", entry.Fields["user"])
+	}
+	if entry.Fields["score"] != float64(100) {
+		t.Errorf("expected score=100, got %v", entry.Fields["score"])
+	}
+}
+
+func TestExecute_LogWithoutFields(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "lognf", `
+		mus.log.debug("simple message")
+		mus.response("ok")
+	`)
+
+	logger := &testutil.MockLogger{}
+	engine := outbound.NewLuaScriptEngine(dir, logger, 5, nil, nil, nil, nil, nil, nil)
+
+	_, err := engine.Execute(&ports.ScriptMessage{Subject: "lognf", SenderID: "u1", Content: lingo.NewLVoid()})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(logger.Messages) != 1 {
+		t.Fatalf("expected 1 log entry, got %d", len(logger.Messages))
+	}
+	if logger.Messages[0].Fields != nil {
+		t.Errorf("expected nil fields, got %v", logger.Messages[0].Fields)
+	}
+}

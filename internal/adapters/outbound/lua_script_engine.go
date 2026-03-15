@@ -154,6 +154,9 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 		registerCacheModule(L, musMod, e.cache)
 	}
 
+	// Register mus.log module
+	registerLogModule(L, musMod, e.logger)
+
 	// Register mus.time module
 	registerTimeModule(L, musMod)
 
