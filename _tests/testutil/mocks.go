@@ -507,11 +507,13 @@ func (m *MockConnectionWriter) RemapClientID(oldID, newID string) {
 type MockCache struct {
 	mu      sync.RWMutex
 	entries map[string][]byte
+	sets    map[string]map[string]struct{}
 }
 
 func NewMockCache() *MockCache {
 	return &MockCache{
 		entries: make(map[string][]byte),
+		sets:    make(map[string]map[string]struct{}),
 	}
 }
 
@@ -548,6 +550,54 @@ func (m *MockCache) Exists(key string) (bool, error) {
 	defer m.mu.RUnlock()
 	_, ok := m.entries[key]
 	return ok, nil
+}
+
+func (m *MockCache) SetAdd(key, member string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, ok := m.sets[key]
+	if !ok {
+		s = make(map[string]struct{})
+		m.sets[key] = s
+	}
+	s[member] = struct{}{}
+	return nil
+}
+
+func (m *MockCache) SetRemove(key, member string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if s, ok := m.sets[key]; ok {
+		delete(s, member)
+		if len(s) == 0 {
+			delete(m.sets, key)
+		}
+	}
+	return nil
+}
+
+func (m *MockCache) SetMembers(key string) ([]string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	s, ok := m.sets[key]
+	if !ok {
+		return []string{}, nil
+	}
+	members := make([]string, 0, len(s))
+	for member := range s {
+		members = append(members, member)
+	}
+	return members, nil
+}
+
+func (m *MockCache) SetIsMember(key, member string) (bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if s, ok := m.sets[key]; ok {
+		_, exists := s[member]
+		return exists, nil
+	}
+	return false, nil
 }
 
 func (m *MockCache) Close() error {

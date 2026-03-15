@@ -60,5 +60,58 @@ func registerCacheModule(L *lua.LState, musMod *lua.LTable, cache ports.Cache) {
 		return 1
 	}))
 
+	// mus.cache.setAdd(key, member) -> bool
+	cacheMod.RawSetString("setAdd", L.NewFunction(func(L *lua.LState) int {
+		key := L.CheckString(1)
+		member := L.CheckString(2)
+		if err := cache.SetAdd(key, member); err != nil {
+			L.Push(lua.LBool(false))
+			return 1
+		}
+		L.Push(lua.LBool(true))
+		return 1
+	}))
+
+	// mus.cache.setRemove(key, member) -> bool
+	cacheMod.RawSetString("setRemove", L.NewFunction(func(L *lua.LState) int {
+		key := L.CheckString(1)
+		member := L.CheckString(2)
+		if err := cache.SetRemove(key, member); err != nil {
+			L.Push(lua.LBool(false))
+			return 1
+		}
+		L.Push(lua.LBool(true))
+		return 1
+	}))
+
+	// mus.cache.setMembers(key) -> table|nil
+	cacheMod.RawSetString("setMembers", L.NewFunction(func(L *lua.LState) int {
+		key := L.CheckString(1)
+		members, err := cache.SetMembers(key)
+		if err != nil {
+			L.Push(lua.LNil)
+			return 1
+		}
+		tbl := L.NewTable()
+		for _, m := range members {
+			tbl.Append(lua.LString(m))
+		}
+		L.Push(tbl)
+		return 1
+	}))
+
+	// mus.cache.setIsMember(key, member) -> bool
+	cacheMod.RawSetString("setIsMember", L.NewFunction(func(L *lua.LState) int {
+		key := L.CheckString(1)
+		member := L.CheckString(2)
+		isMember, err := cache.SetIsMember(key, member)
+		if err != nil {
+			L.Push(lua.LBool(false))
+			return 1
+		}
+		L.Push(lua.LBool(isMember))
+		return 1
+	}))
+
 	musMod.RawSetString("cache", cacheMod)
 }

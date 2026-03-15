@@ -20,6 +20,7 @@ func (e *cacheEntry) expired() bool {
 type MemoryCache struct {
 	mu            sync.RWMutex
 	entries       map[string]*cacheEntry
+	sets          map[string]map[string]struct{}
 	closed        bool
 	writeCount    int
 	sweepInterval int
@@ -28,6 +29,7 @@ type MemoryCache struct {
 func NewMemoryCache() *MemoryCache {
 	return &MemoryCache{
 		entries:       make(map[string]*cacheEntry),
+		sets:          make(map[string]map[string]struct{}),
 		sweepInterval: 1000,
 	}
 }
@@ -95,11 +97,67 @@ func (c *MemoryCache) Exists(key string) (bool, error) {
 	return true, nil
 }
 
+func (c *MemoryCache) SetAdd(key, member string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	s, ok := c.sets[key]
+	if !ok {
+		s = make(map[string]struct{})
+		c.sets[key] = s
+	}
+	s[member] = struct{}{}
+	return nil
+}
+
+func (c *MemoryCache) SetRemove(key, member string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	s, ok := c.sets[key]
+	if !ok {
+		return nil
+	}
+	delete(s, member)
+	if len(s) == 0 {
+		delete(c.sets, key)
+	}
+	return nil
+}
+
+func (c *MemoryCache) SetMembers(key string) ([]string, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	s, ok := c.sets[key]
+	if !ok {
+		return []string{}, nil
+	}
+	members := make([]string, 0, len(s))
+	for m := range s {
+		members = append(members, m)
+	}
+	return members, nil
+}
+
+func (c *MemoryCache) SetIsMember(key, member string) (bool, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	s, ok := c.sets[key]
+	if !ok {
+		return false, nil
+	}
+	_, exists := s[member]
+	return exists, nil
+}
+
 func (c *MemoryCache) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.entries = nil
+	c.sets = nil
 	c.closed = true
 	return nil
 }

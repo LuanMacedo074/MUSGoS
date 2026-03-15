@@ -1,6 +1,7 @@
 package outbound_test
 
 import (
+	"sort"
 	"testing"
 	"time"
 
@@ -127,5 +128,93 @@ func TestMemoryCache_IsolatedCopy(t *testing.T) {
 	got, _ := c.Get("key1")
 	if string(got) != "original" {
 		t.Errorf("Get = %q, want %q (mutation leaked)", got, "original")
+	}
+}
+
+func TestMemoryCache_SetAddAndMembers(t *testing.T) {
+	c := outbound.NewMemoryCache()
+	defer c.Close()
+
+	c.SetAdd("myset", "a")
+	c.SetAdd("myset", "b")
+	c.SetAdd("myset", "c")
+
+	members, err := c.SetMembers("myset")
+	if err != nil {
+		t.Fatalf("SetMembers: %v", err)
+	}
+	sort.Strings(members)
+	if len(members) != 3 || members[0] != "a" || members[1] != "b" || members[2] != "c" {
+		t.Errorf("SetMembers = %v, want [a b c]", members)
+	}
+}
+
+func TestMemoryCache_SetAddDuplicate(t *testing.T) {
+	c := outbound.NewMemoryCache()
+	defer c.Close()
+
+	c.SetAdd("myset", "a")
+	c.SetAdd("myset", "a")
+
+	members, _ := c.SetMembers("myset")
+	if len(members) != 1 {
+		t.Errorf("SetMembers length = %d, want 1", len(members))
+	}
+}
+
+func TestMemoryCache_SetRemove(t *testing.T) {
+	c := outbound.NewMemoryCache()
+	defer c.Close()
+
+	c.SetAdd("myset", "a")
+	c.SetAdd("myset", "b")
+	c.SetRemove("myset", "a")
+
+	members, _ := c.SetMembers("myset")
+	if len(members) != 1 || members[0] != "b" {
+		t.Errorf("SetMembers = %v, want [b]", members)
+	}
+}
+
+func TestMemoryCache_SetRemoveDeletesEmptySet(t *testing.T) {
+	c := outbound.NewMemoryCache()
+	defer c.Close()
+
+	c.SetAdd("myset", "a")
+	c.SetRemove("myset", "a")
+
+	members, _ := c.SetMembers("myset")
+	if len(members) != 0 {
+		t.Errorf("SetMembers = %v, want empty", members)
+	}
+}
+
+func TestMemoryCache_SetIsMember(t *testing.T) {
+	c := outbound.NewMemoryCache()
+	defer c.Close()
+
+	c.SetAdd("myset", "a")
+
+	ok, _ := c.SetIsMember("myset", "a")
+	if !ok {
+		t.Error("SetIsMember should be true for existing member")
+	}
+
+	ok, _ = c.SetIsMember("myset", "b")
+	if ok {
+		t.Error("SetIsMember should be false for missing member")
+	}
+}
+
+func TestMemoryCache_SetMembersEmpty(t *testing.T) {
+	c := outbound.NewMemoryCache()
+	defer c.Close()
+
+	members, err := c.SetMembers("nonexistent")
+	if err != nil {
+		t.Fatalf("SetMembers: %v", err)
+	}
+	if len(members) != 0 {
+		t.Errorf("SetMembers = %v, want empty slice", members)
 	}
 }

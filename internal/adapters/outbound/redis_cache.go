@@ -79,6 +79,26 @@ func (c *RedisCache) Exists(key string) (bool, error) {
 	return n > 0, nil
 }
 
+func (c *RedisCache) SetAdd(key, member string) error {
+	ctx := context.Background()
+	return c.client.SAdd(ctx, c.key(key), member).Err()
+}
+
+func (c *RedisCache) SetRemove(key, member string) error {
+	ctx := context.Background()
+	return c.client.SRem(ctx, c.key(key), member).Err()
+}
+
+func (c *RedisCache) SetMembers(key string) ([]string, error) {
+	ctx := context.Background()
+	return c.client.SMembers(ctx, c.key(key)).Result()
+}
+
+func (c *RedisCache) SetIsMember(key, member string) (bool, error) {
+	ctx := context.Background()
+	return c.client.SIsMember(ctx, c.key(key), member).Result()
+}
+
 func (c *RedisCache) Close() error {
 	return c.closer()
 }
