@@ -21,7 +21,7 @@ func registerLogModule(L *lua.LState, musMod *lua.LTable, logger ports.Logger) {
 func makeLogFn(logFn func(string, ...map[string]interface{})) lua.LGFunction {
 	return func(L *lua.LState) int {
 		msg := L.CheckString(1)
-		fields := luaTableToFields(L, 2)
+		fields := luaArgsToFields(L, 2)
 		if fields != nil {
 			logFn(msg, fields)
 		} else {
@@ -31,29 +31,54 @@ func makeLogFn(logFn func(string, ...map[string]interface{})) lua.LGFunction {
 	}
 }
 
-func luaTableToFields(L *lua.LState, argPos int) map[string]interface{} {
+// luaArgsToFields accepts either a table or variadic key-value pairs:
+//
+//	mus.log.info("msg", {key="val"})
+//	mus.log.info("msg", "key", val, "key2", val2)
+func luaArgsToFields(L *lua.LState, argPos int) map[string]interface{} {
 	arg := L.Get(argPos)
-	tbl, ok := arg.(*lua.LTable)
-	if !ok {
+	if arg == lua.LNil {
 		return nil
 	}
 
+	// Table form: mus.log.info("msg", {key="val"})
+	if tbl, ok := arg.(*lua.LTable); ok {
+		fields := make(map[string]interface{})
+		tbl.ForEach(func(key, value lua.LValue) {
+			k, ok := key.(lua.LString)
+			if !ok {
+				return
+			}
+			fields[string(k)] = luaValueToGo(value)
+		})
+		return fields
+	}
+
+	// Variadic form: mus.log.info("msg", "key", val, "key2", val2)
+	n := L.GetTop()
+	if argPos > n {
+		return nil
+	}
 	fields := make(map[string]interface{})
-	tbl.ForEach(func(key, value lua.LValue) {
-		k, ok := key.(lua.LString)
-		if !ok {
-			return
+	for i := argPos; i <= n-1; i += 2 {
+		key := L.Get(i)
+		val := L.Get(i + 1)
+		if k, ok := key.(lua.LString); ok {
+			fields[string(k)] = luaValueToGo(val)
 		}
-		switch v := value.(type) {
-		case lua.LBool:
-			fields[string(k)] = bool(v)
-		case lua.LNumber:
-			fields[string(k)] = float64(v)
-		case lua.LString:
-			fields[string(k)] = string(v)
-		default:
-			fields[string(k)] = v.String()
-		}
-	})
+	}
 	return fields
+}
+
+func luaValueToGo(value lua.LValue) interface{} {
+	switch v := value.(type) {
+	case lua.LBool:
+		return bool(v)
+	case lua.LNumber:
+		return float64(v)
+	case lua.LString:
+		return string(v)
+	default:
+		return v.String()
+	}
 }

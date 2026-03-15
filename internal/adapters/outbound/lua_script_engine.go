@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"fsos-server/internal/domain/ports"
@@ -170,6 +171,96 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 
 	L.SetGlobal("mus", musMod)
 
+	// Sandboxed require: only loads .lua files from scriptsDir/lib/
+	loaded := L.NewTable()
+	L.SetGlobal("require", L.NewFunction(func(L *lua.LState) int {
+		modName := L.CheckString(1)
+
+		// Return cached module if already loaded
+		if cached := loaded.RawGetString(modName); cached != lua.LNil {
+			L.Push(cached)
+			return 1
+		}
+
+		// Resolve path — only allow lib/ prefix, no ".." traversal
+		if filepath.IsAbs(modName) || containsDotDot(modName) {
+			L.ArgError(1, "invalid module name: "+modName)
+			return 0
+		}
+
+		modPath := filepath.Join(e.scriptsDir, modName+".lua")
+
+		// Security: ensure resolved path stays within scriptsDir
+		absModPath, err := filepath.Abs(modPath)
+		if err != nil {
+			L.ArgError(1, "cannot resolve module path: "+modName)
+			return 0
+		}
+		absScriptsDir, _ := filepath.Abs(e.scriptsDir)
+		if !isSubpath(absScriptsDir, absModPath) {
+			L.ArgError(1, "module path escapes scripts directory: "+modName)
+			return 0
+		}
+
+		if _, err := os.Stat(modPath); err != nil {
+			L.ArgError(1, "module not found: "+modName)
+			return 0
+		}
+
+		// Load and execute the module file
+		fn, err := L.LoadFile(modPath)
+		if err != nil {
+			L.RaiseError("failed to load module %q: %s", modName, err.Error())
+			return 0
+		}
+
+		L.Push(fn)
+		if err := L.PCall(0, 1, nil); err != nil {
+			L.RaiseError("failed to execute module %q: %s", modName, err.Error())
+			return 0
+		}
+
+		ret := L.Get(-1)
+		if ret == lua.LNil {
+			ret = lua.LTrue
+		}
+
+		// Cache the result
+		loaded.RawSetString(modName, ret)
+
+		L.Push(ret)
+		return 1
+	}))
+
+	// Sandboxed dofile: resolves paths relative to scriptsDir, same security as require
+	L.SetGlobal("dofile", L.NewFunction(func(L *lua.LState) int {
+		name := L.CheckString(1)
+
+		if filepath.IsAbs(name) || containsDotDot(name) {
+			L.ArgError(1, "invalid path: "+name)
+			return 0
+		}
+
+		filePath := filepath.Join(e.scriptsDir, name)
+
+		absFilePath, err := filepath.Abs(filePath)
+		if err != nil {
+			L.ArgError(1, "cannot resolve path: "+name)
+			return 0
+		}
+		absScriptsDir, _ := filepath.Abs(e.scriptsDir)
+		if !isSubpath(absScriptsDir, absFilePath) {
+			L.ArgError(1, "path escapes scripts directory: "+name)
+			return 0
+		}
+
+		if err := L.DoFile(filePath); err != nil {
+			L.RaiseError("dofile %q failed: %s", name, err.Error())
+			return 0
+		}
+		return 0
+	}))
+
 	if err := L.DoFile(path); err != nil {
 		return nil, fmt.Errorf("script %q execution failed: %w", msg.Subject, err)
 	}
@@ -181,4 +272,14 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 	}
 
 	return result, nil
+}
+
+func containsDotDot(path string) bool {
+	return strings.Contains(path, "..")
+}
+
+func isSubpath(parent, child string) bool {
+	parent = filepath.Clean(parent) + string(filepath.Separator)
+	child = filepath.Clean(child)
+	return strings.HasPrefix(child, parent)
 }
