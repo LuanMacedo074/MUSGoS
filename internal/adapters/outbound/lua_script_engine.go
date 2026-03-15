@@ -10,6 +10,7 @@ import (
 	"fsos-server/internal/domain/ports"
 	"fsos-server/internal/domain/types/lingo"
 
+	"github.com/google/uuid"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -158,6 +159,11 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 
 	// Register mus.json module
 	registerJsonModule(L, musMod)
+
+	musMod.RawSetString("uuid", L.NewFunction(func(L *lua.LState) int {
+		L.Push(lua.LString(uuid.New().String()))
+		return 1
+	}))
 
 	L.SetGlobal("mus", musMod)
 

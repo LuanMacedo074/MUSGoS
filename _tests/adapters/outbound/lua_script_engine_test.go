@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -548,5 +549,47 @@ func TestExecute_DBQueryBuilder(t *testing.T) {
 	}
 	if intResult.Value != 10 {
 		t.Errorf("expected 10, got %d", intResult.Value)
+	}
+}
+
+func TestExecute_UUID(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "uuidtest", `mus.response(mus.uuid())`)
+
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	result, err := engine.Execute(&ports.ScriptMessage{Subject: "uuidtest", SenderID: "u1", Content: lingo.NewLVoid()})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	strResult, ok := result.Content.(*lingo.LString)
+	if !ok {
+		t.Fatalf("expected *LString, got %T", result.Content)
+	}
+	uuidPattern := regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+	if !uuidPattern.MatchString(strResult.Value) {
+		t.Errorf("expected valid UUID v4, got %q", strResult.Value)
+	}
+}
+
+func TestExecute_UUID_Unique(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "uuidtest", `
+		local a = mus.uuid()
+		local b = mus.uuid()
+		if a == b then error("UUIDs must be unique") end
+		mus.response("ok")
+	`)
+
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	result, err := engine.Execute(&ports.ScriptMessage{Subject: "uuidtest", SenderID: "u1", Content: lingo.NewLVoid()})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	strResult, ok := result.Content.(*lingo.LString)
+	if !ok {
+		t.Fatalf("expected *LString, got %T", result.Content)
+	}
+	if strResult.Value != "ok" {
+		t.Errorf("expected ok, got %q", strResult.Value)
 	}
 }
