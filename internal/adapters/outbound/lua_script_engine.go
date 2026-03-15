@@ -156,6 +156,9 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 	// Register mus.time module
 	registerTimeModule(L, musMod)
 
+	// Register mus.json module
+	registerJsonModule(L, musMod)
+
 	L.SetGlobal("mus", musMod)
 
 	if err := L.DoFile(path); err != nil {

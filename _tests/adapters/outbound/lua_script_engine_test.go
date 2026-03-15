@@ -1,8 +1,10 @@
 package outbound_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"fsos-server/_tests/testutil"
@@ -309,6 +311,194 @@ func TestExecute_ServerGetUserCount(t *testing.T) {
 	}
 	if intResult.Value != 2 {
 		t.Errorf("expected 2, got %d", intResult.Value)
+	}
+}
+
+func TestExecute_JsonEncodeArray(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "jsontest", `mus.response(mus.json.encode({1, 2, 3}))`)
+
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	result, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	strResult, ok := result.Content.(*lingo.LString)
+	if !ok {
+		t.Fatalf("expected *LString, got %T", result.Content)
+	}
+	if strResult.Value != "[1,2,3]" {
+		t.Errorf("expected [1,2,3], got %q", strResult.Value)
+	}
+}
+
+func TestExecute_JsonEncodeArrayStrings(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "jsontest", `mus.response(mus.json.encode({"a", "b"}))`)
+
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	result, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	strResult, ok := result.Content.(*lingo.LString)
+	if !ok {
+		t.Fatalf("expected *LString, got %T", result.Content)
+	}
+	if strResult.Value != `["a","b"]` {
+		t.Errorf(`expected ["a","b"], got %q`, strResult.Value)
+	}
+}
+
+func TestExecute_JsonEncodeObject(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "jsontest", `mus.response(mus.json.encode({name = "foo", age = 10}))`)
+
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	result, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	strResult, ok := result.Content.(*lingo.LString)
+	if !ok {
+		t.Fatalf("expected *LString, got %T", result.Content)
+	}
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(strResult.Value), &parsed); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if parsed["name"] != "foo" {
+		t.Errorf("expected name=foo, got %v", parsed["name"])
+	}
+	if parsed["age"] != float64(10) {
+		t.Errorf("expected age=10, got %v", parsed["age"])
+	}
+}
+
+func TestExecute_JsonEncodeNested(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "jsontest", `mus.response(mus.json.encode({items = {1, 2}, name = "x"}))`)
+
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	result, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	strResult, ok := result.Content.(*lingo.LString)
+	if !ok {
+		t.Fatalf("expected *LString, got %T", result.Content)
+	}
+	var parsed map[string]interface{}
+	if err := json.Unmarshal([]byte(strResult.Value), &parsed); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	items, ok := parsed["items"].([]interface{})
+	if !ok {
+		t.Fatalf("expected items to be array, got %T", parsed["items"])
+	}
+	if len(items) != 2 {
+		t.Errorf("expected 2 items, got %d", len(items))
+	}
+}
+
+func TestExecute_JsonEncodeEmptyTable(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "jsontest", `mus.response(mus.json.encode({}))`)
+
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	result, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	strResult, ok := result.Content.(*lingo.LString)
+	if !ok {
+		t.Fatalf("expected *LString, got %T", result.Content)
+	}
+	if strResult.Value != "{}" {
+		t.Errorf("expected {}, got %q", strResult.Value)
+	}
+}
+
+func TestExecute_JsonDecodeArray(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "jsontest", `
+		local tbl = mus.json.decode("[1,2,3]")
+		mus.response(#tbl)
+	`)
+
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	result, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	intResult, ok := result.Content.(*lingo.LInteger)
+	if !ok {
+		t.Fatalf("expected *LInteger, got %T", result.Content)
+	}
+	if intResult.Value != 3 {
+		t.Errorf("expected 3, got %d", intResult.Value)
+	}
+}
+
+func TestExecute_JsonDecodeObject(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "jsontest", `
+		local tbl = mus.json.decode('{"name":"foo"}')
+		mus.response(tbl.name)
+	`)
+
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	result, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	strResult, ok := result.Content.(*lingo.LString)
+	if !ok {
+		t.Fatalf("expected *LString, got %T", result.Content)
+	}
+	if strResult.Value != "foo" {
+		t.Errorf("expected foo, got %q", strResult.Value)
+	}
+}
+
+func TestExecute_JsonRoundtrip(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "jsontest", `
+		local inputs = {'[1,2,3]', '{"name":"foo"}', '"hello"', '42', 'true', 'null'}
+		for _, input in ipairs(inputs) do
+			local result = mus.json.encode(mus.json.decode(input))
+			if result ~= input then
+				error("roundtrip failed: " .. input .. " -> " .. result)
+			end
+		end
+		mus.response("ok")
+	`)
+
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	result, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	strResult, ok := result.Content.(*lingo.LString)
+	if !ok {
+		t.Fatalf("expected *LString, got %T", result.Content)
+	}
+	if strResult.Value != "ok" {
+		t.Errorf("expected ok, got %q", strResult.Value)
+	}
+}
+
+func TestExecute_JsonDecodeInvalidJSON(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "jsontest", `mus.json.decode("{invalid}")`)
+
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	_, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
+	if err == nil {
+		t.Error("expected error for invalid JSON")
+	}
+	if !strings.Contains(err.Error(), "json.decode") {
+		t.Errorf("expected error to mention json.decode, got: %v", err)
 	}
 }
 
