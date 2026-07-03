@@ -52,8 +52,15 @@ set** (Redis, RabbitMQ, cache, rate limiting, metrics, UDP, and more).
 | `CIPHER_TYPE` | `blowfish` | Cipher type |
 | `ENCRYPTION_KEY` | `IPAddress resolution` | Encryption key (a `#All` prefix encrypts whole packets) |
 | `PROTOCOL` | `smus` | Communication protocol |
-| `DATABASE_TYPE` | `sqlite` | Database type |
-| `DATABASE_PATH` | `data/musgo.db` | Database path |
+| `DATABASE_TYPE` | `sqlite` | Database type (`sqlite`, `postgres`) |
+| `DATABASE_PATH` | `data/musgo.db` | Database file path (sqlite) |
+| `DATABASE_URL` | — | Full Postgres DSN; overrides the discrete `DATABASE_*` fields below |
+| `DATABASE_HOST` | `localhost` | Postgres host |
+| `DATABASE_PORT` | `5432` | Postgres port |
+| `DATABASE_USER` | `postgres` | Postgres user |
+| `DATABASE_PASSWORD` | — | Postgres password |
+| `DATABASE_NAME` | `musgo` | Postgres database name |
+| `DATABASE_SSLMODE` | `disable` | Postgres SSL mode |
 | `SCRIPTS_PATH` | `external/scripts` | Lua scripts path |
 | `SCRIPT_TIMEOUT` | `5` | Lua script timeout (seconds) |
 | `JOBS_ENABLED` | `1` | Enable scheduled jobs |

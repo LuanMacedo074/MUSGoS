@@ -2,6 +2,8 @@ package config
 
 import (
 	"log"
+	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -27,6 +29,38 @@ type RabbitMQConfig struct {
 	Exchange string
 }
 
+// PostgresConfig holds the connection settings for the PostgreSQL adapter.
+// If URL is set it is used verbatim; otherwise a DSN is assembled from the
+// discrete fields.
+type PostgresConfig struct {
+	URL      string
+	Host     string
+	Port     string
+	User     string
+	Password string
+	DBName   string
+	SSLMode  string
+}
+
+// DSN returns the connection string passed to the Postgres driver. A non-empty
+// URL wins; otherwise the discrete fields are assembled into a postgres:// URL
+// (which handles escaping of credentials for us).
+func (c PostgresConfig) DSN() string {
+	if c.URL != "" {
+		return c.URL
+	}
+	u := url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(c.User, c.Password),
+		Host:   net.JoinHostPort(c.Host, c.Port),
+		Path:   "/" + c.DBName,
+	}
+	q := url.Values{}
+	q.Set("sslmode", c.SSLMode)
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
 type ServerConfig struct {
 	ApplicationName   string
 	Port              string
@@ -44,6 +78,7 @@ type ServerConfig struct {
 	Protocol          string
 	DatabaseType      string
 	DatabasePath      string
+	Postgres          PostgresConfig
 	SessionStoreType  string
 	ScriptsPath       string
 	ScriptTimeout     int
@@ -146,6 +181,15 @@ func LoadServerConfig() ServerConfig {
 		Protocol:         getEnv("PROTOCOL", "smus"),
 		DatabaseType:     getEnv("DATABASE_TYPE", "sqlite"),
 		DatabasePath:     getEnv("DATABASE_PATH", "data/musgo.db"),
+		Postgres: PostgresConfig{
+			URL:      getEnv("DATABASE_URL", ""),
+			Host:     getEnv("DATABASE_HOST", "localhost"),
+			Port:     getEnv("DATABASE_PORT", "5432"),
+			User:     getEnv("DATABASE_USER", "postgres"),
+			Password: getEnv("DATABASE_PASSWORD", ""),
+			DBName:   getEnv("DATABASE_NAME", "musgo"),
+			SSLMode:  getEnv("DATABASE_SSLMODE", "disable"),
+		},
 		SessionStoreType: getEnv("SESSION_STORE_TYPE", "memory"),
 		ScriptsPath:      getEnv("SCRIPTS_PATH", "external/scripts"),
 		ScriptTimeout:    getEnvInt("SCRIPT_TIMEOUT", 5),
