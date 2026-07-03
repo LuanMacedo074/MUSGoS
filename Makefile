@@ -1,6 +1,6 @@
 TEST_PKGS = ./_tests/config/... ./_tests/domain/... ./_tests/factory/... ./_tests/adapters/...
 
-.PHONY: test test-v test-cover test-run build run migration queue script
+.PHONY: test test-v test-cover test-run build run migration queue script job
 
 test:
 	go test $(TEST_PKGS)
@@ -45,3 +45,13 @@ script:
 	sed -e "s|NAME|$(name)|g" \
 		external/scripts/script.lua.tmpl > "$$file"; \
 	echo "Created $$file"
+
+job:
+	@if [ -z "$(name)" ] || [ -z "$(interval)" ]; then echo "Usage: make job name=<job_name> interval=<seconds>"; exit 1; fi
+	@mkdir -p external/jobs external/scripts/jobs; \
+	file="external/jobs/$(name).go"; \
+	sed -e "s|NAME|$(name)|g" -e "s|INTERVAL|$(interval)|g" \
+		external/jobs/job.go.tmpl > "$$file"; \
+	lua="external/scripts/jobs/$(name).lua"; \
+	[ -f "$$lua" ] || printf -- '-- jobs/%s — recurring job (interval: %ss). TODO: implement.\n' "$(name)" "$(interval)" > "$$lua"; \
+	echo "Created $$file and $$lua"

@@ -19,10 +19,70 @@ func registerDBModule(L *lua.LState, musMod *lua.LTable, db ports.DBAdapter, qb 
 
 	// mus.db.table(name) -> query userdata
 	if qb != nil {
+		// active is the builder mus.db.table(...) routes through. It's the root
+		// builder except while inside a mus.db.transaction callback, when it
+		// points at the tx-bound builder. Mutating it without a lock is safe:
+		// each script runs on its own LState in a single goroutine.
+		active := qb
 		dbMod.RawSetString("table", L.NewFunction(func(L *lua.LState) int {
 			name := L.CheckString(1)
-			q := qb.Table(name)
+			q := active.Table(name)
 			L.Push(wrapQuery(L, q))
+			return 1
+		}))
+
+		// mus.db.transaction(fn) runs fn with all mus.db.table(...) ops enrolled
+		// in a single transaction. Commits when fn returns (anything but false);
+		// rolls back if fn returns false or raises an error (error re-raised).
+		// Nested transactions are rejected. Note: mus.db player/application/user
+		// ops are NOT enrolled — only mus.db.table(...) operations.
+		dbMod.RawSetString("transaction", L.NewFunction(func(L *lua.LState) int {
+			fn := L.CheckFunction(1)
+
+			txqb, ok := qb.(ports.TransactionalQueryBuilder)
+			if !ok {
+				L.RaiseError("mus.db.transaction: transactions are not supported by this database")
+				return 0
+			}
+			if _, nested := active.(ports.Tx); nested {
+				L.RaiseError("mus.db.transaction: nested transactions are not supported")
+				return 0
+			}
+
+			tx, err := txqb.Begin()
+			if err != nil {
+				L.RaiseError("mus.db.transaction: begin failed: %v", err)
+				return 0
+			}
+
+			active = tx
+			L.Push(fn)
+			callErr := L.PCall(0, 1, nil)
+			active = qb // restore before finalizing so later table() calls hit root
+
+			if callErr != nil {
+				_ = tx.Rollback()
+				L.RaiseError("mus.db.transaction: rolled back: %v", callErr)
+				return 0
+			}
+
+			ret := L.Get(-1)
+			L.Pop(1)
+			if ret == lua.LFalse {
+				if rbErr := tx.Rollback(); rbErr != nil {
+					L.RaiseError("mus.db.transaction: rollback failed: %v", rbErr)
+					return 0
+				}
+				L.Push(lua.LFalse)
+				return 1
+			}
+
+			if cErr := tx.Commit(); cErr != nil {
+				_ = tx.Rollback()
+				L.RaiseError("mus.db.transaction: commit failed: %v", cErr)
+				return 0
+			}
+			L.Push(lua.LTrue)
 			return 1
 		}))
 	}
@@ -337,6 +397,19 @@ func registerDBAdminOps(L *lua.LState, dbMod *lua.LTable, db ports.DBAdapter, lo
 		}
 		if err := db.CreateUser(userID, string(hash), userLevel); err != nil {
 			L.RaiseError("createUser failed: %s", err.Error())
+		}
+		return 0
+	}))
+	dbMod.RawSetString("setPassword", L.NewFunction(func(L *lua.LState) int {
+		userID := L.CheckString(1)
+		password := L.CheckString(2)
+		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			L.RaiseError("setPassword failed: %s", err.Error())
+			return 0
+		}
+		if err := db.UpdateUserPassword(userID, string(hash)); err != nil {
+			L.RaiseError("setPassword failed: %s", err.Error())
 		}
 		return 0
 	}))

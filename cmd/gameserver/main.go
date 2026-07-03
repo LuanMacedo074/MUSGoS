@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"fsos-server/external/jobs"
 	"fsos-server/external/migrations"
 	"fsos-server/external/queues"
 	"fsos-server/internal/adapters/inbound"
@@ -222,7 +223,15 @@ func main() {
 		BanChecker:   banChecker,
 		RateLimiter:  rateLimiter,
 		Metrics:      metrics,
+		OnDisconnect: inbound.NewDisconnectFlushHook(scriptEngine, cfg.DisconnectHook, gameLogger),
 	})
+	if cfg.DisconnectHook == "" {
+		gameLogger.Info("Disconnect flush hook disabled (DISCONNECT_HOOK empty)")
+	} else {
+		gameLogger.Info("Disconnect flush hook enabled", map[string]interface{}{
+			"subject": cfg.DisconnectHook,
+		})
+	}
 
 	serverReady := make(chan struct{})
 	go func() {
@@ -245,7 +254,26 @@ func main() {
 		})
 	}
 
-	// 12. UDP Server
+	// 12. Job Scheduler — runs external/scripts/jobs/<name>.lua on their intervals
+	if cfg.JobsEnabled {
+		var scheduledJobs []inbound.ScheduledJob
+		for _, j := range jobs.All {
+			if !j.Enabled {
+				continue
+			}
+			scheduledJobs = append(scheduledJobs, inbound.ScheduledJob{
+				Name:     j.Name,
+				Interval: time.Duration(j.IntervalSeconds) * time.Second,
+			})
+		}
+		scheduler := inbound.NewScheduler(scriptEngine, scheduledJobs, gameLogger)
+		scheduler.Start()
+		defer scheduler.Stop()
+	} else {
+		gameLogger.Info("Job scheduler disabled (JOBS_ENABLED != 1)")
+	}
+
+	// 13. UDP Server
 	var udpServer *inbound.UDPServer
 	if cfg.UDPPort != "" {
 		udpServer = inbound.NewUDPServer(inbound.UDPServerConfig{

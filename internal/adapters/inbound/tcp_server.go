@@ -25,6 +25,9 @@ type TCPServerDeps struct {
 	BanChecker   *BanChecker
 	RateLimiter  ports.RateLimiter
 	Metrics      ports.Metrics
+	// OnDisconnect, if set, is called with the client's id when its connection
+	// tears down (socket close, idle/kill-timer, admin delete, or shutdown).
+	OnDisconnect func(clientID string)
 }
 
 type TCPServer struct {
@@ -39,6 +42,7 @@ type TCPServer struct {
 	banChecker   *BanChecker
 	rateLimiter  ports.RateLimiter
 	metrics      ports.Metrics
+	onDisconnect func(clientID string)
 }
 
 func NewTCPServer(cfg TCPServerConfig, deps TCPServerDeps) *TCPServer {
@@ -52,6 +56,7 @@ func NewTCPServer(cfg TCPServerConfig, deps TCPServerDeps) *TCPServer {
 		banChecker:   deps.BanChecker,
 		rateLimiter:  deps.RateLimiter,
 		metrics:      deps.Metrics,
+		onDisconnect: deps.OnDisconnect,
 	}
 }
 
@@ -124,6 +129,12 @@ func (s *TCPServer) handleConnection(conn net.Conn, host string) {
 
 	defer func() {
 		currentID := s.pool.Unregister(conn)
+
+		// Flush hot-state before dropping the session (all teardown paths —
+		// idle/kill-timer/admin-delete/shutdown — funnel through here).
+		if s.onDisconnect != nil {
+			s.onDisconnect(currentID)
+		}
 
 		if err := s.sessionStore.UnregisterConnection(currentID); err != nil {
 			s.logger.Error("Failed to unregister connection", map[string]interface{}{

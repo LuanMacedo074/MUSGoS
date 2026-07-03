@@ -18,3 +18,19 @@ type Query interface {
 	Get() ([]QueryResult, error)
 	Count() (int64, error)
 }
+
+// Tx is a QueryBuilder whose operations run inside a single transaction, plus
+// the means to finalize it. Table(name) returns queries bound to the tx.
+type Tx interface {
+	QueryBuilder
+	Commit() error
+	Rollback() error
+}
+
+// TransactionalQueryBuilder is a QueryBuilder that can open a transaction.
+// Implementations that don't support transactions simply omit this interface;
+// callers type-assert for it and degrade gracefully.
+type TransactionalQueryBuilder interface {
+	QueryBuilder
+	Begin() (Tx, error)
+}

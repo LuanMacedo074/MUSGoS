@@ -41,14 +41,39 @@ func NewLuaScriptEngine(scriptsDir string, logger ports.Logger, scriptTimeoutSec
 	}
 }
 
-func (e *LuaScriptEngine) HasScript(subject string) bool {
+// resolveScriptPath maps a network-supplied subject to an on-disk .lua path,
+// rejecting absolute subjects, ".." traversal, and any path that escapes
+// scriptsDir. Same containment policy already enforced for require/dofile.
+func (e *LuaScriptEngine) resolveScriptPath(subject string) (string, bool) {
+	if subject == "" || filepath.IsAbs(subject) || containsDotDot(subject) {
+		return "", false
+	}
 	path := filepath.Join(e.scriptsDir, subject+".lua")
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", false
+	}
+	absScriptsDir, _ := filepath.Abs(e.scriptsDir)
+	if !isSubpath(absScriptsDir, absPath) {
+		return "", false
+	}
+	return path, true
+}
+
+func (e *LuaScriptEngine) HasScript(subject string) bool {
+	path, ok := e.resolveScriptPath(subject)
+	if !ok {
+		return false
+	}
 	_, err := os.Stat(path)
 	return err == nil
 }
 
 func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult, error) {
-	path := filepath.Join(e.scriptsDir, msg.Subject+".lua")
+	path, ok := e.resolveScriptPath(msg.Subject)
+	if !ok {
+		return nil, fmt.Errorf("invalid script subject: %q", msg.Subject)
+	}
 
 	// Fresh VM per execution — intentionally not pooled.
 	// This ensures thread safety (no shared state between concurrent calls)
@@ -147,7 +172,7 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 
 	// Register mus.server module
 	if e.sessionStore != nil {
-		registerServerModule(L, musMod, e.sessionStore)
+		registerServerModule(L, musMod, e.sessionStore, e.sender, msg.SenderID, e.logger)
 	}
 
 	// Register mus.cache module

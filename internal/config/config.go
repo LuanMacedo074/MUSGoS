@@ -28,40 +28,42 @@ type RabbitMQConfig struct {
 }
 
 type ServerConfig struct {
-	ApplicationName  string
-	Port             string
-	ServerIP         string
-	MaxMessageSize   int
-	TCPNoDelay       bool
-	DefaultUserLevel int
-	LogLevel         string
-	LoggerType       string
-	LogPath          string
-	LogBufferSize    int
-	Environment      string
-	CipherType       string
-	EncryptionKey    string
-	Protocol         string
-	DatabaseType     string
-	DatabasePath     string
-	SessionStoreType string
-	ScriptsPath      string
-	ScriptTimeout    int
-	AuthMode         string
-	Redis            RedisConfig
-	AllEncrypted     bool
-	QueueType        string
-	QueueRedis       RedisConfig
-	RabbitMQ         RabbitMQConfig
-	CommandLevels    map[string]int
-	IdleTimeout      int
-	UDPPort          string
-	CacheType        string
-	CacheRedis       RedisConfig
+	ApplicationName   string
+	Port              string
+	ServerIP          string
+	MaxMessageSize    int
+	TCPNoDelay        bool
+	DefaultUserLevel  int
+	LogLevel          string
+	LoggerType        string
+	LogPath           string
+	LogBufferSize     int
+	Environment       string
+	CipherType        string
+	EncryptionKey     string
+	Protocol          string
+	DatabaseType      string
+	DatabasePath      string
+	SessionStoreType  string
+	ScriptsPath       string
+	ScriptTimeout     int
+	DisconnectHook    string
+	AuthMode          string
+	Redis             RedisConfig
+	AllEncrypted      bool
+	QueueType         string
+	QueueRedis        RedisConfig
+	RabbitMQ          RabbitMQConfig
+	CommandLevels     map[string]int
+	IdleTimeout       int
+	UDPPort           string
+	CacheType         string
+	CacheRedis        RedisConfig
 	RateLimitRequests int
 	RateLimitWindow   int
 	MetricsPort       string
 	MetricsBindAddr   string
+	JobsEnabled       bool
 }
 
 var defaultCommandLevels = map[string]int{
@@ -72,9 +74,9 @@ var defaultCommandLevels = map[string]int{
 	"system.server.getMovieCount": 20,
 	"system.server.getMovies":     20,
 	// Movie
-	"system.movie.getUserCount":   20,
-	"system.movie.getGroups":      20,
-	"system.movie.getGroupCount":  20,
+	"system.movie.getUserCount":  20,
+	"system.movie.getGroups":     20,
+	"system.movie.getGroupCount": 20,
 	// Group
 	"system.group.join":              20,
 	"system.group.leave":             20,
@@ -85,9 +87,9 @@ var defaultCommandLevels = map[string]int{
 	"system.group.deleteAttribute":   20,
 	"system.group.getAttributeNames": 20,
 	// User
-	"system.user.getAddress":   20,
-	"system.user.getGroups":    20,
-	"system.user.delete":       80,
+	"system.user.getAddress": 20,
+	"system.user.getGroups":  20,
+	"system.user.delete":     80,
 	// DBPlayer
 	"DBPlayer.getAttribute":      20,
 	"DBPlayer.setAttribute":      20,
@@ -121,25 +123,26 @@ func LoadServerConfig() ServerConfig {
 	}
 
 	cfg := ServerConfig{
-		ApplicationName: getEnv("APPLICATION_NAME", "SMUS-SERVER"),
-		Port:            getEnv("PORT", "1199"),
-		ServerIP:        getEnv("SERVER_IP", ""),
-		MaxMessageSize:  getEnvInt("MAX_MESSAGE_SIZE", 8192),
-		TCPNoDelay:      getEnv("TCP_NO_DELAY", "1") == "1",
+		ApplicationName:  getEnv("APPLICATION_NAME", "SMUS-SERVER"),
+		Port:             getEnv("PORT", "1199"),
+		ServerIP:         getEnv("SERVER_IP", ""),
+		MaxMessageSize:   getEnvInt("MAX_MESSAGE_SIZE", 8192),
+		TCPNoDelay:       getEnv("TCP_NO_DELAY", "1") == "1",
 		DefaultUserLevel: getEnvInt("DEFAULT_USER_LEVEL", 20),
-		LogLevel:      getEnv("LOG_LEVEL", "INFO"),
-		LoggerType:    getEnv("LOGGER_TYPE", "file"),
-		LogPath:       getEnv("LOG_PATH", "logs"),
-		LogBufferSize: getEnvInt("LOG_BUFFER_SIZE", 1024),
-		Environment:   getEnv("ENVIRONMENT", "development"),
-		CipherType:    getEnv("CIPHER_TYPE", "blowfish"),
-		EncryptionKey: getEnv("ENCRYPTION_KEY", "IPAddress resolution"),
-		Protocol:      getEnv("PROTOCOL", "smus"),
+		LogLevel:         getEnv("LOG_LEVEL", "INFO"),
+		LoggerType:       getEnv("LOGGER_TYPE", "file"),
+		LogPath:          getEnv("LOG_PATH", "logs"),
+		LogBufferSize:    getEnvInt("LOG_BUFFER_SIZE", 1024),
+		Environment:      getEnv("ENVIRONMENT", "development"),
+		CipherType:       getEnv("CIPHER_TYPE", "blowfish"),
+		EncryptionKey:    getEnv("ENCRYPTION_KEY", "IPAddress resolution"),
+		Protocol:         getEnv("PROTOCOL", "smus"),
 		DatabaseType:     getEnv("DATABASE_TYPE", "sqlite"),
 		DatabasePath:     getEnv("DATABASE_PATH", "data/musgo.db"),
 		SessionStoreType: getEnv("SESSION_STORE_TYPE", "memory"),
 		ScriptsPath:      getEnv("SCRIPTS_PATH", "external/scripts"),
 		ScriptTimeout:    getEnvInt("SCRIPT_TIMEOUT", 5),
+		DisconnectHook:   getEnv("DISCONNECT_HOOK", "users/onDisconnect"),
 		AuthMode:         getEnv("AUTH_MODE", "open"),
 		Redis: RedisConfig{
 			Host:      getEnv("REDIS_HOST", "localhost"),
@@ -182,6 +185,7 @@ func LoadServerConfig() ServerConfig {
 	cfg.RateLimitWindow = getEnvInt("RATE_LIMIT_WINDOW", 60)
 	cfg.MetricsPort = getEnv("METRICS_PORT", "")
 	cfg.MetricsBindAddr = getEnv("METRICS_BIND_ADDR", "127.0.0.1")
+	cfg.JobsEnabled = getEnv("JOBS_ENABLED", "1") == "1"
 	cfg.CommandLevels = loadCommandLevels()
 
 	return cfg

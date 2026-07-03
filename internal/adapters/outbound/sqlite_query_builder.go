@@ -8,21 +8,57 @@ import (
 	"fsos-server/internal/domain/ports"
 )
 
-// SQLiteQueryBuilder implements ports.QueryBuilder for SQLite.
+// dbExecutor is the subset of *sql.DB used by queries. Both *sql.DB and *sql.Tx
+// satisfy it, so a query builder can run against the root connection or inside
+// a transaction with no behavioral difference.
+type dbExecutor interface {
+	Exec(query string, args ...interface{}) (sql.Result, error)
+	Query(query string, args ...interface{}) (*sql.Rows, error)
+	QueryRow(query string, args ...interface{}) *sql.Row
+}
+
+// SQLiteQueryBuilder implements ports.QueryBuilder (and, over a *sql.DB,
+// ports.TransactionalQueryBuilder) for SQLite.
 type SQLiteQueryBuilder struct {
-	db *sql.DB
+	exec dbExecutor
 }
 
 func NewSQLiteQueryBuilder(db *sql.DB) *SQLiteQueryBuilder {
-	return &SQLiteQueryBuilder{db: db}
+	return &SQLiteQueryBuilder{exec: db}
 }
 
 func (qb *SQLiteQueryBuilder) Table(name string) ports.Query {
 	return &sqliteQuery{
 		tableName: name,
-		db:        qb.db,
+		exec:      qb.exec,
 	}
 }
+
+// Begin opens a transaction and returns a ports.Tx whose queries run inside it.
+// Only valid on a builder backed by the root *sql.DB (not an already-tx one).
+func (qb *SQLiteQueryBuilder) Begin() (ports.Tx, error) {
+	db, ok := qb.exec.(*sql.DB)
+	if !ok {
+		return nil, fmt.Errorf("cannot begin transaction: query builder is not backed by a root connection")
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	return &sqliteTx{tx: tx}, nil
+}
+
+// sqliteTx implements ports.Tx: a query builder bound to a *sql.Tx.
+type sqliteTx struct {
+	tx *sql.Tx
+}
+
+func (t *sqliteTx) Table(name string) ports.Query {
+	return &sqliteQuery{tableName: name, exec: t.tx}
+}
+
+func (t *sqliteTx) Commit() error   { return t.tx.Commit() }
+func (t *sqliteTx) Rollback() error { return t.tx.Rollback() }
 
 type whereClause struct {
 	column string
@@ -33,7 +69,7 @@ type whereClause struct {
 type sqliteQuery struct {
 	tableName string
 	wheres    []whereClause
-	db        *sql.DB
+	exec      dbExecutor
 }
 
 func (q *sqliteQuery) Where(column string, value interface{}) ports.Query {
@@ -43,7 +79,7 @@ func (q *sqliteQuery) Where(column string, value interface{}) ports.Query {
 	return &sqliteQuery{
 		tableName: q.tableName,
 		wheres:    newWheres,
-		db:        q.db,
+		exec:      q.exec,
 	}
 }
 
@@ -64,7 +100,7 @@ func (q *sqliteQuery) Insert(data map[string]interface{}) error {
 	}
 	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
 		q.tableName, strings.Join(cols, ", "), strings.Join(placeholders, ", "))
-	_, err := q.db.Exec(query, vals...)
+	_, err := q.exec.Exec(query, vals...)
 	return err
 }
 
@@ -88,7 +124,7 @@ func (q *sqliteQuery) Update(data map[string]interface{}) (int64, error) {
 	vals = append(vals, whereVals...)
 
 	query := fmt.Sprintf("UPDATE %s SET %s%s", q.tableName, strings.Join(sets, ", "), whereSQL)
-	result, execErr := q.db.Exec(query, vals...)
+	result, execErr := q.exec.Exec(query, vals...)
 	if execErr != nil {
 		return 0, execErr
 	}
@@ -104,7 +140,7 @@ func (q *sqliteQuery) Delete() (int64, error) {
 		return 0, err
 	}
 	query := fmt.Sprintf("DELETE FROM %s%s", q.tableName, whereSQL)
-	result, execErr := q.db.Exec(query, vals...)
+	result, execErr := q.exec.Exec(query, vals...)
 	if execErr != nil {
 		return 0, execErr
 	}
@@ -120,7 +156,7 @@ func (q *sqliteQuery) First() (ports.QueryResult, error) {
 		return nil, err
 	}
 	query := fmt.Sprintf("SELECT * FROM %s%s LIMIT 1", q.tableName, whereSQL)
-	rows, err := q.db.Query(query, vals...)
+	rows, err := q.exec.Query(query, vals...)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +181,7 @@ func (q *sqliteQuery) Get() ([]ports.QueryResult, error) {
 		return nil, err
 	}
 	query := fmt.Sprintf("SELECT * FROM %s%s", q.tableName, whereSQL)
-	rows, err := q.db.Query(query, vals...)
+	rows, err := q.exec.Query(query, vals...)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +199,7 @@ func (q *sqliteQuery) Count() (int64, error) {
 	}
 	query := fmt.Sprintf("SELECT COUNT(*) FROM %s%s", q.tableName, whereSQL)
 	var count int64
-	err = q.db.QueryRow(query, vals...).Scan(&count)
+	err = q.exec.QueryRow(query, vals...).Scan(&count)
 	return count, err
 }
 
