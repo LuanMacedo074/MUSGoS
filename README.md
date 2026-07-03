@@ -1,85 +1,103 @@
 # MUSGoS
 
-Servidor MUS (Multiuser Server) escrito em Go, compatível com clientes Macromedia Shockwave/Director que usam o protocolo SMUS.
+MUS (Multiuser Server) written in Go — a modern, hexagonal reimplementation of the
+Macromedia Shockwave Multiuser Server, compatible with Shockwave/Director clients
+that speak the SMUS protocol.
 
-## Requisitos
+## Requirements
 
 - Go 1.24+
 
-## Início rápido
+## Quick start
 
 ```bash
-cp .env.example .env    # configure as variáveis
-make run                # inicia o servidor
+cp .env.example .env    # configure the variables
+make run                # start the server
 ```
 
-## Comandos
+## Commands
 
 ```bash
-make test               # roda todos os testes
-make test-v             # testes com output verbose
-make test-cover         # testes com relatório de cobertura
-make test-run T=Nome    # roda teste específico por nome
-make build              # compila para bin/gameserver
-make run                # executa o servidor
+make test               # run all tests
+make test-v             # tests with verbose output
+make test-cover         # tests with a coverage report
+make test-run T=Name    # run a specific test by name
+make build              # build to bin/gameserver
+make run                # run the server
 ```
 
-## Configuração
+## Configuration
 
-Via variáveis de ambiente (veja `.env.example`):
+Via environment variables. Core settings below; **see `.env.example` for the full
+set** (Redis, RabbitMQ, cache, rate limiting, metrics, UDP, and more).
 
-| Variável | Default | Descrição |
+| Variable | Default | Description |
 |---|---|---|
-| `APPLICATION_NAME` | `SMUS-SERVER` | Nome da aplicação |
-| `PORT` | `1199` | Porta TCP do servidor |
-| `LOG_LEVEL` | `INFO` | Nível de log (`DEBUG`, `INFO`, `WARN`, `ERROR`) |
-| `LOGGER_TYPE` | `file` | Tipo de logger |
-| `LOG_PATH` | `logs` | Diretório dos arquivos de log |
-| `ENVIRONMENT` | `development` | Ambiente de execução |
-| `CIPHER_TYPE` | `blowfish` | Tipo de criptografia |
-| `ENCRYPTION_KEY` | — | Chave de criptografia |
-| `PROTOCOL` | `smus` | Protocolo de comunicação |
-| `DATABASE_TYPE` | `sqlite` | Tipo de banco de dados |
-| `DATABASE_PATH` | `data/musgo.db` | Caminho do banco de dados |
-| `SESSION_STORE_TYPE` | `memory` | Tipo de session store (`memory`, `redis`) |
-| `SCRIPTS_PATH` | `external/scripts` | Caminho dos scripts Lua |
-| `AUTH_MODE` | `open` | Modo de autenticação (`none`, `open`, `strict`) |
+| `APPLICATION_NAME` | `SMUS-SERVER` | Application name |
+| `PORT` | `1199` | Server TCP port |
+| `ENVIRONMENT` | `development` | Runtime environment |
+| `MAX_MESSAGE_SIZE` | `2097151` | Max message size (bytes) |
+| `DEFAULT_USER_LEVEL` | `20` | Default user level on logon |
+| `LOG_LEVEL` | `DEBUG` | Log level (`DEBUG`, `INFO`, `WARN`, `ERROR`) |
+| `LOGGER_TYPE` | `file` | Logger type |
+| `CIPHER_TYPE` | `blowfish` | Cipher type |
+| `ENCRYPTION_KEY` | `IPAddress resolution` | Encryption key (a `#All` prefix encrypts whole packets) |
+| `PROTOCOL` | `smus` | Communication protocol |
+| `DATABASE_TYPE` | `sqlite` | Database type |
+| `DATABASE_PATH` | `data/musgo.db` | Database path |
+| `SCRIPTS_PATH` | `external/scripts` | Lua scripts path |
+| `SCRIPT_TIMEOUT` | `5` | Lua script timeout (seconds) |
+| `JOBS_ENABLED` | `1` | Enable scheduled jobs |
+| `DISCONNECT_HOOK` | `users/onDisconnect` | Script subject invoked when a client disconnects |
+| `AUTH_MODE` | `open` | Auth mode (`none`, `open`, `strict`) |
+| `SESSION_STORE_TYPE` | `memory` | Session store (`memory`, `redis`) |
+| `QUEUE_TYPE` | `memory` | Message queue (`memory`, `redis`, `rabbitmq`) |
+| `CACHE_TYPE` | `memory` | Cache (`memory`, `redis`) |
 
-## Arquitetura
+## Architecture
 
-O projeto usa **arquitetura hexagonal** (ports & adapters). O domínio define interfaces (ports), e as implementações concretas (adapters) são injetadas via factories.
+The project uses **hexagonal architecture** (ports & adapters). The domain defines
+interfaces (ports), and the concrete implementations (adapters) are injected via
+factories.
+
+The ports (`internal/domain/ports/`): `Cipher`, `Handler`, `Logger`, `Database`,
+`QueryBuilder`, `SessionStore`, `MessageSender`, `ConnectionWriter`, `Migration`,
+`Schema`, `Queue`, `ScriptEngine`, `Cache`, `RateLimiter`, `Metrics`, `Timer`, `Email`.
 
 ```
 internal/
-├── config/              ← variáveis de ambiente
-├── factory/             ← resolve implementações concretas
+├── config/              ← environment variables
+├── factory/             ← resolves concrete implementations
 ├── domain/
 │   ├── types/
-│   │   ├── lingo/       ← tipos Lingo (LValue, LString, LInteger, etc.)
-│   │   └── smus/        ← protocolo SMUS (MUSMessage, headers)
-│   └── ports/           ← interfaces (Cipher, MessageHandler, Logger)
+│   │   ├── lingo/       ← Lingo types (LValue, LString, LInteger, etc.)
+│   │   └── smus/        ← SMUS protocol (MUSMessage, headers)
+│   └── ports/           ← interfaces (Cipher, Handler, Logger, Database, Queue, …)
 └── adapters/
     ├── inbound/         ← TCP server, SMUS handler
-    └── outbound/        ← Blowfish cipher, file logger
+    └── outbound/        ← Blowfish cipher, SQLite, loggers, queues, …
 ```
 
-Regra de dependência: as setas de import sempre apontam para o domínio. Adapters dependem do domínio, nunca o contrário.
+Dependency rule: import arrows always point toward the domain. Adapters depend on
+the domain, never the other way around.
 
-Documentação detalhada em [`docs/architecture.md`](docs/architecture.md).
+Detailed docs in [`docs/architecture.md`](docs/architecture.md).
 
-## Testes
+## Tests
 
-Os testes ficam em `_tests/` (diretório com underscore, ignorado pelo `go test ./...`). Rode com `make test`.
+Tests live in `_tests/` (an underscore directory, ignored by `go test ./...`). Run
+them with `make test`.
 
 ```
 _tests/
-├── testutil/            ← mocks compartilhados
-├── config/              ← testes de configuração
-├── domain/              ← testes dos tipos e ports
-├── factory/             ← testes das factories
-└── adapters/            ← testes dos adapters
+├── testutil/            ← shared mocks
+├── config/              ← configuration tests
+├── domain/              ← type and port tests
+├── factory/             ← factory tests
+└── adapters/            ← adapter tests
 ```
 
-## Créditos
+## Credits
 
-A implementação do Blowfish é baseada no [OpenSMUS](https://github.com/piacentini/OpenSMUS) de Mauricio Piacentini, licenciado sob MIT.
+The Blowfish implementation is based on [OpenSMUS](https://github.com/piacentini/OpenSMUS)
+by Mauricio Piacentini, licensed under MIT.
