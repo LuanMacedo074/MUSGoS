@@ -7,9 +7,14 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-// registerServerModule builds mus.server. sender/senderID may be nil/empty in
-// contexts without an outbound path (e.g. tests) — broadcast degrades to a no-op.
-func registerServerModule(L *lua.LState, musMod *lua.LTable, sessionStore ports.SessionStore, sender ports.MessageSender, senderID string, logger ports.Logger) {
+// systemScriptSender is the protocol "from" for server-authored broadcasts.
+// The unchanged client only renders subjects like "Broadcast" when they arrive
+// from system.script (the invoking player's name goes in the content instead).
+const systemScriptSender = "system.script"
+
+// registerServerModule builds mus.server. sender may be nil in contexts without
+// an outbound path (e.g. tests) — broadcast degrades to a no-op.
+func registerServerModule(L *lua.LState, musMod *lua.LTable, sessionStore ports.SessionStore, sender ports.MessageSender, logger ports.Logger) {
 	serverMod := L.NewTable()
 
 	serverMod.RawSetString("getUserCount", L.NewFunction(func(L *lua.LState) int {
@@ -55,7 +60,7 @@ func registerServerModule(L *lua.LState, musMod *lua.LTable, sessionStore ports.
 			return 0
 		}
 		for _, c := range conns {
-			if err := sender.SendMessage(senderID, c.ClientID, subject, lingoContent); err != nil && logger != nil {
+			if err := sender.SendMessage(systemScriptSender, c.ClientID, subject, lingoContent); err != nil && logger != nil {
 				logger.Warn("mus.server.broadcast: delivery failed", map[string]interface{}{
 					"recipient": c.ClientID,
 					"subject":   subject,

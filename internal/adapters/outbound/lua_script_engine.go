@@ -172,7 +172,7 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 
 	// Register mus.server module
 	if e.sessionStore != nil {
-		registerServerModule(L, musMod, e.sessionStore, e.sender, msg.SenderID, e.logger)
+		registerServerModule(L, musMod, e.sessionStore, e.sender, e.logger)
 	}
 
 	// Register mus.cache module
