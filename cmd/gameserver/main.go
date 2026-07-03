@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -47,7 +48,12 @@ func main() {
 		"idle_timeout":  cfg.IdleTimeout,
 	})
 
-	dbResult, err := factory.NewDatabase(cfg.DatabaseType, cfg.DatabasePath, migrations.All)
+	// sqlite uses a filesystem path; postgres uses an assembled DSN.
+	dbConn := cfg.DatabasePath
+	if cfg.DatabaseType == "postgres" || cfg.DatabaseType == "postgresql" {
+		dbConn = cfg.Postgres.DSN()
+	}
+	dbResult, err := factory.NewDatabase(cfg.DatabaseType, dbConn, migrations.All)
 	if err != nil {
 		gameLogger.Fatal("Failed to initialize database", map[string]interface{}{
 			"error": err,
@@ -62,10 +68,20 @@ func main() {
 			"error": err,
 		})
 	}
-	gameLogger.Info("Database initialized", map[string]interface{}{
-		"type": cfg.DatabaseType,
-		"path": cfg.DatabasePath,
-	})
+	dbInfo := map[string]interface{}{"type": cfg.DatabaseType}
+	switch cfg.DatabaseType {
+	case "postgres", "postgresql":
+		// Never log the DSN — it carries credentials.
+		if cfg.Postgres.URL != "" {
+			dbInfo["source"] = "DATABASE_URL"
+		} else {
+			dbInfo["host"] = net.JoinHostPort(cfg.Postgres.Host, cfg.Postgres.Port)
+			dbInfo["dbname"] = cfg.Postgres.DBName
+		}
+	default:
+		dbInfo["path"] = cfg.DatabasePath
+	}
+	gameLogger.Info("Database initialized", dbInfo)
 	if len(migrationResult.Ran) > 0 {
 		gameLogger.Info("Migrations executed", map[string]interface{}{
 			"total":    migrationResult.Total,
