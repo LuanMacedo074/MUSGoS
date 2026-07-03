@@ -14,10 +14,25 @@ type DatabaseResult struct {
 	QueryBuilder    ports.QueryBuilder
 }
 
-func NewDatabase(dbType, dbPath string, migrations []ports.Migration) (*DatabaseResult, error) {
+// NewDatabase builds the database adapter for dbType. connStr is a filesystem
+// path for sqlite and a connection DSN for postgres.
+func NewDatabase(dbType, connStr string, migrations []ports.Migration) (*DatabaseResult, error) {
 	switch dbType {
 	case "sqlite":
-		db, err := outbound.NewSQLiteDB(dbPath)
+		db, err := outbound.NewSQLiteDB(connStr)
+		if err != nil {
+			return nil, err
+		}
+
+		runner := services.NewMigrationRunner(db, db, migrations)
+
+		return &DatabaseResult{
+			Adapter:         db,
+			MigrationRunner: runner,
+			QueryBuilder:    db.QueryBuilder(),
+		}, nil
+	case "postgres", "postgresql":
+		db, err := outbound.NewPostgresDB(connStr)
 		if err != nil {
 			return nil, err
 		}
