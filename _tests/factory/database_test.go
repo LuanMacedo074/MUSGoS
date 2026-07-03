@@ -1,6 +1,7 @@
 package factory_test
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -23,6 +24,23 @@ func TestNewDatabase_SQLite(t *testing.T) {
 	}
 	if result.MigrationRunner == nil {
 		t.Error("migration runner should not be nil")
+	}
+}
+
+func TestNewDatabase_Postgres(t *testing.T) {
+	dsn := os.Getenv("TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("TEST_POSTGRES_DSN not set; skipping postgres factory test")
+	}
+
+	result, err := factory.NewDatabase("postgres", dsn, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	defer result.Adapter.Close()
+
+	if result.Adapter == nil || result.MigrationRunner == nil || result.QueryBuilder == nil {
+		t.Error("database result should be fully populated")
 	}
 }
 
