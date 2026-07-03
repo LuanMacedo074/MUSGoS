@@ -47,7 +47,10 @@ func TestServer_Broadcast_ReachesAllConnections(t *testing.T) {
 	sender := &testutil.MockMessageSender{}
 	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, sender, nil, nil, ss, nil)
 
-	_, err := engine.Execute(&ports.ScriptMessage{Subject: "bcast", SenderID: "system.jobs", Content: lingo.NewLVoid()})
+	// Invoked by an arbitrary sender, but broadcasts must go out AS system.script
+	// (the client only renders "Broadcast" from system.script; the human name
+	// lives in the content, set by the calling Lua script).
+	_, err := engine.Execute(&ports.ScriptMessage{Subject: "bcast", SenderID: "some-player", Content: lingo.NewLVoid()})
 	if err != nil {
 		t.Fatalf("execute: %v", err)
 	}
@@ -61,8 +64,8 @@ func TestServer_Broadcast_ReachesAllConnections(t *testing.T) {
 		if c.Subject != "News" {
 			t.Errorf("expected subject News, got %q", c.Subject)
 		}
-		if c.SenderID != "system.jobs" {
-			t.Errorf("expected senderID system.jobs, got %q", c.SenderID)
+		if c.SenderID != "system.script" {
+			t.Errorf("expected broadcast senderID system.script, got %q", c.SenderID)
 		}
 		if s, ok := c.Content.(*lingo.LString); !ok || s.Value != "hello all" {
 			t.Errorf("expected content 'hello all', got %v", c.Content)
