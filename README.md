@@ -18,13 +18,22 @@ make run                # start the server
 ## Commands
 
 ```bash
-make test               # run all tests
-make test-v             # tests with verbose output
-make test-cover         # tests with a coverage report
-make test-run T=Name    # run a specific test by name
+make test               # unit + integration (starts Docker third-party services)
+make test-unit          # unit tests only (fast, no Docker)
+make test-integration   # integration tests only (starts Docker third-party services)
+make test-v             # unit tests with verbose output
+make test-cover         # unit tests with a coverage report
+make test-run T=Name    # run a specific unit test by name
+make thirdparties-up    # start the third-party services (Postgres/Redis/RabbitMQ)
+make thirdparties-down  # stop them
 make build              # build to bin/gameserver
 make run                # run the server
 ```
+
+Integration tests (build tag `integration`) run against **real** Postgres, Redis,
+and RabbitMQ brought up via Docker — see [`docker/thirdparties/`](docker/thirdparties/).
+If a default port is already in use locally, override it in
+`docker/thirdparties/custom_settings.env`. Unit tests need no Docker.
 
 ## Configuration
 

@@ -1,10 +1,28 @@
 TEST_PKGS = ./_tests/config/... ./_tests/domain/... ./_tests/factory/... ./_tests/adapters/...
 
-.PHONY: test test-v test-cover test-run build run migration queue script job
+.PHONY: test test-unit test-integration test-v test-cover test-run thirdparties-up thirdparties-down build run migration queue script job
 
+# Unit + integration. Brings up the third-party services (Postgres/Redis/RabbitMQ)
+# via Docker, then runs everything.
 test:
-	go test $(TEST_PKGS)
+	./scripts/run-tests.sh --all
 
+# Unit tests only — fast, no Docker required.
+test-unit:
+	./scripts/run-tests.sh --unit
+
+# Integration tests only — brings up the third-party services via Docker.
+test-integration:
+	./scripts/run-tests.sh --integration
+
+# Start / stop the third-party services without running any tests.
+thirdparties-up:
+	./docker/thirdparties/run-thirdparties-docker.sh
+
+thirdparties-down:
+	./docker/thirdparties/run-thirdparties-docker.sh --stop
+
+# The -v / -cover / -run helpers target the unit suite for quick iteration.
 test-v:
 	go test $(TEST_PKGS) -v
 

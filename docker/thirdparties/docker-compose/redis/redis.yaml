@@ -1,0 +1,13 @@
+# Redis service for the integration test suite.
+services:
+  musgo-redis:
+    image: redis:7-alpine
+    container_name: ${MUS_CONTAINER_PREFIX:-musgo}-redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "${MUS_REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

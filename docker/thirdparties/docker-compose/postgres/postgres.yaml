@@ -1,0 +1,20 @@
+# Postgres service for the integration test suite.
+# Ports/credentials are driven by ../../custom_settings.env (via --env-file).
+services:
+  musgo-postgres:
+    image: postgres:16-alpine
+    container_name: ${MUS_CONTAINER_PREFIX:-musgo}-postgres
+    environment:
+      POSTGRES_USER: ${MUS_PG_USER:-postgres}
+      POSTGRES_PASSWORD: ${MUS_PG_PASSWORD:-my_secret_pw}
+      POSTGRES_DB: ${MUS_PG_DB:-musgo_regression}
+    ports:
+      - "${MUS_PG_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MUS_PG_USER:-postgres} -d ${MUS_PG_DB:-musgo_regression}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    tmpfs:
+      # ephemeral storage — each `up` starts from a clean database
+      - /var/lib/postgresql/data

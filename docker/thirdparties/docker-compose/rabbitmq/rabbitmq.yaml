@@ -1,0 +1,16 @@
+# RabbitMQ service (with management UI) for the integration test suite.
+services:
+  musgo-rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: ${MUS_CONTAINER_PREFIX:-musgo}-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${MUS_RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${MUS_RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "${MUS_RABBITMQ_PORT:-5672}:5672"
+      - "${MUS_RABBITMQ_MGMT_PORT:-15672}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
