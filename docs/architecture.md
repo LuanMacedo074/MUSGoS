@@ -1,143 +1,143 @@
-# Arquitetura Hexagonal — MUSGoS
+# Hexagonal Architecture — MUSGoS
 
-## O que é Arquitetura Hexagonal?
+## What is Hexagonal Architecture?
 
-A ideia central é simples: **o domínio (a lógica do seu sistema) não depende de nada externo**. Ele não sabe se a conexão vem por TCP, HTTP ou um teste unitário. Ele não sabe se a criptografia é Blowfish, AES ou um mock. Ele só conhece **contratos** (interfaces).
+The core idea is simple: **the domain (your system's logic) does not depend on anything external**. It doesn't know whether the connection comes over TCP, HTTP, or a unit test. It doesn't know whether the cryptography is Blowfish, AES, or a mock. It only knows **contracts** (interfaces).
 
-Isso é feito separando o código em três camadas:
+This is achieved by separating the code into three layers:
 
 ```
                     ┌─────────────────────────────┐
-  mundo externo     │       ADAPTERS (inbound)     │  ← recebe dados do mundo externo
-  (clients TCP) ──► │   tcp_server, smus_handler   │
+  outside world     │       ADAPTERS (inbound)     │  ← receives data from the outside world
+  (TCP clients) ──► │   tcp_server, smus_handler   │
                     └──────────────┬───────────────┘
-                                   │ implementa / usa
+                                   │ implements / uses
                     ┌──────────────▼───────────────┐
-                    │           DOMAIN              │  ← núcleo do sistema
+                    │           DOMAIN              │  ← the core of the system
                     │   types (lingo, smus)         │
                     │   ports (interfaces)          │
                     └──────────────┬───────────────┘
-                                   │ define contratos
+                                   │ defines contracts
                     ┌──────────────▼───────────────┐
-  mundo externo     │      ADAPTERS (outbound)      │  ← fornece capacidades ao domínio
-  (cripto, logs) ◄──│     blowfish, file_logger     │
+  outside world     │      ADAPTERS (outbound)      │  ← provides capabilities to the domain
+  (crypto, logs) ◄──│     blowfish, file_logger     │
                     └─────────────────────────────┘
 ```
 
 ---
 
-## Estrutura de pastas
+## Folder structure
 
 ```
 internal/
-├── config/                           ← carrega variáveis de ambiente
-│   └── config.go                     ← struct ServerConfig + LoadServerConfig()
+├── config/                           ← loads environment variables
+│   └── config.go                     ← ServerConfig struct + LoadServerConfig()
 │
-├── factory/                          ← resolve qual implementação concreta usar
-│   ├── cipher.go                     ← NewCipher() — escolhe o cipher pelo tipo
-│   ├── database.go                   ← NewDatabase() — cria DB + migration runner
-│   ├── handler.go                    ← NewHandler() — escolhe o handler pelo protocolo
-│   ├── logger.go                     ← NewLogger() — escolhe o logger pelo tipo
-│   ├── queue.go                      ← NewMessageQueue() — memory, Redis ou RabbitMQ
-│   ├── script_engine.go              ← NewScriptEngine() — cria o engine Lua
-│   └── session_store.go              ← NewSessionStore() — memory ou Redis
+├── factory/                          ← resolves which concrete implementation to use
+│   ├── cipher.go                     ← NewCipher() — picks the cipher by type
+│   ├── database.go                   ← NewDatabase() — creates DB + migration runner
+│   ├── handler.go                    ← NewHandler() — picks the handler by protocol
+│   ├── logger.go                     ← NewLogger() — picks the logger by type
+│   ├── queue.go                      ← NewMessageQueue() — memory, Redis or RabbitMQ
+│   ├── script_engine.go              ← NewScriptEngine() — creates the Lua engine
+│   └── session_store.go              ← NewSessionStore() — memory or Redis
 │
-├── domain/                           ← núcleo, não depende de nada externo
+├── domain/                           ← the core, depends on nothing external
 │   ├── types/
-│   │   ├── lingo/                    ← tipos do Lingo (LValue, LString, LInteger, etc.)
-│   │   │   ├── codec.go             ← JSON marshal/unmarshal de LValues
-│   │   │   └── lua_convert.go       ← conversão bidirecional LValue ↔ Lua
-│   │   └── smus/                     ← tipos do protocolo SMUS (MUSMessage, headers)
-│   │       └── mus_error_code.go     ← ~54 constantes de erro do protocolo MUS
-│   ├── ports/                        ← interfaces (contratos)
-│   │   ├── cipher.go                 ← interface Cipher
-│   │   ├── connection_writer.go      ← interface ConnectionWriter (write + remap + disconnect)
-│   │   ├── database.go               ← interface DBAdapter (users, bans, atributos)
-│   │   ├── query_builder.go          ← interfaces QueryBuilder + Query (fluent table ops)
-│   │   ├── handler.go                ← interface MessageHandler
-│   │   ├── logger.go                 ← interface Logger + LogLevel
-│   │   ├── message_sender.go         ← interface MessageSender (envio de mensagens)
-│   │   ├── migration.go              ← interfaces Migration + MigrationTracker
-│   │   ├── schema.go                 ← DSL para definição de tabelas/índices
-│   │   ├── queue.go                  ← interfaces QueuePublisher, QueueConsumer, MessageQueue
-│   │   ├── script_engine.go          ← interface ScriptEngine
-│   │   └── session_store.go          ← interface SessionStore
+│   │   ├── lingo/                    ← Lingo types (LValue, LString, LInteger, etc.)
+│   │   │   ├── codec.go             ← JSON marshal/unmarshal of LValues
+│   │   │   └── lua_convert.go       ← bidirectional conversion LValue ↔ Lua
+│   │   └── smus/                     ← SMUS protocol types (MUSMessage, headers)
+│   │       └── mus_error_code.go     ← ~54 MUS protocol error constants
+│   ├── ports/                        ← interfaces (contracts)
+│   │   ├── cipher.go                 ← Cipher interface
+│   │   ├── connection_writer.go      ← ConnectionWriter interface (write + remap + disconnect)
+│   │   ├── database.go               ← DBAdapter interface (users, bans, attributes)
+│   │   ├── query_builder.go          ← QueryBuilder + Query interfaces (fluent table ops)
+│   │   ├── handler.go                ← MessageHandler interface
+│   │   ├── logger.go                 ← Logger interface + LogLevel
+│   │   ├── message_sender.go         ← MessageSender interface (message sending)
+│   │   ├── migration.go              ← Migration + MigrationTracker interfaces
+│   │   ├── schema.go                 ← DSL for table/index definitions
+│   │   ├── queue.go                  ← QueuePublisher, QueueConsumer, MessageQueue interfaces
+│   │   ├── script_engine.go          ← ScriptEngine interface
+│   │   └── session_store.go          ← SessionStore interface
 │   └── services/
-│       └── migration_runner.go       ← executa migrations pendentes em ordem
+│       └── migration_runner.go       ← runs pending migrations in order
 │
-└── adapters/                         ← implementações concretas
-    ├── inbound/                      ← adaptadores de ENTRADA
-    │   ├── mus/                      ← lógica específica do protocolo MUS
+└── adapters/                         ← concrete implementations
+    ├── inbound/                      ← INBOUND adapters
+    │   ├── mus/                      ← MUS-protocol-specific logic
     │   │   ├── system_service.go     ← SystemService (handler map, logon, permission checks, DB command helper)
     │   │   ├── system_service_server.go  ← handlers: getVersion, getTime, getUserCount, getMovieCount, getMovies
     │   │   ├── system_service_movie.go   ← handlers: movie.getUserCount, movie.getGroups, movie.getGroupCount
     │   │   ├── system_service_group.go   ← handlers: group.join/leave/getUsers/getUserCount/set/get/deleteAttribute
-    │   │   ├── system_service_user.go    ← handlers: user.getAddress, user.getGroups, user.delete (com cleanup)
+    │   │   ├── system_service_user.go    ← handlers: user.getAddress, user.getGroups, user.delete (with cleanup)
     │   │   ├── system_service_db_player.go      ← handlers: DBPlayer.get/set/delete/getAttributeNames
     │   │   ├── system_service_db_application.go ← handlers: DBApplication.get/set/delete/getAttributeNames
     │   │   ├── system_service_db_admin.go       ← handlers: DBAdmin.create/deleteUser, create/deleteApp, ban/revokeBan
-    │   │   ├── dispatcher.go         ← roteamento central por primeiro recipient
-    │   │   ├── sender.go             ← envio direto (user-to-user) e broadcast (group)
-    │   │   ├── movie.go              ← MovieManager — gerencia movies e groups
-    │   │   ├── group.go              ← Group — membership e broadcast dentro de movies
-    │   │   └── response.go           ← helpers para construção de respostas SMUS
-    │   ├── tcp_server.go             ← servidor TCP, delega conexões para ConnPool
-    │   ├── conn_pool.go              ← pool de conexões com per-conn write mutex
-    │   ├── smus_handler.go           ← parseia mensagens SMUS, delega roteamento para Dispatcher
-    │   └── console.go                ← CLI interativo (create user, etc.)
-    └── outbound/                     ← adaptadores de SAÍDA
-        ├── blowfish.go               ← implementação da criptografia Blowfish
-        ├── file_logger.go            ← implementação do logger em arquivo
-        ├── lua_script_engine.go      ← execução de scripts Lua (gopher-lua)
-        ├── lua_db_module.go          ← módulo mus.db para Lua (query builder + DB ops + bcrypt)
-        ├── lua_server_module.go      ← módulo mus.server para Lua
-        ├── sqlite_query_builder.go   ← query builder fluente para SQLite
-        ├── memory_queue.go           ← message queue in-memory (dev)
+    │   │   ├── dispatcher.go         ← central routing by first recipient
+    │   │   ├── sender.go             ← direct send (user-to-user) and broadcast (group)
+    │   │   ├── movie.go              ← MovieManager — manages movies and groups
+    │   │   ├── group.go              ← Group — membership and broadcast within movies
+    │   │   └── response.go           ← helpers for building SMUS responses
+    │   ├── tcp_server.go             ← TCP server, delegates connections to ConnPool
+    │   ├── conn_pool.go              ← connection pool with per-conn write mutex
+    │   ├── smus_handler.go           ← parses SMUS messages, delegates routing to Dispatcher
+    │   └── console.go                ← interactive CLI (create user, etc.)
+    └── outbound/                     ← OUTBOUND adapters
+        ├── blowfish.go               ← Blowfish cryptography implementation
+        ├── file_logger.go            ← file logger implementation
+        ├── lua_script_engine.go      ← Lua script execution (gopher-lua)
+        ├── lua_db_module.go          ← mus.db module for Lua (query builder + DB ops + bcrypt)
+        ├── lua_server_module.go      ← mus.server module for Lua
+        ├── sqlite_query_builder.go   ← fluent query builder for SQLite
+        ├── memory_queue.go           ← in-memory message queue (dev)
         ├── redis_queue.go            ← message queue via Redis pub/sub
         ├── rabbitmq_queue.go         ← message queue via RabbitMQ (AMQP)
-        ├── queue_errors.go           ← erros compartilhados dos adapters de queue
-        ├── memory_session_store.go   ← session store in-memory (dev)
-        ├── redis_session_store.go    ← session store via Redis (produção)
-        └── sqlite_db.go             ← SQLite: users, bans, atributos, schema DSL
+        ├── queue_errors.go           ← shared errors for the queue adapters
+        ├── memory_session_store.go   ← in-memory session store (dev)
+        ├── redis_session_store.go    ← session store via Redis (production)
+        └── sqlite_db.go             ← SQLite: users, bans, attributes, schema DSL
 
 external/
-├── migrations/                       ← migrations SQL versionadas
+├── migrations/                       ← versioned SQL migrations
 │   └── 00000000000000_initial_schema.go
-├── queues/                           ← registro de consumers de queue
-│   └── registry.go                   ← lista de topic→handler para bootstrap
-└── scripts/                          ← scripts Lua server-side
-    └── echo.lua                      ← script exemplo
+├── queues/                           ← registry of queue consumers
+│   └── registry.go                   ← topic→handler list for bootstrap
+└── scripts/                          ← server-side Lua scripts
+    └── echo.lua                      ← example script
 ```
 
 ---
 
-## O que é cada coisa
+## What each thing is
 
 ### Config
 
-O pacote `config/` centraliza a leitura de variáveis de ambiente numa struct `ServerConfig`. Ele usa `os.LookupEnv` com fallbacks padrão para cada variável. O `main.go` chama `config.LoadServerConfig()` uma vez e passa os valores para as factories. Os defaults são baseados no `Multiuser.cfg` original do Shockwave Multiuser Server 3.0 (ex: `DEFAULT_USER_LEVEL=20`, `MAX_MESSAGE_SIZE=2097151`, `TCP_NO_DELAY=1`).
+The `config/` package centralizes reading environment variables into a `ServerConfig` struct. It uses `os.LookupEnv` with default fallbacks for each variable. `main.go` calls `config.LoadServerConfig()` once and passes the values to the factories. The defaults are based on the original `Multiuser.cfg` from Shockwave Multiuser Server 3.0 (e.g. `DEFAULT_USER_LEVEL=20`, `MAX_MESSAGE_SIZE=2097151`, `TCP_NO_DELAY=1`).
 
 ### Factory
 
-O pacote `factory/` contém funções construtoras (`NewCipher`, `NewHandler`, `NewLogger`, `NewDatabase`, `NewSessionStore`, `NewScriptEngine`, `NewMessageQueue`) que recebem um tipo (string vinda do config) e retornam a interface correspondente do domínio. Isso isola o `main.go` de conhecer as implementações concretas diretamente — ele só precisa saber o tipo desejado.
+The `factory/` package contains constructor functions (`NewCipher`, `NewHandler`, `NewLogger`, `NewDatabase`, `NewSessionStore`, `NewScriptEngine`, `NewMessageQueue`) that receive a type (a string coming from the config) and return the corresponding domain interface. This isolates `main.go` from knowing the concrete implementations directly — it only needs to know the desired type.
 
-### Domain (Domínio)
+### Domain
 
-É o **coração** do sistema. Aqui ficam as regras e estruturas que definem o que o MUSGoS **é**. No nosso caso:
+This is the **heart** of the system. Here live the rules and structures that define what MUSGoS **is**. In our case:
 
-- **`types/lingo/`** — os tipos de dados da linguagem Lingo (strings, inteiros, listas, prop-lists, etc.). Esses tipos existem independente de como o dado chegou ou para onde vai.
+- **`types/lingo/`** — the Lingo language data types (strings, integers, lists, prop-lists, etc.). These types exist independently of how the data arrived or where it's going.
 
-- **`types/smus/`** — a estrutura de uma mensagem MUS (`MUSMessage`). Sabe fazer o parsing dos bytes brutos em campos (subject, sender, recipients, conteúdo). Quando precisa descriptografar, ele **não sabe o que é Blowfish** — ele só pede um `ports.Cipher` e chama `.Decrypt()`.
+- **`types/smus/`** — the structure of a MUS message (`MUSMessage`). It knows how to parse the raw bytes into fields (subject, sender, recipients, content). When it needs to decrypt, it **doesn't know what Blowfish is** — it just asks for a `ports.Cipher` and calls `.Decrypt()`.
 
-- **`ports/`** — as **interfaces** que o domínio expõe. São os "contratos" que dizem: *"eu preciso de alguém que faça X, não me importa como"*.
+- **`ports/`** — the **interfaces** that the domain exposes. These are the "contracts" that say: *"I need someone who does X, I don't care how"*.
 
-### Ports (Portas)
+### Ports
 
-Porta é só um nome bonito para **interface**. São os pontos de conexão entre o domínio e o mundo externo.
+Port is just a fancy name for **interface**. They are the connection points between the domain and the outside world.
 
-Temos onze:
+We have eleven:
 
-#### `SessionStore` (porta outbound)
+#### `SessionStore` (outbound port)
 ```go
 type SessionStore interface {
     RegisterConnection(clientID, ip string) error
@@ -157,9 +157,9 @@ type SessionStore interface {
     Close() error
 }
 ```
-Centraliza o gerenciamento de conexões ativas, atributos efêmeros de sessão (por clientID) e membership de rooms/groups. Duas implementações: `MemorySessionStore` (in-memory, padrão para desenvolvimento) e `RedisSessionStore` (para produção, permite múltiplas instâncias compartilharem estado). Quando um cliente desconecta (`UnregisterConnection`), todos os dados associados (conexão, atributos, rooms) são limpos automaticamente.
+Centralizes management of active connections, ephemeral session attributes (per clientID), and room/group membership. Two implementations: `MemorySessionStore` (in-memory, the default for development) and `RedisSessionStore` (for production, allowing multiple instances to share state). When a client disconnects (`UnregisterConnection`), all associated data (connection, attributes, rooms) is cleaned up automatically.
 
-#### `ConnectionWriter` (porta outbound)
+#### `ConnectionWriter` (outbound port)
 ```go
 type ConnectionWriter interface {
     WriteToClient(clientID string, data []byte) error
@@ -167,34 +167,34 @@ type ConnectionWriter interface {
     DisconnectClient(clientID string) error
 }
 ```
-Abstração para escrita em conexões de rede. `WriteToClient` envia bytes para um cliente pelo seu ID. `RemapClientID` permite trocar o ID de uma conexão (usado durante o Logon, quando o IP é substituído pelo userID). `DisconnectClient` fecha a conexão TCP (usado por `system.user.delete`). Implementada pelo `ConnPool`.
+Abstraction for writing to network connections. `WriteToClient` sends bytes to a client by its ID. `RemapClientID` allows swapping a connection's ID (used during Logon, when the IP is replaced by the userID). `DisconnectClient` closes the TCP connection (used by `system.user.delete`). Implemented by `ConnPool`.
 
-#### `MessageSender` (porta outbound)
+#### `MessageSender` (outbound port)
 ```go
 type MessageSender interface {
     SendMessage(senderID, recipientID, subject string, content lingo.LValue) error
 }
 ```
-Contrato para envio de mensagens MUS. Roteia automaticamente: se o recipientID começa com `@`, faz broadcast para o group; caso contrário, envia diretamente ao usuário. Implementada pelo `Sender`. Usada pelo `LuaScriptEngine` para `mus.sendMessage()`.
+Contract for sending MUS messages. It routes automatically: if the recipientID begins with `@`, it broadcasts to the group; otherwise, it sends directly to the user. Implemented by `Sender`. Used by `LuaScriptEngine` for `mus.sendMessage()`.
 
-#### `Cipher` (porta outbound)
+#### `Cipher` (outbound port)
 ```go
 type Cipher interface {
     Encrypt(data []byte) []byte
     Decrypt(data []byte) []byte
 }
 ```
-O domínio (`mus_message.go`) precisa descriptografar conteúdo. Em vez de importar o Blowfish diretamente, ele recebe qualquer coisa que implemente `Cipher`. Hoje é Blowfish, amanhã poderia ser AES, ou um mock no teste.
+The domain (`mus_message.go`) needs to decrypt content. Instead of importing Blowfish directly, it receives anything that implements `Cipher`. Today it's Blowfish, tomorrow it could be AES, or a mock in a test.
 
-#### `MessageHandler` (porta inbound)
+#### `MessageHandler` (inbound port)
 ```go
 type MessageHandler interface {
     HandleRawMessage(clientID string, data []byte) ([]byte, error)
 }
 ```
-O TCP server precisa de alguém que processe os bytes que chegam pela rede. Em vez de conhecer o `SMUSHandler` diretamente, ele recebe qualquer coisa que implemente `MessageHandler`. Hoje é SMUS, mas poderia ser outro protocolo.
+The TCP server needs someone to process the bytes arriving over the network. Instead of knowing `SMUSHandler` directly, it receives anything that implements `MessageHandler`. Today it's SMUS, but it could be another protocol.
 
-#### `Logger` (porta outbound)
+#### `Logger` (outbound port)
 ```go
 type Logger interface {
     Debug(msg string, fields ...map[string]interface{})
@@ -204,9 +204,9 @@ type Logger interface {
     Fatal(msg string, fields ...map[string]interface{})
 }
 ```
-Qualquer componente que precisa logar recebe um `ports.Logger`. Hoje é `FileLogger` (escreve em arquivo), mas poderia ser um logger para stdout, para um serviço externo, ou um mock nos testes.
+Any component that needs to log receives a `ports.Logger`. Today it's `FileLogger` (writes to a file), but it could be a logger to stdout, to an external service, or a mock in tests.
 
-#### `DBAdapter` (porta outbound)
+#### `DBAdapter` (outbound port)
 ```go
 type DBAdapter interface {
     CreateUser(username, passwordHash string, userLevel int) error
@@ -218,9 +218,9 @@ type DBAdapter interface {
     Close() error
 }
 ```
-Interface completa de persistência. Gerencia usuários (criação, autenticação com bcrypt), bans (por user/IP, temporários ou permanentes), atributos de aplicação e de jogador (armazenados como LValue via JSON), e operações de schema para migrations. Implementada via SQLite (`sqlite_db.go`).
+Complete persistence interface. It manages users (creation, authentication with bcrypt), bans (by user/IP, temporary or permanent), application and player attributes (stored as LValue via JSON), and schema operations for migrations. Implemented via SQLite (`sqlite_db.go`).
 
-#### `QueryBuilder` + `Query` (porta outbound)
+#### `QueryBuilder` + `Query` (outbound port)
 ```go
 type QueryBuilder interface {
     Table(name string) Query
@@ -235,9 +235,9 @@ type Query interface {
     Count() (int64, error)
 }
 ```
-Interface fluente para operações genéricas em tabelas. Exposta aos scripts Lua via `mus.db.table("name")`, permitindo queries arbitrárias em tabelas customizadas sem precisar de métodos específicos no `DBAdapter`. Implementada pelo `SQLiteQueryBuilder` com validação de identificadores via whitelist regex.
+Fluent interface for generic operations on tables. Exposed to Lua scripts via `mus.db.table("name")`, allowing arbitrary queries on custom tables without needing specific methods on `DBAdapter`. Implemented by `SQLiteQueryBuilder` with identifier validation via a whitelist regex.
 
-#### `Migration` + `MigrationTracker` (portas outbound)
+#### `Migration` + `MigrationTracker` (outbound ports)
 ```go
 type Migration interface {
     ID() string
@@ -249,9 +249,9 @@ type MigrationTracker interface {
     MarkAsRun(migrationID string) error
 }
 ```
-Contratos para o sistema de migrations. Cada migration tem um ID ordenável (timestamp) e um método `Up`. O `MigrationTracker` (implementado pelo próprio `DBAdapter`) registra quais já foram executadas. O `MigrationRunner` (service) orquestra a execução em ordem.
+Contracts for the migration system. Each migration has an orderable ID (timestamp) and an `Up` method. The `MigrationTracker` (implemented by `DBAdapter` itself) records which ones have already been executed. The `MigrationRunner` (service) orchestrates execution in order.
 
-#### `MessageQueue` (porta outbound)
+#### `MessageQueue` (outbound port)
 ```go
 type QueuePublisher interface {
     Publish(topic string, payload []byte) error
@@ -269,168 +269,168 @@ type MessageQueue interface {
     QueueConsumer
 }
 ```
-Sistema de mensageria pub/sub genérico com três implementações: `MemoryQueue` (in-memory, para dev/testes), `RedisQueue` (via Redis pub/sub) e `RabbitMQQueue` (via AMQP). O `ScriptEngine` recebe apenas `QueuePublisher` para publicar mensagens via `mus.publish()` em scripts Lua. Consumers são registrados no bootstrap via `external/queues/registry.go`.
+Generic pub/sub messaging system with three implementations: `MemoryQueue` (in-memory, for dev/tests), `RedisQueue` (via Redis pub/sub), and `RabbitMQQueue` (via AMQP). The `ScriptEngine` receives only a `QueuePublisher` to publish messages via `mus.publish()` in Lua scripts. Consumers are registered at bootstrap via `external/queues/registry.go`.
 
-#### `ScriptEngine` (porta outbound)
+#### `ScriptEngine` (outbound port)
 ```go
 type ScriptEngine interface {
     HasScript(subject string) bool
     Execute(msg *ScriptMessage) (*ScriptResult, error)
 }
 ```
-Execução de scripts server-side. Quando uma mensagem chega, o handler verifica se existe um script para aquele subject e o executa. A interface é agnóstica ao protocolo — recebe um `ScriptMessage` genérico (Subject, SenderID, Content). Implementada via gopher-lua com VM sandboxed (sem acesso a `os`, `io`, `debug`).
+Server-side script execution. When a message arrives, the handler checks whether a script exists for that subject and executes it. The interface is protocol-agnostic — it receives a generic `ScriptMessage` (Subject, SenderID, Content). Implemented via gopher-lua with a sandboxed VM (no access to `os`, `io`, `debug`).
 
-### Adapters (Adaptadores)
+### Adapters
 
-Adaptadores são as **implementações concretas** que conectam o domínio ao mundo real. Existem dois tipos:
+Adapters are the **concrete implementations** that connect the domain to the real world. There are two kinds:
 
-#### Inbound (Entrada) — "dados vindo para dentro do sistema"
+#### Inbound — "data coming into the system"
 
-São os adaptadores que **recebem** dados do mundo externo e os entregam ao domínio.
+These are the adapters that **receive** data from the outside world and deliver it to the domain.
 
-- **`tcp_server.go`** — abre uma porta TCP, aceita conexões, lê bytes da rede. Não gerencia conexões diretamente — delega para o `ConnPool`. Quando recebe dados, repassa para o `MessageHandler` (que ele conhece apenas pela interface). Após `HandleRawMessage`, re-busca o ID atual da conexão no pool (pode ter sido remapeado durante Logon). Configurável via `TCPServerConfig` (bind address, buffer size, TCP_NODELAY). Suporta graceful shutdown. Recebe o handler no constructor (sem `SetHandler`).
+- **`tcp_server.go`** — opens a TCP port, accepts connections, reads bytes from the network. It doesn't manage connections directly — it delegates to `ConnPool`. When it receives data, it passes it to the `MessageHandler` (which it knows only through the interface). After `HandleRawMessage`, it re-fetches the connection's current ID from the pool (it may have been remapped during Logon). Configurable via `TCPServerConfig` (bind address, buffer size, TCP_NODELAY). Supports graceful shutdown. Receives the handler in the constructor (no `SetHandler`).
 
-- **`conn_pool.go`** — pool de conexões TCP com mapeamento bidirecional clientID↔conn e per-conn write mutex para thread safety. Operações: `Register`, `Unregister`, `CurrentID`, `WriteToClient`, `RemapClientID`, `CloseAll`. Implementa `ports.ConnectionWriter`.
+- **`conn_pool.go`** — TCP connection pool with bidirectional clientID↔conn mapping and a per-conn write mutex for thread safety. Operations: `Register`, `Unregister`, `CurrentID`, `WriteToClient`, `RemapClientID`, `CloseAll`. Implements `ports.ConnectionWriter`.
 
-- **`smus_handler.go`** — recebe os bytes brutos do TCP server e usa o domínio (`smus.ParseMUSMessageWithDecryption`) para interpretar a mensagem. Delega toda a lógica de roteamento para o `Dispatcher`. É inbound porque está do lado de "receber e processar" a requisição.
+- **`smus_handler.go`** — receives the raw bytes from the TCP server and uses the domain (`smus.ParseMUSMessageWithDecryption`) to interpret the message. It delegates all routing logic to the `Dispatcher`. It's inbound because it's on the "receive and process" side of the request.
 
-- **`mus/`** — sub-pacote com lógica específica do protocolo MUS:
-  - **`system_service.go`** — `SystemService` com handler map (`map[string]handlerFunc`) para roteamento de comandos por subject. Inclui logon com 3 modos (`none`/`open`/`strict`), sistema de permissões deny-by-default (`checkCommandLevel` via `commandLevels` map), helper genérico `handleDBCommand` para commands DB (parse proplist + extract fields + execute + error mapping), e cache `#movieID` na sessão para lookup O(1). `dbErrorCode` mapeia erros de domínio (`ErrUserNotFound`, `ErrBanNotFound`) para códigos do protocolo MUS usando `errors.Is`.
-  - **`system_service_*.go`** — handlers organizados por domínio: `_server` (version, time, counts), `_movie` (users/groups do movie), `_group` (join/leave/attributes), `_user` (address, groups, delete com cleanup de sessão), `_db_player`/`_db_application`/`_db_admin` (operações DB via `handleDBCommand`).
-  - **`dispatcher.go`** — roteamento central por primeiro recipient: `System` → SystemService, `system.script` → ScriptEngine, `@Group` → Sender broadcast, `userName` → Sender direto.
-  - **`sender.go`** — envio de mensagens. `SendMessage()` roteia: groups (`@`) via `deliverToGroup()` (serializa uma vez, entrega a todos os membros), user-to-user via `ConnectionWriter.WriteToClient()`. Implementa `ports.MessageSender`.
-  - **`response.go`** — helpers para construção de respostas SMUS (`NewResponse`), usados pelo handler e services.
+- **`mus/`** — sub-package with MUS-protocol-specific logic:
+  - **`system_service.go`** — `SystemService` with a handler map (`map[string]handlerFunc`) for routing commands by subject. It includes logon with 3 modes (`none`/`open`/`strict`), a deny-by-default permission system (`checkCommandLevel` via `commandLevels` map), a generic helper `handleDBCommand` for DB commands (parse proplist + extract fields + execute + error mapping), and a `#movieID` cache in the session for O(1) lookup. `dbErrorCode` maps domain errors (`ErrUserNotFound`, `ErrBanNotFound`) to MUS protocol codes using `errors.Is`.
+  - **`system_service_*.go`** — handlers organized by domain: `_server` (version, time, counts), `_movie` (movie users/groups), `_group` (join/leave/attributes), `_user` (address, groups, delete with session cleanup), `_db_player`/`_db_application`/`_db_admin` (DB operations via `handleDBCommand`).
+  - **`dispatcher.go`** — central routing by first recipient: `System` → SystemService, `system.script` → ScriptEngine, `@Group` → Sender broadcast, `userName` → Sender direct.
+  - **`sender.go`** — message sending. `SendMessage()` routes: groups (`@`) via `deliverToGroup()` (serializes once, delivers to all members), user-to-user via `ConnectionWriter.WriteToClient()`. Implements `ports.MessageSender`.
+  - **`response.go`** — helpers for building SMUS responses (`NewResponse`), used by the handler and services.
 
-- **`console.go`** — CLI interativo para administração do servidor. Suporta comandos como `create user <username> <password>`. Usa bcrypt para hash de senhas. Acessa o `DBAdapter` diretamente.
+- **`console.go`** — interactive CLI for server administration. Supports commands like `create user <username> <password>`. Uses bcrypt for password hashing. Accesses `DBAdapter` directly.
 
-#### Outbound (Saída) — "o sistema acessando recursos externos"
+#### Outbound — "the system accessing external resources"
 
-São os adaptadores que o domínio **usa** para fazer coisas que ele não sabe (ou não quer saber) como fazer.
+These are the adapters that the domain **uses** to do things it doesn't know (or doesn't want to know) how to do.
 
-- **`blowfish.go`** — a implementação concreta da criptografia Blowfish. Implementa a interface `ports.Cipher`. É outbound porque é um **recurso** que o domínio consome.
+- **`blowfish.go`** — the concrete Blowfish cryptography implementation. Implements the `ports.Cipher` interface. It's outbound because it's a **resource** the domain consumes.
 
-- **`file_logger.go`** — a implementação concreta do logger em arquivo. Implementa a interface `ports.Logger`. Escreve logs formatados em arquivo e no stdout. É outbound porque logging é um **recurso de infraestrutura** que o sistema consome.
+- **`file_logger.go`** — the concrete file logger implementation. Implements the `ports.Logger` interface. Writes formatted logs to a file and to stdout. It's outbound because logging is an **infrastructure resource** the system consumes.
 
-- **`sqlite_db.go`** — implementação completa do `ports.DBAdapter` via SQLite. Gerencia users (com bcrypt), bans (por user/IP, com expiração), atributos de aplicação e de jogador (LValues serializados como JSON), e operações de schema (CREATE TABLE, CREATE INDEX) para o sistema de migrations. Também implementa `MigrationTracker`.
+- **`sqlite_db.go`** — complete implementation of `ports.DBAdapter` via SQLite. Manages users (with bcrypt), bans (by user/IP, with expiration), application and player attributes (LValues serialized as JSON), and schema operations (CREATE TABLE, CREATE INDEX) for the migration system. It also implements `MigrationTracker`.
 
-- **`memory_session_store.go`** — session store in-memory com `sync.RWMutex`. Implementa `ports.SessionStore`. Ideal para desenvolvimento local — sem dependências externas, mas sem persistência entre restarts.
+- **`memory_session_store.go`** — in-memory session store with `sync.RWMutex`. Implements `ports.SessionStore`. Ideal for local development — no external dependencies, but no persistence across restarts.
 
-- **`redis_session_store.go`** — session store via Redis. Implementa `ports.SessionStore`. Gerencia conexões, atributos efêmeros e rooms usando estruturas Redis (HASH, SET) com key prefixing e TTL. Para produção e cenários multi-instância.
+- **`redis_session_store.go`** — session store via Redis. Implements `ports.SessionStore`. Manages connections, ephemeral attributes, and rooms using Redis structures (HASH, SET) with key prefixing and TTL. For production and multi-instance scenarios.
 
-- **`lua_script_engine.go`** — implementação do `ports.ScriptEngine` via gopher-lua. Cria uma VM Lua fresca por execução, com libs inseguras removidas (`os`, `io`, `debug`). Registra o módulo `mus` com `getSender()`, `getContent()`, `response()`, `publish()` e `sendMessage()`. Scripts ficam em `external/scripts/` com mapping 1:1 por subject. Timeout de execução configurável via `SCRIPT_TIMEOUT`.
+- **`lua_script_engine.go`** — implementation of `ports.ScriptEngine` via gopher-lua. Creates a fresh Lua VM per execution, with unsafe libs removed (`os`, `io`, `debug`). Registers the `mus` module with `getSender()`, `getContent()`, `response()`, `publish()`, and `sendMessage()`. Scripts live in `external/scripts/` with a 1:1 mapping by subject. Execution timeout configurable via `SCRIPT_TIMEOUT`.
 
-- **`lua_db_module.go`** — módulo `mus.db` para scripts Lua. Expõe operações DBPlayer, DBApplication e DBAdmin (com bcrypt no `createUser`), além do query builder fluente (`mus.db.table("name"):where(...):get()`).
+- **`lua_db_module.go`** — `mus.db` module for Lua scripts. Exposes DBPlayer, DBApplication, and DBAdmin operations (with bcrypt in `createUser`), plus the fluent query builder (`mus.db.table("name"):where(...):get()`).
 
-- **`lua_server_module.go`** — módulo `mus.server` para scripts Lua com informações do servidor.
+- **`lua_server_module.go`** — `mus.server` module for Lua scripts with server information.
 
-- **`sqlite_query_builder.go`** — implementação do `ports.QueryBuilder` com queries parametrizadas e validação de identificadores via whitelist regex.
+- **`sqlite_query_builder.go`** — implementation of `ports.QueryBuilder` with parameterized queries and identifier validation via a whitelist regex.
 
-- **`memory_queue.go`** — message queue in-memory com `sync.RWMutex`. Implementa `ports.MessageQueue`. Ideal para desenvolvimento e testes — sem dependências externas.
+- **`memory_queue.go`** — in-memory message queue with `sync.RWMutex`. Implements `ports.MessageQueue`. Ideal for development and tests — no external dependencies.
 
-- **`redis_queue.go`** — message queue via Redis pub/sub. Implementa `ports.MessageQueue`. Usa Redis `PUBLISH`/`SUBSCRIBE` para distribuir mensagens entre instâncias.
+- **`redis_queue.go`** — message queue via Redis pub/sub. Implements `ports.MessageQueue`. Uses Redis `PUBLISH`/`SUBSCRIBE` to distribute messages across instances.
 
-- **`rabbitmq_queue.go`** — message queue via RabbitMQ (AMQP 0-9-1). Implementa `ports.MessageQueue`. Usa topic exchanges para roteamento flexível de mensagens. Cada subscription cria um canal dedicado com queue anônima e auto-delete.
+- **`rabbitmq_queue.go`** — message queue via RabbitMQ (AMQP 0-9-1). Implements `ports.MessageQueue`. Uses topic exchanges for flexible message routing. Each subscription creates a dedicated channel with an anonymous, auto-delete queue.
 
 ---
 
-## Como tudo se conecta
+## How it all connects
 
-A "cola" acontece no `main.go` com ajuda do `config` e das `factories`. O config carrega as variáveis de ambiente, e as factories criam as instâncias concretas:
+The "glue" happens in `main.go` with help from `config` and the `factories`. The config loads the environment variables, and the factories create the concrete instances:
 
 ```go
 cfg := config.LoadServerConfig()
 
-// factory cria o logger (outbound) baseado no tipo configurado
+// factory creates the logger (outbound) based on the configured type
 gameLogger, _ := factory.NewLogger(cfg.LoggerType, cfg.ApplicationName, ...)
 
-// factory cria o database (outbound) + migration runner
+// factory creates the database (outbound) + migration runner
 dbResult, _ := factory.NewDatabase(cfg.DatabaseType, cfg.DatabasePath, migrations.All)
 dbResult.MigrationRunner.RunPending()
 
-// factory cria o cipher (outbound) baseado no tipo configurado
+// factory creates the cipher (outbound) based on the configured type
 cipher, _ := factory.NewCipher(cfg.CipherType, cfg.EncryptionKey)
 
-// factory cria o session store (outbound) baseado no tipo configurado
+// factory creates the session store (outbound) based on the configured type
 sessionStore, _ := factory.NewSessionStore(cfg.SessionStoreType, cfg.Redis)
 
-// factory cria a message queue (outbound) baseada no tipo configurado
+// factory creates the message queue (outbound) based on the configured type
 queue, _ := factory.NewMessageQueue(cfg.QueueType, cfg.QueueRedis, cfg.RabbitMQ)
 
-// 1. ConnPool — standalone, sem dependências
+// 1. ConnPool — standalone, no dependencies
 pool := inbound.NewConnPool()
 
-// 2. Sender — usa pool como ConnectionWriter
+// 2. Sender — uses pool as ConnectionWriter
 sender := mus.NewSender(pool, sessionStore, gameLogger)
 
-// 3. ScriptEngine — pode enviar mensagens via Sender
+// 3. ScriptEngine — can send messages via Sender
 scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout, queue, sender)
 
-// 4. Handler — Dispatcher recebe ScriptEngine + Sender + pool
+// 4. Handler — Dispatcher receives ScriptEngine + Sender + pool
 handler, _ := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine,
     dbResult.Adapter, sessionStore, queue, pool, sender, cfg.AuthMode, cfg.DefaultUserLevel)
 
-// 5. TCPServer — totalmente construído, sem SetHandler
+// 5. TCPServer — fully constructed, no SetHandler
 server := inbound.NewTCPServer(inbound.TCPServerConfig{
     Port: cfg.Port, ServerIP: cfg.ServerIP,
     MaxMessageSize: cfg.MaxMessageSize, TCPNoDelay: cfg.TCPNoDelay,
 }, handler, pool, gameLogger, sessionStore)
 
-// console interativo para administração (usa DefaultUserLevel ao criar users)
+// interactive console for administration (uses DefaultUserLevel when creating users)
 console := inbound.NewConsole(dbResult.Adapter, gameLogger, os.Stdin, cfg.DefaultUserLevel)
 ```
 
-Perceba que:
-- O `main.go` não importa `outbound` diretamente — as factories fazem isso.
-- Cada factory retorna a **interface** do domínio (`ports.Logger`, `ports.Cipher`, `ports.MessageHandler`, `ports.ScriptEngine`), nunca o tipo concreto.
-- Os componentes se conhecem apenas pelos contratos, nunca pelos tipos concretos.
+Notice that:
+- `main.go` does not import `outbound` directly — the factories do that.
+- Each factory returns the domain **interface** (`ports.Logger`, `ports.Cipher`, `ports.MessageHandler`, `ports.ScriptEngine`), never the concrete type.
+- Components know each other only through the contracts, never through the concrete types.
 
-Isso é **inversão de dependência**: quem depende são os adaptadores (do domínio), nunca o contrário.
-
----
-
-## Regra de dependência
-
-A regra de ouro é que as setas de `import` **sempre apontam para dentro**:
-
-```
-adapters/inbound   ──importa──►  domain/ports
-adapters/inbound   ──importa──►  domain/types
-adapters/outbound  ──importa──►  domain/ports
-domain/types/smus  ──importa──►  domain/ports
-domain/types/smus  ──importa──►  domain/types/lingo
-config/            ──importa──►  (nada do domain, só stdlib)
-factory/           ──importa──►  adapters + domain/ports (resolve implementações)
-cmd/main.go        ──importa──►  config + factory + adapters/inbound (é a cola)
-```
-
-O domínio **nunca** importa adapters, config ou factory. Adapters importam o domínio. As factories importam adapters e ports para montar as peças. O `main.go` importa config, factory, adapter inbound (TCP server, console) e as migrations externas.
+This is **dependency inversion**: the adapters are the ones that depend (on the domain), never the other way around.
 
 ---
 
-## Resumo rápido
+## The dependency rule
 
-| Conceito | O que é | No MUSGoS |
+The golden rule is that `import` arrows **always point inward**:
+
+```
+adapters/inbound   ──imports──►  domain/ports
+adapters/inbound   ──imports──►  domain/types
+adapters/outbound  ──imports──►  domain/ports
+domain/types/smus  ──imports──►  domain/ports
+domain/types/smus  ──imports──►  domain/types/lingo
+config/            ──imports──►  (nothing from domain, only stdlib)
+factory/           ──imports──►  adapters + domain/ports (resolves implementations)
+cmd/main.go        ──imports──►  config + factory + adapters/inbound (is the glue)
+```
+
+The domain **never** imports adapters, config, or factory. Adapters import the domain. The factories import adapters and ports to assemble the pieces. `main.go` imports config, factory, inbound adapters (TCP server, console), and the external migrations.
+
+---
+
+## Quick summary
+
+| Concept | What it is | In MUSGoS |
 |---|---|---|
-| **Domain** | Lógica e tipos centrais do sistema | `types/lingo/`, `types/smus/`, `services/` |
-| **Port** | Interface que define um contrato | `Cipher`, `ConnectionWriter`, `MessageHandler`, `MessageSender`, `Logger`, `DBAdapter`, `QueryBuilder`, `SessionStore`, `ScriptEngine`, `MessageQueue`, `Migration` |
-| **Adapter Inbound** | Recebe dados do mundo externo | `TCPServer`, `ConnPool`, `SMUSHandler`, `Dispatcher`, `Sender`, `SystemService`, `Console`, `MovieManager`, `Group` |
-| **Adapter Outbound** | Provê capacidades ao domínio | `Blowfish`, `FileLogger`, `SQLiteDB`, `MemorySessionStore`, `RedisSessionStore`, `LuaScriptEngine`, `MemoryQueue`, `RedisQueue`, `RabbitMQQueue` |
-| **Config** | Carrega variáveis de ambiente | `ServerConfig`, `LoadServerConfig()` |
-| **Factory** | Cria implementações concretas pelo tipo | `NewCipher()`, `NewHandler()`, `NewLogger()`, `NewDatabase()`, `NewSessionStore()`, `NewScriptEngine()`, `NewMessageQueue()` |
-| **main.go** | Cola tudo usando config + factories | Injeção de dependência manual |
+| **Domain** | The system's core logic and types | `types/lingo/`, `types/smus/`, `services/` |
+| **Port** | Interface that defines a contract | `Cipher`, `ConnectionWriter`, `MessageHandler`, `MessageSender`, `Logger`, `DBAdapter`, `QueryBuilder`, `SessionStore`, `ScriptEngine`, `MessageQueue`, `Migration` |
+| **Inbound Adapter** | Receives data from the outside world | `TCPServer`, `ConnPool`, `SMUSHandler`, `Dispatcher`, `Sender`, `SystemService`, `Console`, `MovieManager`, `Group` |
+| **Outbound Adapter** | Provides capabilities to the domain | `Blowfish`, `FileLogger`, `SQLiteDB`, `MemorySessionStore`, `RedisSessionStore`, `LuaScriptEngine`, `MemoryQueue`, `RedisQueue`, `RabbitMQQueue` |
+| **Config** | Loads environment variables | `ServerConfig`, `LoadServerConfig()` |
+| **Factory** | Creates concrete implementations by type | `NewCipher()`, `NewHandler()`, `NewLogger()`, `NewDatabase()`, `NewSessionStore()`, `NewScriptEngine()`, `NewMessageQueue()` |
+| **main.go** | Glues everything together using config + factories | Manual dependency injection |
 
 ---
 
-## Camada de Services
+## Services Layer
 
-Em arquiteturas hexagonais tradicionais existe uma camada de "Application Service" com use cases como `LoginUseCase`, `SendMessageUseCase`, etc.
+In traditional hexagonal architectures there is an "Application Service" layer with use cases like `LoginUseCase`, `SendMessageUseCase`, etc.
 
-Servidores MUS são **script-driven**: o cliente Shockwave/Director envia scripts Lingo, e o servidor reage. Porém, existem mensagens padrão do protocolo MUS (como `Logon`, `Logoff`, `joinGroup`, `leaveGroup`) que envolvem lógica de negócio real — autenticação, gerenciamento de salas, persistência de estado.
+MUS servers are **script-driven**: the Shockwave/Director client sends Lingo scripts, and the server reacts. However, there are standard MUS protocol messages (such as `Logon`, `Logoff`, `joinGroup`, `leaveGroup`) that involve real business logic — authentication, room management, state persistence.
 
-Atualmente a camada `domain/services/` contém:
+Currently the `domain/services/` layer contains:
 
-- **`MigrationRunner`** — orquestra a execução de migrations pendentes em ordem.
+- **`MigrationRunner`** — orchestrates the execution of pending migrations in order.
 
-Lógica específica do protocolo MUS (como `LogonService` e helpers de resposta) vive em `adapters/inbound/mus/`, pois depende diretamente dos tipos SMUS e não é lógica de domínio pura.
+MUS-protocol-specific logic (such as `LogonService` and response helpers) lives in `adapters/inbound/mus/`, since it depends directly on the SMUS types and is not pure domain logic.
 
-Lógica específica do protocolo MUS (`Dispatcher`, `Sender`, `SystemService`, `MovieManager`, `GroupManager`) vive em `adapters/inbound/mus/`, pois depende diretamente dos tipos SMUS. Futuros services de domínio agnósticos ao protocolo serão adicionados em `domain/services/`.
+MUS-protocol-specific logic (`Dispatcher`, `Sender`, `SystemService`, `MovieManager`, `GroupManager`) lives in `adapters/inbound/mus/`, since it depends directly on the SMUS types. Future protocol-agnostic domain services will be added under `domain/services/`.
