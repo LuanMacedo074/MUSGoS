@@ -86,6 +86,20 @@ func (s *UDPServer) Start(ready chan struct{}) error {
 }
 
 func (s *UDPServer) handlePacket(data []byte, addr *net.UDPAddr) {
+	// handlePacket runs inline on the read loop, so an unrecovered parse panic
+	// would take down the whole UDP server (and process). Contain it here.
+	defer func() {
+		if r := recover(); r != nil {
+			s.logger.Error("Recovered from panic in UDP packet handler", map[string]interface{}{
+				"client": addr.String(),
+				"panic":  fmt.Sprintf("%v", r),
+			})
+			if s.metrics != nil {
+				s.metrics.IncrementErrors()
+			}
+		}
+	}()
+
 	clientIP := addr.IP.String()
 
 	if s.banChecker != nil && s.banChecker.IsIPBanned(clientIP) {

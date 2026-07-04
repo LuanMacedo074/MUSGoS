@@ -1,6 +1,6 @@
 TEST_PKGS = ./_tests/config/... ./_tests/domain/... ./_tests/factory/... ./_tests/adapters/...
 
-.PHONY: test test-unit test-integration test-v test-cover test-run thirdparties-up thirdparties-down build run migration queue script job
+.PHONY: test test-unit test-integration test-race test-v test-cover test-run thirdparties-up thirdparties-down build run migration queue script job
 
 # Unit + integration. Brings up the third-party services (Postgres/Redis/RabbitMQ)
 # via Docker, then runs everything.
@@ -21,6 +21,12 @@ thirdparties-up:
 
 thirdparties-down:
 	./docker/thirdparties/run-thirdparties-docker.sh --stop
+
+# Race detector over the unit suite plus the in-package (white-box) tests. No
+# Docker. This is the lane that guards the concurrency-sensitive wire parser and
+# connection paths — run it in CI so data races and parser panics are caught.
+test-race:
+	go test -race $(TEST_PKGS) ./internal/...
 
 # The -v / -cover / -run helpers target the unit suite for quick iteration.
 test-v:

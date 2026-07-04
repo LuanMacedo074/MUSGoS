@@ -81,18 +81,29 @@ func (v *LPropList) ExtractFromBytes(rawBytes []byte, offset int) int {
 		}
 
 		propValue := FromRawBytes(rawBytes, offset+chunkSize)
+		if propValue == nil {
+			break
+		}
 		propSize := propValue.ExtractFromBytes(rawBytes, offset+chunkSize+2)
-		v.Properties = append(v.Properties, propValue)
-		chunkSize += 2 + propSize
+		nextChunk := chunkSize + 2 + propSize
 
-		if offset+chunkSize+2 > len(rawBytes) {
+		// Only commit the property once its paired value is also parsed, so
+		// len(Properties) always equals len(Values). A truncated proplist that
+		// carries a property with no value drops the dangling property instead of
+		// leaving the slices mismatched (which panics GetBytes()/String()).
+		if offset+nextChunk+2 > len(rawBytes) {
 			break
 		}
 
-		elemValue := FromRawBytes(rawBytes, offset+chunkSize)
-		elemSize := elemValue.ExtractFromBytes(rawBytes, offset+chunkSize+2)
+		elemValue := FromRawBytes(rawBytes, offset+nextChunk)
+		if elemValue == nil {
+			break
+		}
+		elemSize := elemValue.ExtractFromBytes(rawBytes, offset+nextChunk+2)
+
+		v.Properties = append(v.Properties, propValue)
 		v.Values = append(v.Values, elemValue)
-		chunkSize += 2 + elemSize
+		chunkSize = nextChunk + 2 + elemSize
 	}
 
 	return chunkSize

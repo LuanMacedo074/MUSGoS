@@ -22,20 +22,31 @@ func (v *LList) ExtractFromBytes(rawBytes []byte, offset int) int {
     }
     
     count := int(binary.BigEndian.Uint32(rawBytes[offset:]))
-    v.Values = make([]LValue, count)
-    
+    if count < 0 {
+        return 0
+    }
+    // Each element carries at least a 2-byte type header, so a count larger than
+    // the remaining bytes allow is malformed. Bounding it before allocating stops
+    // a wire-controlled huge allocation, and append (not indexed make) keeps the
+    // slice consistent if parsing bails mid-list.
+    const minElemSize = 2
+    if count > (len(rawBytes)-offset-4)/minElemSize {
+        return 0
+    }
+    v.Values = make([]LValue, 0, count)
+
     currentOffset := offset + 4
-    
+
     for i := 0; i < count; i++ {
         elem := FromRawBytes(rawBytes, currentOffset)
         if elem == nil {
             return 0
         }
-        v.Values[i] = elem
         consumed := elem.ExtractFromBytes(rawBytes, currentOffset+2)
+        v.Values = append(v.Values, elem)
         currentOffset += 2 + consumed
     }
-    
+
     return currentOffset - offset
 }
 
