@@ -209,9 +209,14 @@ func (s *SystemService) handleLogon(connectionID string, msg *smus.MUSMessage) (
 		}
 	}
 
-	// Re-register session with userID instead of the initial connectionID
+	// Re-register the session under userID, preserving the client's real IP from the
+	// initial registration instead of storing the connection id in the IP field (L5).
+	ip := connectionID
+	if existing, _ := s.sessionStore.GetConnection(connectionID); existing != nil && existing.IP != "" {
+		ip = existing.IP
+	}
 	s.sessionStore.UnregisterConnection(connectionID)
-	s.sessionStore.RegisterConnection(userID, connectionID)
+	s.sessionStore.RegisterConnection(userID, ip)
 
 	// Store user level in session for permission checks
 	s.sessionStore.SetUserAttribute(userID, "#userLevel", lingo.NewLInteger(int32(userLevel)))

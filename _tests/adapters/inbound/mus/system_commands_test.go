@@ -342,10 +342,10 @@ func TestSystemCommand_UserGetAddress(t *testing.T) {
 		t.Fatalf("ErrCode = %d, want %d", resp.ErrCode, smus.ErrNoError)
 	}
 	ip := lingo.StringValue(resp.MsgContent)
-	// After logon, RegisterConnection(userID, connectionID) is called,
-	// so the IP in the mock becomes the original connection ID "conn-1".
-	if ip != "conn-1" {
-		t.Errorf("IP = %q, want %q", ip, "conn-1")
+	// Logon preserves the client's real IP from the initial registration (L5), so
+	// getAddress returns it rather than the connection id.
+	if ip != "192.168.1.10" {
+		t.Errorf("IP = %q, want %q", ip, "192.168.1.10")
 	}
 }
 

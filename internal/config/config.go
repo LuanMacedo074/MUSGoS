@@ -95,11 +95,12 @@ var defaultCommandLevels = map[string]int{
 	"DBPlayer.setAttribute":      20,
 	"DBPlayer.deleteAttribute":   20,
 	"DBPlayer.getAttributeNames": 20,
-	// DBApplication
-	"DBApplication.getAttribute":      20,
-	"DBApplication.setAttribute":      20,
-	"DBApplication.deleteAttribute":   20,
-	"DBApplication.getAttributeNames": 20,
+	// DBApplication — app-level config, admin-only (was level 20, any client could
+	// read/modify application attributes over the wire; backlog L25).
+	"DBApplication.getAttribute":      80,
+	"DBApplication.setAttribute":      80,
+	"DBApplication.deleteAttribute":   80,
+	"DBApplication.getAttributeNames": 80,
 	// DBAdmin
 	"DBAdmin.createApplication": 80,
 	"DBAdmin.deleteApplication": 80,
