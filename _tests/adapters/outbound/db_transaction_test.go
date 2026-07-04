@@ -86,7 +86,7 @@ func newTxEngine(t *testing.T, dir string) (*outbound.SQLiteDB, ports.ScriptEngi
 	t.Helper()
 	db := newTestDB(t)
 	createTxTestTable(t, db)
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, db, db.QueryBuilder(), nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, db, db.QueryBuilder(), nil, nil, nil)
 	return db, engine
 }
 

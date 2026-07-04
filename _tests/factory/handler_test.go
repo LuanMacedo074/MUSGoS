@@ -13,7 +13,7 @@ func TestNewHandler_SMUS(t *testing.T) {
 	cipher := &testutil.MockCipher{}
 	sessionStore := testutil.NewMockSessionStore()
 	connWriter := &testutil.MockConnectionWriter{}
-	sender := mus.NewSender(connWriter, sessionStore, logger, nil, false)
+	sender := mus.NewSender(connWriter, sessionStore, logger, nil, false, "faria")
 
 	handler, err := factory.NewHandler("smus", logger, cipher, nil, nil, sessionStore, nil, connWriter, sender, "open", 40, false, nil, nil, nil)
 	if err != nil {

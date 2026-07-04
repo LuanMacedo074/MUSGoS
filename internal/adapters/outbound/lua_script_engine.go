@@ -25,9 +25,10 @@ type LuaScriptEngine struct {
 	queryBuilder  ports.QueryBuilder
 	sessionStore  ports.SessionStore
 	cache         ports.Cache
+	emailSender   ports.EmailSender
 }
 
-func NewLuaScriptEngine(scriptsDir string, logger ports.Logger, scriptTimeoutSeconds int, publisher ports.QueuePublisher, sender ports.MessageSender, db ports.DBAdapter, queryBuilder ports.QueryBuilder, sessionStore ports.SessionStore, cache ports.Cache) *LuaScriptEngine {
+func NewLuaScriptEngine(scriptsDir string, logger ports.Logger, scriptTimeoutSeconds int, publisher ports.QueuePublisher, sender ports.MessageSender, db ports.DBAdapter, queryBuilder ports.QueryBuilder, sessionStore ports.SessionStore, cache ports.Cache, emailSender ports.EmailSender) *LuaScriptEngine {
 	return &LuaScriptEngine{
 		scriptsDir:    scriptsDir,
 		logger:        logger,
@@ -38,6 +39,7 @@ func NewLuaScriptEngine(scriptsDir string, logger ports.Logger, scriptTimeoutSec
 		queryBuilder:  queryBuilder,
 		sessionStore:  sessionStore,
 		cache:         cache,
+		emailSender:   emailSender,
 	}
 }
 
@@ -60,17 +62,35 @@ func (e *LuaScriptEngine) resolveScriptPath(subject string) (string, bool) {
 	return path, true
 }
 
-func (e *LuaScriptEngine) HasScript(subject string) bool {
-	path, ok := e.resolveScriptPath(subject)
-	if !ok {
-		return false
+// resolveScript resolves a subject to an existing script file, supporting
+// prefix subjects: when no exact script exists, dash-suffixed variants fall
+// back to the longest on-disk prefix (subject "painting/saveLayer1-42" runs
+// painting/saveLayer1.lua). The script reads the full original subject via
+// mus.getSubject(). Exact matches always win; the same containment policy
+// applies at every step.
+func (e *LuaScriptEngine) resolveScript(subject string) (string, bool) {
+	candidate := subject
+	for {
+		if path, ok := e.resolveScriptPath(candidate); ok {
+			if _, err := os.Stat(path); err == nil {
+				return path, true
+			}
+		}
+		i := strings.LastIndex(candidate, "-")
+		if i <= 0 {
+			return "", false
+		}
+		candidate = candidate[:i]
 	}
-	_, err := os.Stat(path)
-	return err == nil
+}
+
+func (e *LuaScriptEngine) HasScript(subject string) bool {
+	_, ok := e.resolveScript(subject)
+	return ok
 }
 
 func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult, error) {
-	path, ok := e.resolveScriptPath(msg.Subject)
+	path, ok := e.resolveScript(msg.Subject)
 	if !ok {
 		return nil, fmt.Errorf("invalid script subject: %q", msg.Subject)
 	}
@@ -121,6 +141,13 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 		return 1
 	}))
 
+	// The full original subject — prefix-routed scripts (SavePainting<L>-<id>
+	// style) read their dash-suffix payload from here.
+	musMod.RawSetString("getSubject", L.NewFunction(func(L *lua.LState) int {
+		L.Push(lua.LString(msg.Subject))
+		return 1
+	}))
+
 	musMod.RawSetString("response", L.NewFunction(func(L *lua.LState) int {
 		arg := L.Get(1)
 		content := lingo.LuaToLValue(arg)
@@ -154,7 +181,10 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 		content := L.Get(3)
 		lingoContent := lingo.LuaToLValue(content)
 		if e.sender != nil {
-			if err := e.sender.SendMessage(msg.SenderID, recipientID, subject, lingoContent); err != nil {
+			// Script-authored messages go on the wire from system.script (the
+			// legacy client only renders several subjects when they come from
+			// the server); the invoking player still anchors group routing.
+			if err := e.sender.SendMessageFrom(systemScriptSender, msg.SenderID, recipientID, subject, lingoContent); err != nil {
 				e.logger.Error("mus.sendMessage failed", map[string]interface{}{
 					"recipientID": recipientID,
 					"subject":     subject,
@@ -173,6 +203,12 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 	// Register mus.server module
 	if e.sessionStore != nil {
 		registerServerModule(L, musMod, e.sessionStore, e.sender, e.logger)
+	}
+
+	// Register mus.email — only when SMTP is configured, so scripts can gate
+	// email-dependent flows on `mus.email ~= nil`.
+	if e.emailSender != nil {
+		registerEmailModule(L, musMod, e.emailSender, e.logger)
 	}
 
 	// Register mus.cache module

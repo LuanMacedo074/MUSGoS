@@ -18,7 +18,7 @@ if mus.server.isOnline(mus.getContent()) then mus.response(1) else mus.response(
 	ss := testutil.NewMockSessionStore()
 	ss.RegisterConnection("alice", "10.0.0.1")
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, ss, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, ss, nil, nil)
 
 	check := func(name string, want int32) {
 		t.Helper()
@@ -45,7 +45,7 @@ func TestServer_Broadcast_ReachesAllConnections(t *testing.T) {
 	ss.RegisterConnection("carol", "10.0.0.3")
 
 	sender := &testutil.MockMessageSender{}
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, sender, nil, nil, ss, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, sender, nil, nil, ss, nil, nil)
 
 	// Invoked by an arbitrary sender, but broadcasts must go out AS system.script
 	// (the client only renders "Broadcast" from system.script; the human name
@@ -86,7 +86,7 @@ func TestServer_Broadcast_NoOpWithoutSender(t *testing.T) {
 	ss.RegisterConnection("alice", "10.0.0.1")
 
 	// sender is nil — broadcast must be a safe no-op (no panic).
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, ss, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, ss, nil, nil)
 	if _, err := engine.Execute(&ports.ScriptMessage{Subject: "bcast", SenderID: "sys", Content: lingo.NewLVoid()}); err != nil {
 		t.Fatalf("execute: %v", err)
 	}

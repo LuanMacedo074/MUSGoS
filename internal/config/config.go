@@ -64,6 +64,12 @@ type ServerConfig struct {
 	MetricsPort       string
 	MetricsBindAddr   string
 	JobsEnabled       bool
+	DefaultMovieID    string
+	SMTPHost          string
+	SMTPPort          string
+	SMTPUser          string
+	SMTPPass          string
+	SMTPFrom          string
 }
 
 var defaultCommandLevels = map[string]int{
@@ -187,6 +193,16 @@ func LoadServerConfig() ServerConfig {
 	cfg.MetricsPort = getEnv("METRICS_PORT", "")
 	cfg.MetricsBindAddr = getEnv("METRICS_BIND_ADDR", "127.0.0.1")
 	cfg.JobsEnabled = getEnv("JOBS_ENABLED", "1") == "1"
+	// Movie used to resolve @group sends from senders that aren't in any movie
+	// (system.script broadcasts, scheduler jobs). The FSOS client always
+	// connects with movieID "faria".
+	cfg.DefaultMovieID = getEnv("DEFAULT_MOVIE_ID", "faria")
+	// SMTP for outbound mail (password recovery). Empty host = email disabled.
+	cfg.SMTPHost = getEnv("SMTP_HOST", "")
+	cfg.SMTPPort = getEnv("SMTP_PORT", "587")
+	cfg.SMTPUser = getEnv("SMTP_USER", "")
+	cfg.SMTPPass = getEnv("SMTP_PASS", "")
+	cfg.SMTPFrom = getEnv("SMTP_FROM", "")
 	cfg.CommandLevels = loadCommandLevels()
 
 	return cfg

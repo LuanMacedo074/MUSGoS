@@ -68,14 +68,49 @@ func LValueToLua(L *lua.LState, val LValue) lua.LValue {
 		}
 		return tbl
 	case *LPicture:
-		return lua.LString(string(v.Data))
+		return binaryToLua(L, lingoTagPicture, v.Data)
 	case *LMedia:
-		return lua.LString(string(v.Data))
+		return binaryToLua(L, lingoTagMedia, v.Data)
 	case *LVoid:
 		return lua.LNil
 	default:
 		return lua.LNil
 	}
+}
+
+// Binary lingo values (media/picture) cross into Lua as a tagged table so a
+// script can pass them through (store, echo, re-send) without losing the wire
+// type — a plain Lua string would come back as LString and break the client's
+// readvalue. The bytes live in `data` as a Lua string (Lua strings are 8-bit
+// clean).
+const (
+	lingoTagKey     = "__lingo"
+	lingoTagMedia   = "media"
+	lingoTagPicture = "picture"
+)
+
+func binaryToLua(L *lua.LState, tag string, data []byte) lua.LValue {
+	tbl := L.NewTable()
+	tbl.RawSetString(lingoTagKey, lua.LString(tag))
+	tbl.RawSetString("data", lua.LString(string(data)))
+	return tbl
+}
+
+// binaryFromLuaTable recognizes the tagged-table form and rebuilds the binary
+// LValue; returns nil when the table isn't tagged.
+func binaryFromLuaTable(tbl *lua.LTable) LValue {
+	tag, ok := tbl.RawGetString(lingoTagKey).(lua.LString)
+	if !ok {
+		return nil
+	}
+	data, _ := tbl.RawGetString("data").(lua.LString)
+	switch string(tag) {
+	case lingoTagMedia:
+		return NewLMedia([]byte(string(data)))
+	case lingoTagPicture:
+		return NewLPicture([]byte(string(data)))
+	}
+	return nil
 }
 
 // LuaToLValue converts a gopher-lua value to a lingo LValue.
@@ -107,6 +142,11 @@ func LuaToLValue(lv lua.LValue) LValue {
 // If the table has sequential integer keys 1..N, it becomes an LList.
 // Otherwise, it becomes an LPropList with LSymbol keys.
 func luaTableToLValue(tbl *lua.LTable) LValue {
+	// Tagged binary tables round-trip back to their lingo type first.
+	if bin := binaryFromLuaTable(tbl); bin != nil {
+		return bin
+	}
+
 	maxN := tbl.MaxN()
 
 	if maxN > 0 && isSequentialArray(tbl, maxN) {

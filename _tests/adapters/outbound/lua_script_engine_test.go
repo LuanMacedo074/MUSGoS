@@ -32,7 +32,7 @@ func TestHasScript_Exists(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "echo", "return 1")
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 	if !engine.HasScript("echo") {
 		t.Error("expected HasScript to return true")
 	}
@@ -41,7 +41,7 @@ func TestHasScript_Exists(t *testing.T) {
 func TestHasScript_NotExists(t *testing.T) {
 	dir := setupScriptsDir(t)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 	if engine.HasScript("nonexistent") {
 		t.Error("expected HasScript to return false")
 	}
@@ -55,7 +55,7 @@ local content = mus.getContent()
 mus.response(content)
 `)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 
 	msg := &ports.ScriptMessage{
 		Subject:  "test",
@@ -81,7 +81,7 @@ func TestExecute_ResponseWithValue(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "ret", `mus.response(42)`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 
 	msg := &ports.ScriptMessage{
 		Subject:  "ret",
@@ -107,7 +107,7 @@ func TestExecute_NoResponse_ReturnsVoid(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "noop", `local x = 1 + 1`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 
 	msg := &ports.ScriptMessage{
 		Subject:  "noop",
@@ -129,7 +129,7 @@ func TestExecute_LuaError(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "bad", `error("something went wrong")`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 
 	msg := &ports.ScriptMessage{
 		Subject:  "bad",
@@ -146,7 +146,7 @@ func TestExecute_LuaError(t *testing.T) {
 func TestExecute_ScriptNotFound(t *testing.T) {
 	dir := setupScriptsDir(t)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 
 	msg := &ports.ScriptMessage{
 		Subject:  "missing",
@@ -165,7 +165,7 @@ func TestExecute_Publish(t *testing.T) {
 	writeScript(t, dir, "pub", `mus.publish("my.topic", "hello world")`)
 
 	mockQueue := testutil.NewMockMessageQueue()
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, mockQueue, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, mockQueue, nil, nil, nil, nil, nil, nil)
 
 	msg := &ports.ScriptMessage{
 		Subject:  "pub",
@@ -201,7 +201,7 @@ func TestExecute_SendMessage_EmptyRecipient(t *testing.T) {
 	writeScript(t, dir, "empty_recip", `mus.sendMessage("", "subj", "x")`)
 
 	mockSender := &testutil.MockMessageSender{}
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, mockSender, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, mockSender, nil, nil, nil, nil, nil)
 
 	msg := &ports.ScriptMessage{
 		Subject:  "empty_recip",
@@ -219,7 +219,7 @@ func TestExecute_SenderAccess(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "who", `mus.response(mus.getSender())`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 
 	msg := &ports.ScriptMessage{
 		Subject:  "who",
@@ -260,7 +260,7 @@ func TestExecute_DBSetGetPlayerAttribute(t *testing.T) {
 		},
 	}
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, db, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, db, nil, nil, nil, nil)
 
 	msg := &ports.ScriptMessage{
 		Subject:  "dbtest",
@@ -293,7 +293,7 @@ func TestExecute_ServerGetUserCount(t *testing.T) {
 	sessionStore.RegisterConnection("user1", "10.0.0.1")
 	sessionStore.RegisterConnection("user2", "10.0.0.2")
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, sessionStore, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, sessionStore, nil, nil)
 
 	msg := &ports.ScriptMessage{
 		Subject:  "srvtest",
@@ -319,7 +319,7 @@ func TestExecute_JsonEncodeArray(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "jsontest", `mus.response(mus.json.encode({1, 2, 3}))`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 	result, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -337,7 +337,7 @@ func TestExecute_JsonEncodeArrayStrings(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "jsontest", `mus.response(mus.json.encode({"a", "b"}))`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 	result, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -355,7 +355,7 @@ func TestExecute_JsonEncodeObject(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "jsontest", `mus.response(mus.json.encode({name = "foo", age = 10}))`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 	result, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -380,7 +380,7 @@ func TestExecute_JsonEncodeNested(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "jsontest", `mus.response(mus.json.encode({items = {1, 2}, name = "x"}))`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 	result, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -406,7 +406,7 @@ func TestExecute_JsonEncodeEmptyTable(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "jsontest", `mus.response(mus.json.encode({}))`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 	result, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -427,7 +427,7 @@ func TestExecute_JsonDecodeArray(t *testing.T) {
 		mus.response(#tbl)
 	`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 	result, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -448,7 +448,7 @@ func TestExecute_JsonDecodeObject(t *testing.T) {
 		mus.response(tbl.name)
 	`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 	result, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -475,7 +475,7 @@ func TestExecute_JsonRoundtrip(t *testing.T) {
 		mus.response("ok")
 	`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 	result, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -493,7 +493,7 @@ func TestExecute_JsonDecodeInvalidJSON(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "jsontest", `mus.json.decode("{invalid}")`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 	_, err := engine.Execute(&ports.ScriptMessage{Subject: "jsontest", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err == nil {
 		t.Error("expected error for invalid JSON")
@@ -530,7 +530,7 @@ func TestExecute_DBQueryBuilder(t *testing.T) {
 	})
 
 	qb := sqliteDB.QueryBuilder()
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, qb, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, qb, nil, nil, nil)
 
 	msg := &ports.ScriptMessage{
 		Subject:  "qbtest",
@@ -556,7 +556,7 @@ func TestExecute_UUID(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "uuidtest", `mus.response(mus.uuid())`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 	result, err := engine.Execute(&ports.ScriptMessage{Subject: "uuidtest", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -580,7 +580,7 @@ func TestExecute_UUID_Unique(t *testing.T) {
 		mus.response("ok")
 	`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 	result, err := engine.Execute(&ports.ScriptMessage{Subject: "uuidtest", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -606,7 +606,7 @@ func TestExecute_LogAllLevels(t *testing.T) {
 	`)
 
 	logger := &testutil.MockLogger{}
-	engine := outbound.NewLuaScriptEngine(dir, logger, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, logger, 5, nil, nil, nil, nil, nil, nil, nil)
 
 	result, err := engine.Execute(&ports.ScriptMessage{Subject: "logtest", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err != nil {
@@ -654,7 +654,7 @@ func TestExecute_LogWithFields(t *testing.T) {
 	`)
 
 	logger := &testutil.MockLogger{}
-	engine := outbound.NewLuaScriptEngine(dir, logger, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, logger, 5, nil, nil, nil, nil, nil, nil, nil)
 
 	_, err := engine.Execute(&ports.ScriptMessage{Subject: "logfields", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err != nil {
@@ -691,7 +691,7 @@ func TestExecute_LogWithoutFields(t *testing.T) {
 	`)
 
 	logger := &testutil.MockLogger{}
-	engine := outbound.NewLuaScriptEngine(dir, logger, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, logger, 5, nil, nil, nil, nil, nil, nil, nil)
 
 	_, err := engine.Execute(&ports.ScriptMessage{Subject: "lognf", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err != nil {

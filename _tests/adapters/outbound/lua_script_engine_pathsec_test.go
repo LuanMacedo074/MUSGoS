@@ -28,7 +28,7 @@ func TestPathSec_HasScriptRejectsTraversal(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "safe", `mus.response(1)`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 
 	if !engine.HasScript("safe") {
 		t.Fatal("expected HasScript(safe) to be true")
@@ -53,7 +53,7 @@ func TestPathSec_ExecuteRejectsTraversal(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "safe", `mus.response(1)`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 
 	for _, subj := range []string{"../secret", "../../etc/passwd", "/etc/passwd", ".."} {
 		_, err := engine.Execute(&ports.ScriptMessage{Subject: subj, SenderID: "u", Content: lingo.NewLVoid()})

@@ -56,7 +56,7 @@ func hdrString(s string) []byte {
 func newSMUSTestDispatcher(scriptEngine ports.ScriptEngine, connWriter ports.ConnectionWriter) *mus.Dispatcher {
 	logger := &testutil.MockLogger{}
 	sessionStore := testutil.NewMockSessionStore()
-	sender := mus.NewSender(connWriter, sessionStore, logger, nil, false)
+	sender := mus.NewSender(connWriter, sessionStore, logger, nil, false, "faria")
 	systemService := mus.NewSystemService(nil, sessionStore, nil, logger, nil, nil, connWriter, "none", 40, nil, nil, nil)
 	return mus.NewDispatcher(logger, scriptEngine, systemService, sender, nil)
 }

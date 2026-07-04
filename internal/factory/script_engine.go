@@ -15,9 +15,10 @@ func NewScriptEngine(
 	queryBuilder ports.QueryBuilder,
 	sessionStore ports.SessionStore,
 	cache ports.Cache,
+	emailSender ports.EmailSender,
 ) ports.ScriptEngine {
 	if scriptsPath == "" {
 		return nil
 	}
-	return outbound.NewLuaScriptEngine(scriptsPath, logger, scriptTimeoutSeconds, publisher, sender, db, queryBuilder, sessionStore, cache)
+	return outbound.NewLuaScriptEngine(scriptsPath, logger, scriptTimeoutSeconds, publisher, sender, db, queryBuilder, sessionStore, cache, emailSender)
 }

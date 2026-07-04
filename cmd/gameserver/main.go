@@ -13,6 +13,7 @@ import (
 	"fsos-server/external/queues"
 	"fsos-server/internal/adapters/inbound"
 	"fsos-server/internal/adapters/inbound/mus"
+	"fsos-server/internal/adapters/outbound"
 	"fsos-server/internal/config"
 	"fsos-server/internal/domain/ports"
 	"fsos-server/internal/factory"
@@ -128,10 +129,16 @@ func main() {
 	pool := inbound.NewConnPool()
 
 	// 3. Sender — uses pool as ConnectionWriter
-	sender := mus.NewSender(pool, sessionStore, gameLogger, cipher, cfg.AllEncrypted)
+	sender := mus.NewSender(pool, sessionStore, gameLogger, cipher, cfg.AllEncrypted, cfg.DefaultMovieID)
+
+	// 3b. Email — SMTP when configured (password recovery); nil disables mus.email
+	var emailSender ports.EmailSender
+	if cfg.SMTPHost != "" {
+		emailSender = outbound.NewSMTPEmailSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPFrom)
+	}
 
 	// 4. ScriptEngine — can send messages via Sender + access DB + server info + cache
-	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout, queue, sender, dbResult.Adapter, dbResult.QueryBuilder, sessionStore, cache)
+	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout, queue, sender, dbResult.Adapter, dbResult.QueryBuilder, sessionStore, cache, emailSender)
 	if cfg.ScriptsPath != "" {
 		scripts, _ := filepath.Glob(filepath.Join(cfg.ScriptsPath, "*.lua"))
 		gameLogger.Info("Script engine initialized", map[string]interface{}{
@@ -169,7 +176,7 @@ func main() {
 	defer timerManager.Stop()
 
 	// 7. Handler — Dispatcher receives ScriptEngine + Sender + pool
-	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine, dbResult.Adapter, sessionStore, queue, pool, sender, cfg.AuthMode, cfg.DefaultUserLevel, cfg.AllEncrypted, cfg.CommandLevels, nil, timerManager)
+	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine, dbResult.Adapter, sessionStore, queue, pool, sender, cfg.AuthMode, cfg.DefaultUserLevel, cfg.AllEncrypted, cfg.CommandLevels, emailSender, timerManager)
 	if err != nil {
 		gameLogger.Fatal("Failed to initialize protocol handler", map[string]interface{}{
 			"error": err,

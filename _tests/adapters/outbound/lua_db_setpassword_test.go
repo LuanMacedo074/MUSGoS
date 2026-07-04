@@ -19,7 +19,7 @@ mus.db.setPassword("hero", "newpass")
 `)
 
 	db := newTestDB(t)
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, db, db.QueryBuilder(), nil, nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, db, db.QueryBuilder(), nil, nil, nil)
 
 	if _, err := engine.Execute(&ports.ScriptMessage{Subject: "setpw", SenderID: "sys", Content: lingo.NewLVoid()}); err != nil {
 		t.Fatalf("execute: %v", err)

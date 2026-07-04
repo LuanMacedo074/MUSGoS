@@ -623,6 +623,10 @@ type SendMessageCall struct {
 	Content     lingo.LValue
 }
 
+func (m *MockMessageSender) SendMessageFrom(wireFrom, routingSender, recipientID, subject string, content lingo.LValue) error {
+	return m.SendMessage(wireFrom, recipientID, subject, content)
+}
+
 func (m *MockMessageSender) SendMessage(senderID, recipientID, subject string, content lingo.LValue) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

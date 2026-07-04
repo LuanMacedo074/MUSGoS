@@ -155,7 +155,7 @@ func TestScheduler_RunsRealLuaJobEndToEnd(t *testing.T) {
 	// Separate loggers: the engine's is written only by the job goroutine and
 	// read after Stop() (which joins it), so there's no cross-goroutine sharing.
 	engineLog := &testutil.MockLogger{}
-	engine := outbound.NewLuaScriptEngine(dir, engineLog, 5, nil, nil, nil, nil, testutil.NewMockSessionStore(), nil)
+	engine := outbound.NewLuaScriptEngine(dir, engineLog, 5, nil, nil, nil, nil, testutil.NewMockSessionStore(), nil, nil)
 
 	s := inbound.NewScheduler(engine, []inbound.ScheduledJob{
 		{Name: "heartbeat", Interval: 25 * time.Millisecond},
