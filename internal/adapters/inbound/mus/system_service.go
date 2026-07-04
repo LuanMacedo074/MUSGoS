@@ -58,28 +58,28 @@ func NewSystemService(
 	}
 
 	s.handlers = map[string]handlerFunc{
-		"Logon":                        s.handleLogon,
-		"system.server.getVersion":     s.handleServerGetVersion,
-		"system.server.getTime":        s.handleServerGetTime,
-		"system.server.getUserCount":   s.handleServerGetUserCount,
-		"system.server.getMovieCount":  s.handleServerGetMovieCount,
-		"system.server.getMovies":      s.handleServerGetMovies,
-		"system.movie.getUserCount":    s.handleMovieGetUserCount,
-		"system.movie.getGroups":       s.handleMovieGetGroups,
-		"system.movie.getGroupCount":   s.handleMovieGetGroupCount,
-		"system.group.join":            s.handleGroupJoin,
-		"JoinGroup":                    s.handleGroupJoin,
-		"system.group.leave":           s.handleGroupLeave,
-		"LeaveGroup":                   s.handleGroupLeave,
-		"system.group.getUsers":        s.handleGroupGetUsers,
-		"system.group.getUserCount":    s.handleGroupGetUserCount,
-		"system.group.setAttribute":    s.handleGroupSetAttribute,
-		"system.group.getAttribute":    s.handleGroupGetAttribute,
-		"system.group.deleteAttribute": s.handleGroupDeleteAttribute,
+		"Logon":                          s.handleLogon,
+		"system.server.getVersion":       s.handleServerGetVersion,
+		"system.server.getTime":          s.handleServerGetTime,
+		"system.server.getUserCount":     s.handleServerGetUserCount,
+		"system.server.getMovieCount":    s.handleServerGetMovieCount,
+		"system.server.getMovies":        s.handleServerGetMovies,
+		"system.movie.getUserCount":      s.handleMovieGetUserCount,
+		"system.movie.getGroups":         s.handleMovieGetGroups,
+		"system.movie.getGroupCount":     s.handleMovieGetGroupCount,
+		"system.group.join":              s.handleGroupJoin,
+		"JoinGroup":                      s.handleGroupJoin,
+		"system.group.leave":             s.handleGroupLeave,
+		"LeaveGroup":                     s.handleGroupLeave,
+		"system.group.getUsers":          s.handleGroupGetUsers,
+		"system.group.getUserCount":      s.handleGroupGetUserCount,
+		"system.group.setAttribute":      s.handleGroupSetAttribute,
+		"system.group.getAttribute":      s.handleGroupGetAttribute,
+		"system.group.deleteAttribute":   s.handleGroupDeleteAttribute,
 		"system.group.getAttributeNames": s.handleGroupGetAttributeNames,
-		"system.user.getAddress":       s.handleUserGetAddress,
-		"system.user.getGroups":        s.handleUserGetGroups,
-		"system.user.delete":           s.handleUserDelete,
+		"system.user.getAddress":         s.handleUserGetAddress,
+		"system.user.getGroups":          s.handleUserGetGroups,
+		"system.user.delete":             s.handleUserDelete,
 		// DBPlayer
 		"DBPlayer.getAttribute":      s.handleDBPlayerGetAttribute,
 		"DBPlayer.setAttribute":      s.handleDBPlayerSetAttribute,
@@ -183,14 +183,35 @@ func (s *SystemService) handleLogon(connectionID string, msg *smus.MUSMessage) (
 		}
 	}
 
+	// Reject a Logon for a userID that already has a live session: otherwise a
+	// second client could remap the connection and hijack/evict the first. (H3)
+	if userID != connectionID {
+		if existing, _ := s.sessionStore.GetConnection(userID); existing != nil {
+			s.logger.Warn("Logon rejected: userID already connected", map[string]interface{}{
+				"client": connectionID,
+				"userID": userID,
+			})
+			return NewResponse("Logon", "System", []string{userID}, smus.ErrConnectionRefused, lingo.NewLVoid()), nil
+		}
+	}
+
+	// Remap the connection so future messages use userID. Do this before touching
+	// the session store: if the slot is already bound to another connection (race
+	// with a concurrent logon) RemapClientID returns false and we refuse rather
+	// than clobber it. (H3)
+	if s.connWriter != nil {
+		if !s.connWriter.RemapClientID(connectionID, userID) {
+			s.logger.Warn("Logon rejected: userID already bound to another connection", map[string]interface{}{
+				"client": connectionID,
+				"userID": userID,
+			})
+			return NewResponse("Logon", "System", []string{userID}, smus.ErrConnectionRefused, lingo.NewLVoid()), nil
+		}
+	}
+
 	// Re-register session with userID instead of the initial connectionID
 	s.sessionStore.UnregisterConnection(connectionID)
 	s.sessionStore.RegisterConnection(userID, connectionID)
-
-	// Remap the connection so future messages use userID
-	if s.connWriter != nil {
-		s.connWriter.RemapClientID(connectionID, userID)
-	}
 
 	// Store user level in session for permission checks
 	s.sessionStore.SetUserAttribute(userID, "#userLevel", lingo.NewLInteger(int32(userLevel)))
@@ -294,6 +315,27 @@ func (s *SystemService) checkCommandLevel(senderID, command string) bool {
 	return s.getUserLevel(senderID) >= requiredLevel
 }
 
+// errCrossUserDenied is returned by a DB action when the caller tries to touch
+// another user's data without an admin-level session; dbErrorCode maps it to a
+// command-refused response. (backlog H2)
+var errCrossUserDenied = errors.New("cross-user access denied")
+
+// adminLevel is the level required to act on data the caller does not own. It
+// tracks the configured DBAdmin level (default 80) so cross-user player-data
+// access needs the same privilege as user administration.
+func (s *SystemService) adminLevel() int {
+	if lvl, ok := s.commandLevels["DBAdmin.createUser"]; ok {
+		return lvl
+	}
+	return 80
+}
+
+// ownerOrAdmin reports whether senderID may operate on targetUserID's data: only
+// when it is their own data, or they hold an admin-level session. (H2)
+func (s *SystemService) ownerOrAdmin(senderID, targetUserID string) bool {
+	return targetUserID == senderID || s.getUserLevel(senderID) >= s.adminLevel()
+}
+
 // handleDBCommand is a generic helper for DB command handlers that follow the pattern:
 // check permissions → parse proplist → extract required fields → execute action → return response.
 func (s *SystemService) handleDBCommand(senderID string, msg *smus.MUSMessage,
@@ -327,6 +369,8 @@ func (s *SystemService) handleDBCommand(senderID string, msg *smus.MUSMessage,
 // dbErrorCode maps domain errors to MUS protocol error codes.
 func dbErrorCode(err error) int32 {
 	switch {
+	case errors.Is(err, errCrossUserDenied):
+		return smus.ErrInvalidServerCommand
 	case errors.Is(err, ports.ErrUserNotFound):
 		return smus.ErrDatabaseUserIDNotFound
 	case errors.Is(err, ports.ErrBanNotFound):

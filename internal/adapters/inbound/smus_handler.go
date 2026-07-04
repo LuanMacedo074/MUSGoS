@@ -63,15 +63,19 @@ func (h *SMUSHandler) HandleRawMessage(clientID string, data []byte) ([]byte, er
 		"parsed": msg.String(),
 	})
 
-	// For UDP connections, clientID is the remote address (not a session ID).
-	// Use the message's SenderID if populated — the user logged in via TCP
-	// and embedded their identity in the message.
-	// Keep clientID for Logon messages since the Logon handler needs the
-	// connection ID for session remap.
+	// The connection's own identity is authoritative. After a successful TCP
+	// Logon the pool remaps the connection so clientID == the authenticated
+	// userID. The wire SenderID is attacker-controlled and must NEVER select the
+	// dispatch identity — doing so let a client impersonate another user and
+	// inherit their command level (privilege escalation). We always dispatch under
+	// clientID and only log a claimed SenderID that disagrees. (backlog B4)
 	dispatchID := clientID
 	isLogon := msg.RecptID.Count > 0 && msg.RecptID.Strings[0].Value == "System" && msg.Subject.Value == "Logon"
-	if !isLogon && msg.SenderID.Value != "" {
-		dispatchID = msg.SenderID.Value
+	if !isLogon && msg.SenderID.Value != "" && msg.SenderID.Value != clientID {
+		h.logger.Warn("Ignoring wire SenderID that does not match the connection", map[string]interface{}{
+			"client":         clientID,
+			"claimed_sender": msg.SenderID.Value,
+		})
 	}
 
 	response, err := h.dispatcher.Dispatch(dispatchID, msg)

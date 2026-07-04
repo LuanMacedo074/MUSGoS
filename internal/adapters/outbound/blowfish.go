@@ -8,6 +8,7 @@ package outbound
 
 import (
 	"encoding/binary"
+	"sync"
 )
 
 type Boxes struct {
@@ -291,6 +292,12 @@ const (
 const BlowfishRounds = 16
 
 type Blowfish struct {
+	// mu serializes Encrypt/Decrypt so a single shared instance can be used from
+	// multiple connection goroutines. The crypto algorithm below is unchanged (a
+	// faithful OpenSMUS port); each Encrypt/Decrypt resets state via clearState,
+	// so serializing calls makes the shared instance race-free without altering
+	// any output byte.
+	mu            sync.Mutex
 	strKey        string
 	key           []byte
 	initBoxes     Boxes
@@ -421,6 +428,9 @@ func (b *Blowfish) clearState() {
 }
 
 func (b *Blowfish) Encrypt(inBuffer []byte) []byte {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	b.clearState()
 	b.lastOperation = kEncrypt
 
@@ -428,6 +438,9 @@ func (b *Blowfish) Encrypt(inBuffer []byte) []byte {
 }
 
 func (b *Blowfish) Decrypt(inBuffer []byte) []byte {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	b.clearState()
 	b.lastOperation = kDecrypt
 

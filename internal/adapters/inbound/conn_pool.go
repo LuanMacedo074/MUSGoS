@@ -61,16 +61,25 @@ func (p *ConnPool) WriteToClient(clientID string, data []byte) error {
 	return err
 }
 
-func (p *ConnPool) RemapClientID(oldID, newID string) {
+// RemapClientID rebinds a connection from oldID to newID (used at Logon to swap
+// the transient connection id for the authenticated userID). It returns false
+// without changing anything if oldID is unknown, or if newID is already bound to
+// a *different* connection — refusing to clobber another client's mapping guards
+// against duplicate-userID session hijack. (backlog H3)
+func (p *ConnPool) RemapClientID(oldID, newID string) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	conn, ok := p.clients[oldID]
 	if !ok {
-		return
+		return false
+	}
+	if existing, taken := p.clients[newID]; taken && existing != conn {
+		return false
 	}
 	delete(p.clients, oldID)
 	p.clients[newID] = conn
 	p.connToID[conn] = newID
+	return true
 }
 
 func (p *ConnPool) DisconnectClient(clientID string) error {

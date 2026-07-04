@@ -8,6 +8,9 @@ import (
 func (s *SystemService) handleDBPlayerGetAttribute(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
 	return s.handleDBCommand(senderID, msg, []string{"application", "userID", "attribute"},
 		func(f map[string]lingo.LValue) (lingo.LValue, error) {
+			if !s.ownerOrAdmin(senderID, lingo.StringValue(f["userID"])) {
+				return nil, errCrossUserDenied
+			}
 			return s.db.GetPlayerAttribute(lingo.StringValue(f["application"]), lingo.StringValue(f["userID"]), lingo.StringValue(f["attribute"]))
 		})
 }
@@ -15,6 +18,9 @@ func (s *SystemService) handleDBPlayerGetAttribute(senderID string, msg *smus.MU
 func (s *SystemService) handleDBPlayerSetAttribute(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
 	return s.handleDBCommand(senderID, msg, []string{"application", "userID", "attribute", "value"},
 		func(f map[string]lingo.LValue) (lingo.LValue, error) {
+			if !s.ownerOrAdmin(senderID, lingo.StringValue(f["userID"])) {
+				return nil, errCrossUserDenied
+			}
 			err := s.db.SetPlayerAttribute(lingo.StringValue(f["application"]), lingo.StringValue(f["userID"]), lingo.StringValue(f["attribute"]), f["value"])
 			return lingo.NewLVoid(), err
 		})
@@ -23,6 +29,9 @@ func (s *SystemService) handleDBPlayerSetAttribute(senderID string, msg *smus.MU
 func (s *SystemService) handleDBPlayerDeleteAttribute(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
 	return s.handleDBCommand(senderID, msg, []string{"application", "userID", "attribute"},
 		func(f map[string]lingo.LValue) (lingo.LValue, error) {
+			if !s.ownerOrAdmin(senderID, lingo.StringValue(f["userID"])) {
+				return nil, errCrossUserDenied
+			}
 			err := s.db.DeletePlayerAttribute(lingo.StringValue(f["application"]), lingo.StringValue(f["userID"]), lingo.StringValue(f["attribute"]))
 			return lingo.NewLVoid(), err
 		})
@@ -31,6 +40,9 @@ func (s *SystemService) handleDBPlayerDeleteAttribute(senderID string, msg *smus
 func (s *SystemService) handleDBPlayerGetAttributeNames(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
 	return s.handleDBCommand(senderID, msg, []string{"application", "userID"},
 		func(f map[string]lingo.LValue) (lingo.LValue, error) {
+			if !s.ownerOrAdmin(senderID, lingo.StringValue(f["userID"])) {
+				return nil, errCrossUserDenied
+			}
 			names, err := s.db.GetPlayerAttributeNames(lingo.StringValue(f["application"]), lingo.StringValue(f["userID"]))
 			if err != nil {
 				return nil, err

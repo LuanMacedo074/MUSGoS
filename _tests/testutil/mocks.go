@@ -100,8 +100,8 @@ type MockSessionStore struct {
 	mu          sync.RWMutex
 	connections map[string]*ports.ConnectionInfo
 	attributes  map[string]map[string]lingo.LValue // clientID -> attrName -> value
-	rooms       map[string]map[string]bool          // roomName -> clientIDs
-	clientRooms map[string]map[string]bool          // clientID -> roomNames
+	rooms       map[string]map[string]bool         // roomName -> clientIDs
+	clientRooms map[string]map[string]bool         // clientID -> roomNames
 }
 
 func NewMockSessionStore() *MockSessionStore {
@@ -344,23 +344,23 @@ func (m *MockMessageQueue) Close() error {
 
 // MockDBAdapter implements ports.DBAdapter with configurable behavior.
 type MockDBAdapter struct {
-	GetUserFunc                    func(username string) (*ports.User, error)
-	GetActiveBanByUserIDFunc       func(userID int64) (*ports.Ban, error)
-	CreateApplicationFunc          func(appName string) error
-	DeleteApplicationFunc          func(appName string) error
-	SetApplicationAttributeFunc    func(appName, attrName string, value lingo.LValue) error
-	GetApplicationAttributeFunc    func(appName, attrName string) (lingo.LValue, error)
+	GetUserFunc                      func(username string) (*ports.User, error)
+	GetActiveBanByUserIDFunc         func(userID int64) (*ports.Ban, error)
+	CreateApplicationFunc            func(appName string) error
+	DeleteApplicationFunc            func(appName string) error
+	SetApplicationAttributeFunc      func(appName, attrName string, value lingo.LValue) error
+	GetApplicationAttributeFunc      func(appName, attrName string) (lingo.LValue, error)
 	GetApplicationAttributeNamesFunc func(appName string) ([]string, error)
-	DeleteApplicationAttributeFunc func(appName, attrName string) error
-	SetPlayerAttributeFunc         func(appName, userID, attrName string, value lingo.LValue) error
-	GetPlayerAttributeFunc         func(appName, userID, attrName string) (lingo.LValue, error)
-	GetPlayerAttributeNamesFunc    func(appName, userID string) ([]string, error)
-	DeletePlayerAttributeFunc      func(appName, userID, attrName string) error
-	CreateUserFunc                 func(username, passwordHash string, userLevel int) error
-	DeleteUserFunc                 func(username string) error
-	CreateBanFunc                  func(userID *int64, ipAddress *string, reason string, expiresAt *time.Time) error
-	RevokeBanFunc                  func(banID int64) error
-	GetActiveBanByIPFunc           func(ipAddress string) (*ports.Ban, error)
+	DeleteApplicationAttributeFunc   func(appName, attrName string) error
+	SetPlayerAttributeFunc           func(appName, userID, attrName string, value lingo.LValue) error
+	GetPlayerAttributeFunc           func(appName, userID, attrName string) (lingo.LValue, error)
+	GetPlayerAttributeNamesFunc      func(appName, userID string) ([]string, error)
+	DeletePlayerAttributeFunc        func(appName, userID, attrName string) error
+	CreateUserFunc                   func(username, passwordHash string, userLevel int) error
+	DeleteUserFunc                   func(username string) error
+	CreateBanFunc                    func(userID *int64, ipAddress *string, reason string, expiresAt *time.Time) error
+	RevokeBanFunc                    func(banID int64) error
+	GetActiveBanByIPFunc             func(ipAddress string) (*ports.Ban, error)
 }
 
 func (m *MockDBAdapter) CreateApplication(appName string) error {
@@ -441,7 +441,7 @@ func (m *MockDBAdapter) DeleteUser(username string) error {
 	}
 	return nil
 }
-func (m *MockDBAdapter) UpdateUserLevel(username string, level int) error  { return nil }
+func (m *MockDBAdapter) UpdateUserLevel(username string, level int) error       { return nil }
 func (m *MockDBAdapter) UpdateUserPassword(username, passwordHash string) error { return nil }
 func (m *MockDBAdapter) CreateBan(userID *int64, ipAddress *string, reason string, expiresAt *time.Time) error {
 	if m.CreateBanFunc != nil {
@@ -467,16 +467,17 @@ func (m *MockDBAdapter) RevokeBan(banID int64) error {
 	}
 	return nil
 }
-func (m *MockDBAdapter) CreateTable(def ports.Table) error    { return nil }
-func (m *MockDBAdapter) DropTable(name string) error          { return nil }
-func (m *MockDBAdapter) CreateIndex(def ports.Index) error    { return nil }
-func (m *MockDBAdapter) Close() error { return nil }
+func (m *MockDBAdapter) CreateTable(def ports.Table) error { return nil }
+func (m *MockDBAdapter) DropTable(name string) error       { return nil }
+func (m *MockDBAdapter) CreateIndex(def ports.Index) error { return nil }
+func (m *MockDBAdapter) Close() error                      { return nil }
 
 // MockConnectionWriter implements ports.ConnectionWriter, recording writes for assertions.
 type MockConnectionWriter struct {
-	mu      sync.Mutex
-	Writes  []WriteCall
-	RemapFn func(oldID, newID string)
+	mu          sync.Mutex
+	Writes      []WriteCall
+	RemapFn     func(oldID, newID string)
+	RemapResult *bool // when non-nil, RemapClientID returns *RemapResult (default true)
 }
 
 type WriteCall struct {
@@ -497,10 +498,14 @@ func (m *MockConnectionWriter) DisconnectClient(clientID string) error {
 	return nil
 }
 
-func (m *MockConnectionWriter) RemapClientID(oldID, newID string) {
+func (m *MockConnectionWriter) RemapClientID(oldID, newID string) bool {
 	if m.RemapFn != nil {
 		m.RemapFn(oldID, newID)
 	}
+	if m.RemapResult != nil {
+		return *m.RemapResult
+	}
+	return true
 }
 
 // MockCache implements ports.Cache with in-memory storage.
@@ -656,7 +661,7 @@ type MockMetrics struct {
 	BannedConns atomic.Int64
 }
 
-func (m *MockMetrics) IncrementMessages()   { m.Messages.Add(1) }
+func (m *MockMetrics) IncrementMessages()    { m.Messages.Add(1) }
 func (m *MockMetrics) IncrementErrors()      { m.Errors.Add(1) }
 func (m *MockMetrics) IncrementRateLimited() { m.RateLimited.Add(1) }
 func (m *MockMetrics) IncrementBannedConns() { m.BannedConns.Add(1) }
