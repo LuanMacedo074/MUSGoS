@@ -467,10 +467,11 @@ func (m *MockDBAdapter) RevokeBan(banID int64) error {
 	}
 	return nil
 }
-func (m *MockDBAdapter) CreateTable(def ports.Table) error { return nil }
-func (m *MockDBAdapter) DropTable(name string) error       { return nil }
-func (m *MockDBAdapter) CreateIndex(def ports.Index) error { return nil }
-func (m *MockDBAdapter) Close() error                      { return nil }
+func (m *MockDBAdapter) CreateTable(def ports.Table) error              { return nil }
+func (m *MockDBAdapter) DropTable(name string) error                    { return nil }
+func (m *MockDBAdapter) AddColumn(table string, col ports.Column) error { return nil }
+func (m *MockDBAdapter) CreateIndex(def ports.Index) error              { return nil }
+func (m *MockDBAdapter) Close() error                                   { return nil }
 
 // MockConnectionWriter implements ports.ConnectionWriter, recording writes for assertions.
 type MockConnectionWriter struct {

@@ -30,8 +30,8 @@ type Ban struct {
 const DefaultUserLevel = 20
 
 var (
-	ErrUserNotFound      = errors.New("user not found")
-	ErrBanNotFound       = errors.New("ban not found")
+	ErrUserNotFound       = errors.New("user not found")
+	ErrBanNotFound        = errors.New("ban not found")
 	ErrInvalidCredentials = errors.New("invalid credentials format")
 )
 
@@ -68,6 +68,10 @@ type DBAdapter interface {
 	// Schema operations — used by migrations for schema changes.
 	CreateTable(def Table) error
 	DropTable(name string) error
+	// AddColumn adds one column to an existing table (ALTER TABLE ... ADD COLUMN),
+	// preserving existing rows — use this to evolve a populated table instead of
+	// DropTable+CreateTable, which silently discards data on re-run.
+	AddColumn(table string, col Column) error
 	CreateIndex(def Index) error
 
 	Close() error

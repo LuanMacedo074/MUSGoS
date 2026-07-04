@@ -19,12 +19,12 @@ import (
 var validIdentifier = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
 var validOnDelete = map[string]bool{
-	"":           true,
-	"CASCADE":    true,
-	"SET NULL":   true,
+	"":            true,
+	"CASCADE":     true,
+	"SET NULL":    true,
 	"SET DEFAULT": true,
-	"RESTRICT":   true,
-	"NO ACTION":  true,
+	"RESTRICT":    true,
+	"NO ACTION":   true,
 }
 
 func validateIdentifier(name string) error {
@@ -463,6 +463,52 @@ func (s *SQLiteDB) DropTable(name string) error {
 	return err
 }
 
+func (s *SQLiteDB) AddColumn(table string, col ports.Column) error {
+	if err := validateIdentifier(table); err != nil {
+		return fmt.Errorf("invalid table name %q: %w", table, err)
+	}
+	if err := validateIdentifier(col.Name); err != nil {
+		return fmt.Errorf("invalid column name %q: %w", col.Name, err)
+	}
+	// SQLite has no ADD COLUMN IF NOT EXISTS; skip when the column already exists so
+	// re-running a migration is a no-op.
+	rows, err := s.db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, ctype string
+		var dflt interface{}
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			rows.Close()
+			return err
+		}
+		if name == col.Name {
+			rows.Close()
+			return nil
+		}
+	}
+	rows.Close()
+
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(table)
+	b.WriteString(" ADD COLUMN ")
+	b.WriteString(col.Name)
+	b.WriteString(" ")
+	b.WriteString(s.columnTypeSQL(col.Type))
+	if col.IsNotNull {
+		b.WriteString(" NOT NULL")
+	}
+	if col.DefType != ports.DefaultNone {
+		b.WriteString(" DEFAULT ")
+		b.WriteString(s.defaultSQL(col))
+	}
+	_, err = s.db.Exec(b.String())
+	return err
+}
+
 func (s *SQLiteDB) CreateIndex(def ports.Index) error {
 	if err := validateIdentifier(def.Name); err != nil {
 		return fmt.Errorf("invalid index name %q: %w", def.Name, err)
@@ -514,7 +560,6 @@ func (s *SQLiteDB) defaultSQL(col ports.Column) string {
 func (s *SQLiteDB) hasCompositePK(def ports.Table) bool {
 	return len(def.PrimaryKeys) > 0
 }
-
 
 // QueryBuilder returns a generic query builder for this database.
 func (s *SQLiteDB) QueryBuilder() ports.QueryBuilder {
