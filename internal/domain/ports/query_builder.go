@@ -13,6 +13,10 @@ type Query interface {
 	Where(column string, value interface{}) Query
 	Insert(data map[string]interface{}) error
 	Update(data map[string]interface{}) (int64, error)
+	// Increment atomically adds delta to a numeric column (SET col = col + delta) in a
+	// single UPDATE, so concurrent adjustments don't lose updates the way a
+	// read-modify-write does. Returns the number of rows affected.
+	Increment(column string, delta int64) (int64, error)
 	Delete() (int64, error)
 	First() (QueryResult, error)
 	Get() ([]QueryResult, error)

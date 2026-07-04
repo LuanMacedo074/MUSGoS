@@ -131,6 +131,28 @@ func (q *sqliteQuery) Update(data map[string]interface{}) (int64, error) {
 	return result.RowsAffected()
 }
 
+func (q *sqliteQuery) Increment(column string, delta int64) (int64, error) {
+	if err := validateIdentifier(q.tableName); err != nil {
+		return 0, fmt.Errorf("invalid table name: %w", err)
+	}
+	if err := validateIdentifier(column); err != nil {
+		return 0, fmt.Errorf("invalid column name %q: %w", column, err)
+	}
+	vals := []interface{}{delta}
+	whereSQL, whereVals, err := q.buildWhere()
+	if err != nil {
+		return 0, err
+	}
+	vals = append(vals, whereVals...)
+
+	query := fmt.Sprintf("UPDATE %s SET %s = %s + ?%s", q.tableName, column, column, whereSQL)
+	result, execErr := q.exec.Exec(query, vals...)
+	if execErr != nil {
+		return 0, execErr
+	}
+	return result.RowsAffected()
+}
+
 func (q *sqliteQuery) Delete() (int64, error) {
 	if err := validateIdentifier(q.tableName); err != nil {
 		return 0, fmt.Errorf("invalid table name: %w", err)

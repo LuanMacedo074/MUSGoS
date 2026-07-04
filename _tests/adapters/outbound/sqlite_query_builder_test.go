@@ -88,6 +88,35 @@ func TestQueryBuilder_Update(t *testing.T) {
 	}
 }
 
+func TestQueryBuilder_Increment(t *testing.T) {
+	db := newTestDB(t)
+	qb := db.QueryBuilder()
+
+	db.CreateUser("incuser", "hash", 20)
+
+	// SET user_level = user_level + 10 in one statement (atomic; no read-modify-write).
+	affected, err := qb.Table("users").Where("username", "incuser").Increment("user_level", 10)
+	if err != nil {
+		t.Fatalf("increment error: %v", err)
+	}
+	if affected != 1 {
+		t.Errorf("affected = %d, want 1", affected)
+	}
+
+	// A negative delta subtracts.
+	if _, err := qb.Table("users").Where("username", "incuser").Increment("user_level", -5); err != nil {
+		t.Fatalf("increment (negative) error: %v", err)
+	}
+
+	row, err := qb.Table("users").Where("username", "incuser").First()
+	if err != nil {
+		t.Fatalf("first error: %v", err)
+	}
+	if level, _ := row["user_level"].(int64); level != 25 {
+		t.Errorf("user_level = %v, want 25 (20 +10 -5)", row["user_level"])
+	}
+}
+
 func TestQueryBuilder_Delete(t *testing.T) {
 	db := newTestDB(t)
 	qb := db.QueryBuilder()

@@ -127,6 +127,8 @@ func queryIndex(L *lua.LState) int {
 		L.Push(L.NewFunction(queryInsert))
 	case "update":
 		L.Push(L.NewFunction(queryUpdate))
+	case "increment":
+		L.Push(L.NewFunction(queryIncrement))
 	case "delete":
 		L.Push(L.NewFunction(queryDelete))
 	case "count":
@@ -194,6 +196,19 @@ func queryUpdate(L *lua.LState) int {
 	affected, err := q.Update(data)
 	if err != nil {
 		L.RaiseError("query update failed: %s", err.Error())
+		return 0
+	}
+	L.Push(lua.LNumber(affected))
+	return 1
+}
+
+func queryIncrement(L *lua.LState) int {
+	q := checkQuery(L)
+	col := L.CheckString(2)
+	delta := int64(L.CheckNumber(3))
+	affected, err := q.Increment(col, delta)
+	if err != nil {
+		L.RaiseError("query increment failed: %s", err.Error())
 		return 0
 	}
 	L.Push(lua.LNumber(affected))
