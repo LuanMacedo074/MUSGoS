@@ -55,8 +55,11 @@ func ParseMUSMessageWithDecryption(rawmsg []byte, decrypt ports.Cipher) (*MUSMes
 	msg.ContentSize = int32(binary.BigEndian.Uint32(rawmsg[readPtr:]))
 	readPtr += 4
 
-	if len(rawmsg) < int(6+msg.ContentSize) {
-		return nil, fmt.Errorf("message truncated: expected %d bytes, got %d", 6+msg.ContentSize, len(rawmsg))
+	// A ContentSize >= 0x80000000 turns negative as int32; guard that (and compute
+	// the total as int, not int32, so 6+ContentSize can't overflow) before using it
+	// as a length (L4).
+	if msg.ContentSize < 0 || len(rawmsg) < 6+int(msg.ContentSize) {
+		return nil, fmt.Errorf("message truncated or invalid content size: %d (have %d bytes)", msg.ContentSize, len(rawmsg))
 	}
 
 	// campos obrigatorios do header
