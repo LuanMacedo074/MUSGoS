@@ -72,10 +72,9 @@ script:
 
 job:
 	@if [ -z "$(name)" ] || [ -z "$(interval)" ]; then echo "Usage: make job name=<job_name> interval=<seconds>"; exit 1; fi
-	@mkdir -p external/jobs external/scripts/jobs; \
-	file="external/jobs/$(name).go"; \
-	sed -e "s|NAME|$(name)|g" -e "s|INTERVAL|$(interval)|g" \
-		external/jobs/job.go.tmpl > "$$file"; \
+	@mkdir -p external/scripts/jobs; \
 	lua="external/scripts/jobs/$(name).lua"; \
-	[ -f "$$lua" ] || printf -- '-- jobs/%s — recurring job (interval: %ss). TODO: implement.\n' "$(name)" "$(interval)" > "$$lua"; \
-	echo "Created $$file and $$lua"
+	if [ -f "$$lua" ]; then echo "$$lua already exists"; else \
+		printf -- '-- @job interval=%s\n-- jobs/%s — recurring job. TODO: implement.\n' "$(interval)" "$(name)" > "$$lua"; \
+		echo "Created $$lua (discovered by its @job header — no Go)"; \
+	fi

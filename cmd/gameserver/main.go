@@ -8,7 +8,6 @@ import (
 	"syscall"
 	"time"
 
-	"fsos-server/external/jobs"
 	"fsos-server/external/migrations"
 	"fsos-server/external/queues"
 	"fsos-server/internal/adapters/inbound"
@@ -263,16 +262,9 @@ func main() {
 
 	// 12. Job Scheduler — runs external/scripts/jobs/<name>.lua on their intervals
 	if cfg.JobsEnabled {
-		var scheduledJobs []inbound.ScheduledJob
-		for _, j := range jobs.All {
-			if !j.Enabled {
-				continue
-			}
-			scheduledJobs = append(scheduledJobs, inbound.ScheduledJob{
-				Name:     j.Name,
-				Interval: time.Duration(j.IntervalSeconds) * time.Second,
-			})
-		}
+		// Jobs are discovered from external/scripts/jobs/*.lua by their
+		// "-- @job interval=N" header — no Go registration per job.
+		scheduledJobs := inbound.DiscoverJobs(cfg.ScriptsPath, gameLogger)
 		scheduler := inbound.NewScheduler(scriptEngine, scheduledJobs, gameLogger)
 		scheduler.Start()
 		defer scheduler.Stop()
