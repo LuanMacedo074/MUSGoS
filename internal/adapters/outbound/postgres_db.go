@@ -450,6 +450,34 @@ func (p *PostgresDB) DropTable(name string) error {
 	return err
 }
 
+func (p *PostgresDB) AddColumn(table string, col ports.Column) error {
+	if err := validateIdentifier(table); err != nil {
+		return fmt.Errorf("invalid table name %q: %w", table, err)
+	}
+	if err := validateIdentifier(col.Name); err != nil {
+		return fmt.Errorf("invalid column name %q: %w", col.Name, err)
+	}
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(table)
+	b.WriteString(" ADD COLUMN IF NOT EXISTS ")
+	b.WriteString(col.Name)
+	b.WriteString(" ")
+	b.WriteString(p.columnTypeSQL(col.Type))
+	if col.IsNotNull {
+		b.WriteString(" NOT NULL")
+	}
+	if col.IsUnique {
+		b.WriteString(" UNIQUE")
+	}
+	if col.DefType != ports.DefaultNone {
+		b.WriteString(" DEFAULT ")
+		b.WriteString(p.defaultSQL(col))
+	}
+	_, err := p.db.Exec(b.String())
+	return err
+}
+
 func (p *PostgresDB) CreateIndex(def ports.Index) error {
 	if err := validateIdentifier(def.Name); err != nil {
 		return fmt.Errorf("invalid index name %q: %w", def.Name, err)
