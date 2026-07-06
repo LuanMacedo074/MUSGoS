@@ -70,7 +70,7 @@ type DBAdapter interface {
 	DropTable(name string) error
 	// AddColumn adds one column to an existing table (ALTER TABLE ... ADD COLUMN),
 	// preserving existing rows — use this to evolve a populated table instead of
-	// DropTable+CreateTable, which silently discards data on re-run.
+	// DropTable+CreateTable, which silently discards data on re-run (backlog M10).
 	AddColumn(table string, col Column) error
 	CreateIndex(def Index) error
 

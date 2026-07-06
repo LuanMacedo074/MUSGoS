@@ -40,7 +40,7 @@ func NewMetricsServer(port string, bindAddr string, sessionStore ports.SessionSt
 	}
 }
 
-func (m *MetricsServer) IncrementMessages()   { m.msgCount.Add(1) }
+func (m *MetricsServer) IncrementMessages()    { m.msgCount.Add(1) }
 func (m *MetricsServer) IncrementErrors()      { m.msgErrors.Add(1) }
 func (m *MetricsServer) IncrementRateLimited() { m.rateLimited.Add(1) }
 func (m *MetricsServer) IncrementBannedConns() { m.bannedConns.Add(1) }
