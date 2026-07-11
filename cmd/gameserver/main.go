@@ -169,7 +169,7 @@ func main() {
 		topic := q.Topic
 		h := q.Handler
 		queue.Subscribe(topic, func(msg ports.QueueMessage) {
-			h(msg.Payload)
+			h(scriptEngine, msg)
 		})
 		registeredTopics = append(registeredTopics, topic)
 	}

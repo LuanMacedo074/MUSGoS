@@ -1,10 +1,14 @@
 package queues
 
+import "fsos-server/internal/domain/ports"
+
 func init() {
 	Register(QueueDefinition{
 		Topic: "TOPIC",
-		Handler: func(payload []byte) {
-			// TODO: implement handler for TOPIC
+		Handler: func(engine ports.ScriptEngine, msg ports.QueueMessage) {
+			// TODO: implement handler for TOPIC.
+			// msg.Topic / msg.Payload carry the message; use engine.Execute to
+			// dispatch to a Lua script (which can emit SMUS, touch the DB, etc.).
 		},
 	})
 }
