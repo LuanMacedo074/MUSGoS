@@ -71,28 +71,6 @@ func (s *SQLiteDB) init() error {
 	return s.ensureMigrationsTable()
 }
 
-// --- DBAdmin ---
-
-func (s *SQLiteDB) CreateApplication(appName string) error {
-	_, err := s.db.Exec("INSERT INTO applications (name) VALUES (?)", appName)
-	return err
-}
-
-func (s *SQLiteDB) DeleteApplication(appName string) error {
-	result, err := s.db.Exec("DELETE FROM applications WHERE name = ?", appName)
-	if err != nil {
-		return err
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return fmt.Errorf("application %q not found", appName)
-	}
-	return nil
-}
-
 // --- DBApplication ---
 
 func (s *SQLiteDB) SetApplicationAttribute(appName, attrName string, value lingo.LValue) error {
@@ -541,15 +519,6 @@ func (s *SQLiteDB) Close() error {
 }
 
 // --- helpers ---
-
-func (s *SQLiteDB) getAppID(appName string) (int64, error) {
-	var id int64
-	err := s.db.QueryRow("SELECT id FROM applications WHERE name = ?", appName).Scan(&id)
-	if err != nil {
-		return 0, fmt.Errorf("application %q not found: %w", appName, err)
-	}
-	return id, nil
-}
 
 func (s *SQLiteDB) queryNames(query string, args ...interface{}) ([]string, error) {
 	rows, err := s.db.Query(query, args...)

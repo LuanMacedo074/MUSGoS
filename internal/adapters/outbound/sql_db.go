@@ -54,3 +54,34 @@ func (d *sqlDB) MarkMigrationApplied(name string) error {
 	_, err := d.db.Exec(d.dialect.Rebind("INSERT INTO migrations (name, applied_at) VALUES (?, ?)"), name, time.Now())
 	return err
 }
+
+// --- DBAdmin ---
+
+func (d *sqlDB) CreateApplication(appName string) error {
+	_, err := d.db.Exec(d.dialect.Rebind("INSERT INTO applications (name) VALUES (?)"), appName)
+	return err
+}
+
+func (d *sqlDB) DeleteApplication(appName string) error {
+	result, err := d.db.Exec(d.dialect.Rebind("DELETE FROM applications WHERE name = ?"), appName)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return fmt.Errorf("application %q not found", appName)
+	}
+	return nil
+}
+
+func (d *sqlDB) getAppID(appName string) (int64, error) {
+	var id int64
+	err := d.db.QueryRow(d.dialect.Rebind("SELECT id FROM applications WHERE name = ?"), appName).Scan(&id)
+	if err != nil {
+		return 0, fmt.Errorf("application %q not found: %w", appName, err)
+	}
+	return id, nil
+}

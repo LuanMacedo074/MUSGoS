@@ -51,28 +51,6 @@ func (p *PostgresDB) init() error {
 	return p.ensureMigrationsTable()
 }
 
-// --- DBAdmin ---
-
-func (p *PostgresDB) CreateApplication(appName string) error {
-	_, err := p.db.Exec("INSERT INTO applications (name) VALUES ($1)", appName)
-	return err
-}
-
-func (p *PostgresDB) DeleteApplication(appName string) error {
-	result, err := p.db.Exec("DELETE FROM applications WHERE name = $1", appName)
-	if err != nil {
-		return err
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return fmt.Errorf("application %q not found", appName)
-	}
-	return nil
-}
-
 // --- DBApplication ---
 
 func (p *PostgresDB) SetApplicationAttribute(appName, attrName string, value lingo.LValue) error {
@@ -510,15 +488,6 @@ func (p *PostgresDB) Close() error {
 }
 
 // --- helpers ---
-
-func (p *PostgresDB) getAppID(appName string) (int64, error) {
-	var id int64
-	err := p.db.QueryRow("SELECT id FROM applications WHERE name = $1", appName).Scan(&id)
-	if err != nil {
-		return 0, fmt.Errorf("application %q not found: %w", appName, err)
-	}
-	return id, nil
-}
 
 func (p *PostgresDB) queryNames(query string, args ...interface{}) ([]string, error) {
 	rows, err := p.db.Query(query, args...)
