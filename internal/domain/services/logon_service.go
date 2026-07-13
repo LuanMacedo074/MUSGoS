@@ -3,6 +3,8 @@ package services
 import (
 	"fsos-server/internal/domain/ports"
 	"fsos-server/internal/domain/types/lingo"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // UserLevelAttribute is the session attribute the logon flow stamps with the
@@ -94,12 +96,98 @@ func NewLogonService(
 // session is registered under the effective userID with the user level
 // stamped; on any other code no session state has been taken over.
 func (s *LogonService) Logon(req LogonRequest) LogonResult {
-	userID := req.Credentials.UserID
-	movieID := req.Credentials.MovieID
+	var userID, password, movieID string
+	if req.Credentials == nil {
+		// Strict mode requires parseable credentials; the other modes fall
+		// back to the wire sender identity with an empty password.
+		if s.mode == "strict" {
+			parseErr := ""
+			if req.ParseErr != nil {
+				parseErr = req.ParseErr.Error()
+			}
+			s.logger.Warn("Logon failed: could not extract credentials", map[string]interface{}{
+				"client": req.ConnectionID,
+				"error":  parseErr,
+			})
+			return LogonResult{Code: LogonBadCredentialsFormat, UserID: req.SenderID}
+		}
+		userID = req.SenderID
+		password = ""
+	} else {
+		userID = req.Credentials.UserID
+		password = req.Credentials.Password
+		movieID = req.Credentials.MovieID
+	}
 
 	userLevel := s.defaultLevel
 
+	switch s.mode {
+	case "none":
+		// Accept any user without DB lookup
+
+	case "strict":
+		user, err := s.db.GetUser(userID)
+		if err != nil {
+			s.logger.Info("Logon failed: user not found", map[string]interface{}{
+				"client": req.ConnectionID,
+				"userID": userID,
+			})
+			return LogonResult{Code: LogonInvalidUser, UserID: userID}
+		}
+
+		if code := s.validateCredentials(user, password, req.ConnectionID, userID); code != LogonOK {
+			return LogonResult{Code: code, UserID: userID}
+		}
+
+		userLevel = user.UserLevel
+
+	default: // "open"
+		user, err := s.db.GetUser(userID)
+		if err != nil {
+			if err == ports.ErrUserNotFound {
+				// No DB record — accept anyway in open mode, use defaultLevel
+			} else {
+				s.logger.Error("Logon failed: database error", map[string]interface{}{
+					"client": req.ConnectionID,
+					"userID": userID,
+					"error":  err.Error(),
+				})
+				return LogonResult{Code: LogonInternalError, UserID: userID}
+			}
+		} else {
+			if code := s.validateCredentials(user, password, req.ConnectionID, userID); code != LogonOK {
+				return LogonResult{Code: code, UserID: userID}
+			}
+
+			userLevel = user.UserLevel
+		}
+	}
+
 	return s.establishSession(req.ConnectionID, userID, movieID, userLevel)
+}
+
+// validateCredentials checks the password against the account and rejects
+// actively banned users; LogonOK means the credentials passed.
+func (s *LogonService) validateCredentials(user *ports.User, password, connectionID, userID string) LogonCode {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		s.logger.Info("Logon failed: invalid password", map[string]interface{}{
+			"client": connectionID,
+			"userID": userID,
+		})
+		return LogonInvalidPassword
+	}
+
+	ban, err := s.db.GetActiveBanByUserID(user.ID)
+	if err == nil && ban != nil {
+		s.logger.Info("Logon failed: user is banned", map[string]interface{}{
+			"client": connectionID,
+			"userID": userID,
+			"reason": ban.Reason,
+		})
+		return LogonRefused
+	}
+
+	return LogonOK
 }
 
 // establishSession is the mode-independent tail of a successful
