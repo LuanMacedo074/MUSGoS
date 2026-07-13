@@ -71,55 +71,6 @@ func (s *SQLiteDB) init() error {
 	return s.ensureMigrationsTable()
 }
 
-// --- DBApplication ---
-
-func (s *SQLiteDB) SetApplicationAttribute(appName, attrName string, value lingo.LValue) error {
-	appID, err := s.getAppID(appName)
-	if err != nil {
-		return err
-	}
-
-	jsonBytes, err := lingo.MarshalLValue(value)
-	if err != nil {
-		return err
-	}
-
-	_, err = s.db.Exec(`
-		INSERT INTO application_attributes (app_id, attr_name, value_json)
-		VALUES (?, ?, ?)
-		ON CONFLICT(app_id, attr_name) DO UPDATE SET value_json=excluded.value_json`,
-		appID, attrName, string(jsonBytes))
-	return err
-}
-
-func (s *SQLiteDB) GetApplicationAttribute(appName, attrName string) (lingo.LValue, error) {
-	appID, err := s.getAppID(appName)
-	if err != nil {
-		return lingo.NewLVoid(), err
-	}
-
-	return s.scanAttribute(
-		"SELECT value_json FROM application_attributes WHERE app_id = ? AND attr_name = ?",
-		appID, attrName)
-}
-
-func (s *SQLiteDB) GetApplicationAttributeNames(appName string) ([]string, error) {
-	appID, err := s.getAppID(appName)
-	if err != nil {
-		return nil, err
-	}
-	return s.queryNames("SELECT attr_name FROM application_attributes WHERE app_id = ?", appID)
-}
-
-func (s *SQLiteDB) DeleteApplicationAttribute(appName, attrName string) error {
-	appID, err := s.getAppID(appName)
-	if err != nil {
-		return err
-	}
-	_, err = s.db.Exec("DELETE FROM application_attributes WHERE app_id = ? AND attr_name = ?", appID, attrName)
-	return err
-}
-
 // --- DBPlayer ---
 
 func (s *SQLiteDB) SetPlayerAttribute(appName, userID, attrName string, value lingo.LValue) error {
@@ -518,36 +469,3 @@ func (s *SQLiteDB) Close() error {
 	return s.db.Close()
 }
 
-// --- helpers ---
-
-func (s *SQLiteDB) queryNames(query string, args ...interface{}) ([]string, error) {
-	rows, err := s.db.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var names []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		names = append(names, name)
-	}
-	return names, rows.Err()
-}
-
-func (s *SQLiteDB) scanAttribute(query string, args ...interface{}) (lingo.LValue, error) {
-	var valueJSON string
-
-	err := s.db.QueryRow(query, args...).Scan(&valueJSON)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return lingo.NewLVoid(), nil
-		}
-		return lingo.NewLVoid(), err
-	}
-
-	return lingo.UnmarshalLValue([]byte(valueJSON))
-}

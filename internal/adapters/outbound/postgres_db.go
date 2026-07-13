@@ -51,55 +51,6 @@ func (p *PostgresDB) init() error {
 	return p.ensureMigrationsTable()
 }
 
-// --- DBApplication ---
-
-func (p *PostgresDB) SetApplicationAttribute(appName, attrName string, value lingo.LValue) error {
-	appID, err := p.getAppID(appName)
-	if err != nil {
-		return err
-	}
-
-	jsonBytes, err := lingo.MarshalLValue(value)
-	if err != nil {
-		return err
-	}
-
-	_, err = p.db.Exec(`
-		INSERT INTO application_attributes (app_id, attr_name, value_json)
-		VALUES ($1, $2, $3)
-		ON CONFLICT(app_id, attr_name) DO UPDATE SET value_json=excluded.value_json`,
-		appID, attrName, string(jsonBytes))
-	return err
-}
-
-func (p *PostgresDB) GetApplicationAttribute(appName, attrName string) (lingo.LValue, error) {
-	appID, err := p.getAppID(appName)
-	if err != nil {
-		return lingo.NewLVoid(), err
-	}
-
-	return p.scanAttribute(
-		"SELECT value_json FROM application_attributes WHERE app_id = $1 AND attr_name = $2",
-		appID, attrName)
-}
-
-func (p *PostgresDB) GetApplicationAttributeNames(appName string) ([]string, error) {
-	appID, err := p.getAppID(appName)
-	if err != nil {
-		return nil, err
-	}
-	return p.queryNames("SELECT attr_name FROM application_attributes WHERE app_id = $1", appID)
-}
-
-func (p *PostgresDB) DeleteApplicationAttribute(appName, attrName string) error {
-	appID, err := p.getAppID(appName)
-	if err != nil {
-		return err
-	}
-	_, err = p.db.Exec("DELETE FROM application_attributes WHERE app_id = $1 AND attr_name = $2", appID, attrName)
-	return err
-}
-
 // --- DBPlayer ---
 
 func (p *PostgresDB) SetPlayerAttribute(appName, userID, attrName string, value lingo.LValue) error {
@@ -487,36 +438,3 @@ func (p *PostgresDB) Close() error {
 	return p.db.Close()
 }
 
-// --- helpers ---
-
-func (p *PostgresDB) queryNames(query string, args ...interface{}) ([]string, error) {
-	rows, err := p.db.Query(query, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var names []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		names = append(names, name)
-	}
-	return names, rows.Err()
-}
-
-func (p *PostgresDB) scanAttribute(query string, args ...interface{}) (lingo.LValue, error) {
-	var valueJSON string
-
-	err := p.db.QueryRow(query, args...).Scan(&valueJSON)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return lingo.NewLVoid(), nil
-		}
-		return lingo.NewLVoid(), err
-	}
-
-	return lingo.UnmarshalLValue([]byte(valueJSON))
-}

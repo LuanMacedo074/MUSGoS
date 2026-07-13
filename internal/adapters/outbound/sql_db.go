@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"fsos-server/internal/domain/ports"
+	"fsos-server/internal/domain/types/lingo"
 )
 
 // sqlDB is the storage core shared by the SQL-backed adapters (RFC-007). It
@@ -84,4 +85,87 @@ func (d *sqlDB) getAppID(appName string) (int64, error) {
 		return 0, fmt.Errorf("application %q not found: %w", appName, err)
 	}
 	return id, nil
+}
+
+// --- DBApplication ---
+
+func (d *sqlDB) SetApplicationAttribute(appName, attrName string, value lingo.LValue) error {
+	appID, err := d.getAppID(appName)
+	if err != nil {
+		return err
+	}
+
+	jsonBytes, err := lingo.MarshalLValue(value)
+	if err != nil {
+		return err
+	}
+
+	_, err = d.db.Exec(d.dialect.Rebind(`
+		INSERT INTO application_attributes (app_id, attr_name, value_json)
+		VALUES (?, ?, ?)
+		ON CONFLICT(app_id, attr_name) DO UPDATE SET value_json=excluded.value_json`),
+		appID, attrName, string(jsonBytes))
+	return err
+}
+
+func (d *sqlDB) GetApplicationAttribute(appName, attrName string) (lingo.LValue, error) {
+	appID, err := d.getAppID(appName)
+	if err != nil {
+		return lingo.NewLVoid(), err
+	}
+
+	return d.scanAttribute(
+		d.dialect.Rebind("SELECT value_json FROM application_attributes WHERE app_id = ? AND attr_name = ?"),
+		appID, attrName)
+}
+
+func (d *sqlDB) GetApplicationAttributeNames(appName string) ([]string, error) {
+	appID, err := d.getAppID(appName)
+	if err != nil {
+		return nil, err
+	}
+	return d.queryNames(d.dialect.Rebind("SELECT attr_name FROM application_attributes WHERE app_id = ?"), appID)
+}
+
+func (d *sqlDB) DeleteApplicationAttribute(appName, attrName string) error {
+	appID, err := d.getAppID(appName)
+	if err != nil {
+		return err
+	}
+	_, err = d.db.Exec(d.dialect.Rebind("DELETE FROM application_attributes WHERE app_id = ? AND attr_name = ?"), appID, attrName)
+	return err
+}
+
+// --- helpers ---
+
+func (d *sqlDB) queryNames(query string, args ...interface{}) ([]string, error) {
+	rows, err := d.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		names = append(names, name)
+	}
+	return names, rows.Err()
+}
+
+func (d *sqlDB) scanAttribute(query string, args ...interface{}) (lingo.LValue, error) {
+	var valueJSON string
+
+	err := d.db.QueryRow(query, args...).Scan(&valueJSON)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return lingo.NewLVoid(), nil
+		}
+		return lingo.NewLVoid(), err
+	}
+
+	return lingo.UnmarshalLValue([]byte(valueJSON))
 }
