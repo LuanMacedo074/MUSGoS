@@ -5,6 +5,7 @@ import (
 
 	"fsos-server/_tests/testutil"
 	"fsos-server/internal/adapters/inbound/mus"
+	"fsos-server/internal/domain/services"
 	"fsos-server/internal/domain/types/lingo"
 	"fsos-server/internal/domain/types/smus"
 )
@@ -19,7 +20,7 @@ func newNonAdminService(t *testing.T, db *testutil.MockDBAdapter, userID string)
 	mm := mus.NewMovieManager(sessionStore, logger)
 	gm := mus.NewGroupManager(sessionStore, logger)
 	cw := &testutil.MockConnectionWriter{}
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, mm, gm, cw, "none", 20, dbCommandLevels, nil, nil)
+	svc := mus.NewSystemService(db, sessionStore, nil, logger, mm, gm, cw, services.NewLogonService(db, sessionStore, cw, logger, "none", 20), dbCommandLevels, nil, nil)
 
 	logon := buildLogonMsg(userID, "")
 	logon.MsgContent.(*lingo.LList).Values[0] = lingo.NewLString("m")
@@ -93,7 +94,7 @@ func TestLogon_DuplicateUserID_Rejected(t *testing.T) {
 	mm := mus.NewMovieManager(sessionStore, logger)
 	gm := mus.NewGroupManager(sessionStore, logger)
 	cw := &testutil.MockConnectionWriter{}
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, mm, gm, cw, "none", 40, nil, nil, nil)
+	svc := mus.NewSystemService(db, sessionStore, nil, logger, mm, gm, cw, services.NewLogonService(db, sessionStore, cw, logger, "none", 40), nil, nil, nil)
 
 	resp1, err := svc.Handle("conn-1", buildLogonMsg("dupuser", ""))
 	if err != nil || resp1.ErrCode != smus.ErrNoError {

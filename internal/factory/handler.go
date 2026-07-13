@@ -6,6 +6,7 @@ import (
 	"fsos-server/internal/adapters/inbound"
 	"fsos-server/internal/adapters/inbound/mus"
 	"fsos-server/internal/domain/ports"
+	"fsos-server/internal/domain/services"
 )
 
 func NewHandler(
@@ -29,7 +30,8 @@ func NewHandler(
 	case "smus":
 		movieManager := mus.NewMovieManager(sessionStore, log)
 		groupManager := mus.NewGroupManager(sessionStore, log)
-		systemService := mus.NewSystemService(db, sessionStore, cipher, log, movieManager, groupManager, connWriter, authMode, defaultUserLevel, commandLevels, emailSender, timerManager)
+		logonService := services.NewLogonService(db, sessionStore, connWriter, log, authMode, defaultUserLevel)
+		systemService := mus.NewSystemService(db, sessionStore, cipher, log, movieManager, groupManager, connWriter, logonService, commandLevels, emailSender, timerManager)
 		dispatcher := mus.NewDispatcher(log, scriptEngine, systemService, sender, queue)
 		return inbound.NewSMUSHandler(log, cipher, dispatcher, allEncrypted), nil
 	default:

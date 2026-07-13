@@ -6,6 +6,7 @@ import (
 	"fsos-server/_tests/testutil"
 	"fsos-server/internal/adapters/inbound/mus"
 	"fsos-server/internal/domain/ports"
+	"fsos-server/internal/domain/services"
 	"fsos-server/internal/domain/types/lingo"
 	"fsos-server/internal/domain/types/smus"
 
@@ -19,7 +20,8 @@ func setupSystemService(db *testutil.MockDBAdapter, authMode string) *mus.System
 	movieManager := mus.NewMovieManager(sessionStore, logger)
 	groupManager := mus.NewGroupManager(sessionStore, logger)
 	connWriter := &testutil.MockConnectionWriter{}
-	return mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, authMode, 40, nil, nil, nil)
+	return mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter,
+		services.NewLogonService(db, sessionStore, connWriter, logger, authMode, 40), nil, nil, nil)
 }
 
 func hashPassword(password string) string {
@@ -218,7 +220,7 @@ func TestSystemService_Logon_JoinsMovie(t *testing.T) {
 	movieManager := mus.NewMovieManager(sessionStore, logger)
 	groupManager := mus.NewGroupManager(sessionStore, logger)
 	connWriter := &testutil.MockConnectionWriter{}
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, "none", 40, nil, nil, nil)
+	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 40), nil, nil, nil)
 
 	msg := buildLogonMsg("testuser", "nopass")
 
@@ -284,7 +286,7 @@ func TestSystemService_Logon_RemapsClientID(t *testing.T) {
 	sessionStore.RegisterConnection("client-1", "192.168.1.1")
 	movieManager := mus.NewMovieManager(sessionStore, logger)
 	groupManager := mus.NewGroupManager(sessionStore, logger)
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, "none", 40, nil, nil, nil)
+	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 40), nil, nil, nil)
 
 	msg := buildLogonMsg("testuser", "nopass")
 

@@ -6,6 +6,7 @@ import (
 	"fsos-server/_tests/testutil"
 	"fsos-server/internal/adapters/inbound/mus"
 	"fsos-server/internal/domain/ports"
+	"fsos-server/internal/domain/services"
 	"fsos-server/internal/domain/types/lingo"
 	"fsos-server/internal/domain/types/smus"
 )
@@ -15,7 +16,7 @@ func newTestDispatcher(scriptEngine ports.ScriptEngine) (*mus.Dispatcher, *testu
 	sessionStore := testutil.NewMockSessionStore()
 	connWriter := &testutil.MockConnectionWriter{}
 	sender := mus.NewSender(connWriter, sessionStore, logger, nil, false, "faria")
-	systemService := mus.NewSystemService(nil, sessionStore, nil, logger, nil, nil, connWriter, "none", 40, nil, nil, nil)
+	systemService := mus.NewSystemService(nil, sessionStore, nil, logger, nil, nil, connWriter, services.NewLogonService(nil, sessionStore, connWriter, logger, "none", 40), nil, nil, nil)
 	dispatcher := mus.NewDispatcher(logger, scriptEngine, systemService, sender, nil)
 	return dispatcher, connWriter, sessionStore
 }

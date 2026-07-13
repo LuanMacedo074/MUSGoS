@@ -4,28 +4,26 @@ import (
 	"errors"
 	"fmt"
 	"fsos-server/internal/domain/ports"
+	"fsos-server/internal/domain/services"
 	"fsos-server/internal/domain/types/lingo"
 	"fsos-server/internal/domain/types/smus"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 type handlerFunc func(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error)
 
 type SystemService struct {
-	db               ports.DBAdapter
-	sessionStore     ports.SessionStore
-	cipher           ports.Cipher
-	logger           ports.Logger
-	movieManager     *MovieManager
-	groupManager     *GroupManager
-	connWriter       ports.ConnectionWriter
-	authMode         string
-	defaultUserLevel int
-	commandLevels    map[string]int
-	handlers         map[string]handlerFunc
-	emailSender      ports.EmailSender
-	timerManager     ports.TimerManager
+	db            ports.DBAdapter
+	sessionStore  ports.SessionStore
+	cipher        ports.Cipher
+	logger        ports.Logger
+	movieManager  *MovieManager
+	groupManager  *GroupManager
+	connWriter    ports.ConnectionWriter
+	logon         *services.LogonService
+	commandLevels map[string]int
+	handlers      map[string]handlerFunc
+	emailSender   ports.EmailSender
+	timerManager  ports.TimerManager
 }
 
 func NewSystemService(
@@ -36,25 +34,23 @@ func NewSystemService(
 	movieManager *MovieManager,
 	groupManager *GroupManager,
 	connWriter ports.ConnectionWriter,
-	authMode string,
-	defaultUserLevel int,
+	logon *services.LogonService,
 	commandLevels map[string]int,
 	emailSender ports.EmailSender,
 	timerManager ports.TimerManager,
 ) *SystemService {
 	s := &SystemService{
-		db:               db,
-		sessionStore:     sessionStore,
-		cipher:           cipher,
-		logger:           logger,
-		movieManager:     movieManager,
-		groupManager:     groupManager,
-		connWriter:       connWriter,
-		authMode:         authMode,
-		defaultUserLevel: defaultUserLevel,
-		commandLevels:    commandLevels,
-		emailSender:      emailSender,
-		timerManager:     timerManager,
+		db:            db,
+		sessionStore:  sessionStore,
+		cipher:        cipher,
+		logger:        logger,
+		movieManager:  movieManager,
+		groupManager:  groupManager,
+		connWriter:    connWriter,
+		logon:         logon,
+		commandLevels: commandLevels,
+		emailSender:   emailSender,
+		timerManager:  timerManager,
 	}
 
 	s.handlers = map[string]handlerFunc{
@@ -126,146 +122,60 @@ func (s *SystemService) handleLogon(connectionID string, msg *smus.MUSMessage) (
 		"content_type": fmt.Sprintf("%T", msg.MsgContent),
 		"content":      msg.MsgContent.String(),
 	})
-	movieID, userID, password, err := s.extractCredentials(msg.MsgContent)
-	if err != nil {
-		if s.authMode == "strict" {
-			s.logger.Warn("Logon failed: could not extract credentials", map[string]interface{}{
-				"client": connectionID,
-				"error":  err.Error(),
-			})
-			return NewResponse("Logon", "System", []string{msg.SenderID.Value}, smus.ErrInvalidMessageFormat, lingo.NewLVoid()), nil
-		}
-		userID = msg.SenderID.Value
-		password = ""
+
+	// Credential *encoding* (positional list vs prop-list) is SMUS protocol;
+	// everything after parsing is the LogonService's policy.
+	req := services.LogonRequest{ConnectionID: connectionID, SenderID: msg.SenderID.Value}
+	if movieID, userID, password, err := s.extractCredentials(msg.MsgContent); err != nil {
+		req.ParseErr = err
+	} else {
+		req.Credentials = &services.LogonCredentials{MovieID: movieID, UserID: userID, Password: password}
 	}
 
-	userLevel := s.defaultUserLevel
-
-	switch s.authMode {
-	case "none":
-		// Accept any user without DB lookup
-
-	case "strict":
-		user, err := s.db.GetUser(userID)
-		if err != nil {
-			s.logger.Info("Logon failed: user not found", map[string]interface{}{
-				"client": connectionID,
-				"userID": userID,
-			})
-			return NewResponse("Logon", "System", []string{userID}, smus.ErrInvalidUserID, lingo.NewLVoid()), nil
-		}
-
-		if errResp := s.validateUserCredentials(user, password, connectionID, userID); errResp != nil {
-			return errResp, nil
-		}
-
-		userLevel = user.UserLevel
-
-	default: // "open"
-		user, err := s.db.GetUser(userID)
-		if err != nil {
-			if err == ports.ErrUserNotFound {
-				// No DB record — accept anyway in open mode, use defaultUserLevel
-			} else {
-				s.logger.Error("Logon failed: database error", map[string]interface{}{
-					"client": connectionID,
-					"userID": userID,
-					"error":  err.Error(),
-				})
-				return NewResponse("Logon", "System", []string{userID}, smus.ErrServerInternalError, lingo.NewLVoid()), nil
-			}
-		} else {
-			if errResp := s.validateUserCredentials(user, password, connectionID, userID); errResp != nil {
-				return errResp, nil
-			}
-
-			userLevel = user.UserLevel
-		}
+	res := s.logon.Logon(req)
+	if res.Code != services.LogonOK {
+		return NewResponse("Logon", "System", []string{res.UserID}, logonErrCode(res.Code), lingo.NewLVoid()), nil
 	}
-
-	// Reject a Logon for a userID that already has a live session: otherwise a
-	// second client could remap the connection and hijack/evict the first. (H3)
-	if userID != connectionID {
-		if existing, _ := s.sessionStore.GetConnection(userID); existing != nil {
-			s.logger.Warn("Logon rejected: userID already connected", map[string]interface{}{
-				"client": connectionID,
-				"userID": userID,
-			})
-			return NewResponse("Logon", "System", []string{userID}, smus.ErrConnectionRefused, lingo.NewLVoid()), nil
-		}
-	}
-
-	// Remap the connection so future messages use userID. Do this before touching
-	// the session store: if the slot is already bound to another connection (race
-	// with a concurrent logon) RemapClientID returns false and we refuse rather
-	// than clobber it. (H3)
-	if s.connWriter != nil {
-		if !s.connWriter.RemapClientID(connectionID, userID) {
-			s.logger.Warn("Logon rejected: userID already bound to another connection", map[string]interface{}{
-				"client": connectionID,
-				"userID": userID,
-			})
-			return NewResponse("Logon", "System", []string{userID}, smus.ErrConnectionRefused, lingo.NewLVoid()), nil
-		}
-	}
-
-	// Re-register the session under userID, preserving the client's real IP from the
-	// initial registration instead of storing the connection id in the IP field (L5).
-	ip := connectionID
-	if existing, _ := s.sessionStore.GetConnection(connectionID); existing != nil && existing.IP != "" {
-		ip = existing.IP
-	}
-	s.sessionStore.UnregisterConnection(connectionID)
-	s.sessionStore.RegisterConnection(userID, ip)
-
-	// Store user level in session for permission checks
-	s.sessionStore.SetUserAttribute(userID, "#userLevel", lingo.NewLInteger(int32(userLevel)))
 
 	// Join movie if movieID was provided and MovieManager is available
-	if movieID != "" && s.movieManager != nil {
-		if err := s.movieManager.JoinMovie(movieID, userID); err != nil {
+	if res.MovieID != "" && s.movieManager != nil {
+		if err := s.movieManager.JoinMovie(res.MovieID, res.UserID); err != nil {
 			s.logger.Error("Failed to join movie after logon", map[string]interface{}{
 				"client":  connectionID,
-				"userID":  userID,
-				"movieID": movieID,
+				"userID":  res.UserID,
+				"movieID": res.MovieID,
 				"error":   err.Error(),
 			})
 		} else {
 			// Cache movieID for O(1) lookup
-			s.sessionStore.SetUserAttribute(userID, "#movieID", lingo.NewLString(movieID))
+			s.sessionStore.SetUserAttribute(res.UserID, "#movieID", lingo.NewLString(res.MovieID))
 		}
 	}
 
 	s.logger.Info("Logon successful", map[string]interface{}{
 		"client":     connectionID,
-		"userID":     userID,
-		"movieID":    movieID,
-		"user_level": userLevel,
+		"userID":     res.UserID,
+		"movieID":    res.MovieID,
+		"user_level": res.UserLevel,
 	})
 
-	return NewResponse("Logon", "System", []string{userID}, smus.ErrNoError, lingo.NewLVoid()), nil
+	return NewResponse("Logon", "System", []string{res.UserID}, smus.ErrNoError, lingo.NewLVoid()), nil
 }
 
-func (s *SystemService) validateUserCredentials(user *ports.User, password, connectionID, userID string) *smus.MUSMessage {
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		s.logger.Info("Logon failed: invalid password", map[string]interface{}{
-			"client": connectionID,
-			"userID": userID,
-		})
-		return NewResponse("Logon", "System", []string{userID}, smus.ErrInvalidPassword, lingo.NewLVoid())
+// logonErrCode maps domain logon outcomes to MUS protocol error codes.
+func logonErrCode(code services.LogonCode) int32 {
+	switch code {
+	case services.LogonBadCredentialsFormat:
+		return smus.ErrInvalidMessageFormat
+	case services.LogonInvalidUser:
+		return smus.ErrInvalidUserID
+	case services.LogonInvalidPassword:
+		return smus.ErrInvalidPassword
+	case services.LogonRefused:
+		return smus.ErrConnectionRefused
+	default:
+		return smus.ErrServerInternalError
 	}
-
-	ban, err := s.db.GetActiveBanByUserID(user.ID)
-	if err == nil && ban != nil {
-		s.logger.Info("Logon failed: user is banned", map[string]interface{}{
-			"client": connectionID,
-			"userID": userID,
-			"reason": ban.Reason,
-		})
-		return NewResponse("Logon", "System", []string{userID}, smus.ErrConnectionRefused, lingo.NewLVoid())
-	}
-
-	return nil
 }
 
 func (s *SystemService) extractCredentials(content lingo.LValue) (movieID, userID, password string, err error) {

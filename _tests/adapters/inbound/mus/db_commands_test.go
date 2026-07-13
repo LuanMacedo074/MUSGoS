@@ -7,27 +7,28 @@ import (
 	"fsos-server/_tests/testutil"
 	"fsos-server/internal/adapters/inbound/mus"
 	"fsos-server/internal/domain/ports"
+	"fsos-server/internal/domain/services"
 	"fsos-server/internal/domain/types/lingo"
 	"fsos-server/internal/domain/types/smus"
 )
 
 // dbCommandLevels maps all DB commands to level 20 so the admin (level 80) can execute them.
 var dbCommandLevels = map[string]int{
-	"DBPlayer.getAttribute":          20,
-	"DBPlayer.setAttribute":          20,
-	"DBPlayer.deleteAttribute":       20,
-	"DBPlayer.getAttributeNames":     20,
-	"DBApplication.getAttribute":     20,
-	"DBApplication.setAttribute":     20,
-	"DBApplication.deleteAttribute":  20,
+	"DBPlayer.getAttribute":           20,
+	"DBPlayer.setAttribute":           20,
+	"DBPlayer.deleteAttribute":        20,
+	"DBPlayer.getAttributeNames":      20,
+	"DBApplication.getAttribute":      20,
+	"DBApplication.setAttribute":      20,
+	"DBApplication.deleteAttribute":   20,
 	"DBApplication.getAttributeNames": 20,
-	"DBAdmin.createApplication":      80,
-	"DBAdmin.deleteApplication":      80,
-	"DBAdmin.createUser":             80,
-	"DBAdmin.deleteUser":             80,
-	"DBAdmin.getUserCount":           80,
-	"DBAdmin.ban":                    80,
-	"DBAdmin.revokeBan":              80,
+	"DBAdmin.createApplication":       80,
+	"DBAdmin.deleteApplication":       80,
+	"DBAdmin.createUser":              80,
+	"DBAdmin.deleteUser":              80,
+	"DBAdmin.getUserCount":            80,
+	"DBAdmin.ban":                     80,
+	"DBAdmin.revokeBan":               80,
 }
 
 // setupDBCommandsService creates a SystemService with a logged-in admin user (level 80).
@@ -40,7 +41,7 @@ func setupDBCommandsService(t *testing.T, db *testutil.MockDBAdapter) (*mus.Syst
 	groupManager := mus.NewGroupManager(sessionStore, logger)
 	connWriter := &testutil.MockConnectionWriter{}
 
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, "none", 80, dbCommandLevels, nil, nil)
+	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 80), dbCommandLevels, nil, nil)
 
 	// Logon admin to join movie "testMovie"
 	logonMsg := buildLogonMsg("admin", "")
@@ -482,7 +483,7 @@ func TestDBAdmin_PermissionDenied(t *testing.T) {
 
 	// defaultUserLevel=20 — below the 80 required for DBAdmin commands
 	cmdLevels := map[string]int{"DBAdmin.createApplication": 80}
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, "none", 20, cmdLevels, nil, nil)
+	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 20), cmdLevels, nil, nil)
 
 	logonMsg := buildLogonMsg("lowuser", "")
 	logonMsg.MsgContent.(*lingo.LList).Values[0] = lingo.NewLString("testMovie")
