@@ -53,6 +53,11 @@ func (d *sqlDB) Close() error {
 	return d.db.Close()
 }
 
+// QueryBuilder returns a generic query builder for this database.
+func (d *sqlDB) QueryBuilder() ports.QueryBuilder {
+	return &sqlQueryBuilder{exec: d.db, dialect: d.dialect}
+}
+
 // ensureMigrationsTable bootstraps the table the MigrationTracker records
 // applied migrations in; called from the adapters' constructors.
 func (d *sqlDB) ensureMigrationsTable() error {

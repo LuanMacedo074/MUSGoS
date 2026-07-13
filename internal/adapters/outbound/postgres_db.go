@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"fsos-server/internal/domain/ports"
-
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -43,9 +41,4 @@ func NewPostgresDB(dsn string) (*PostgresDB, error) {
 	}
 
 	return p, nil
-}
-
-// QueryBuilder returns a generic query builder for this database.
-func (p *PostgresDB) QueryBuilder() ports.QueryBuilder {
-	return &sqlQueryBuilder{exec: p.db, dialect: postgresDialect{}}
 }

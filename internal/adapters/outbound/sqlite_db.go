@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"fsos-server/internal/domain/ports"
-
 	_ "modernc.org/sqlite"
 )
 
@@ -36,9 +34,4 @@ func NewSQLiteDB(dbPath string) (*SQLiteDB, error) {
 	}
 
 	return s, nil
-}
-
-// QueryBuilder returns a generic query builder for this database.
-func (s *SQLiteDB) QueryBuilder() ports.QueryBuilder {
-	return &sqlQueryBuilder{exec: s.db, dialect: sqliteDialect{}}
 }
