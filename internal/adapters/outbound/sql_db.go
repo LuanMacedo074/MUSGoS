@@ -136,6 +136,55 @@ func (d *sqlDB) DeleteApplicationAttribute(appName, attrName string) error {
 	return err
 }
 
+// --- DBPlayer ---
+
+func (d *sqlDB) SetPlayerAttribute(appName, userID, attrName string, value lingo.LValue) error {
+	appID, err := d.getAppID(appName)
+	if err != nil {
+		return err
+	}
+
+	jsonBytes, err := lingo.MarshalLValue(value)
+	if err != nil {
+		return err
+	}
+
+	_, err = d.db.Exec(d.dialect.Rebind(`
+		INSERT INTO player_attributes (app_id, user_id, attr_name, value_json)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(app_id, user_id, attr_name) DO UPDATE SET value_json=excluded.value_json`),
+		appID, userID, attrName, string(jsonBytes))
+	return err
+}
+
+func (d *sqlDB) GetPlayerAttribute(appName, userID, attrName string) (lingo.LValue, error) {
+	appID, err := d.getAppID(appName)
+	if err != nil {
+		return lingo.NewLVoid(), err
+	}
+
+	return d.scanAttribute(
+		d.dialect.Rebind("SELECT value_json FROM player_attributes WHERE app_id = ? AND user_id = ? AND attr_name = ?"),
+		appID, userID, attrName)
+}
+
+func (d *sqlDB) GetPlayerAttributeNames(appName, userID string) ([]string, error) {
+	appID, err := d.getAppID(appName)
+	if err != nil {
+		return nil, err
+	}
+	return d.queryNames(d.dialect.Rebind("SELECT attr_name FROM player_attributes WHERE app_id = ? AND user_id = ?"), appID, userID)
+}
+
+func (d *sqlDB) DeletePlayerAttribute(appName, userID, attrName string) error {
+	appID, err := d.getAppID(appName)
+	if err != nil {
+		return err
+	}
+	_, err = d.db.Exec(d.dialect.Rebind("DELETE FROM player_attributes WHERE app_id = ? AND user_id = ? AND attr_name = ?"), appID, userID, attrName)
+	return err
+}
+
 // --- helpers ---
 
 func (d *sqlDB) queryNames(query string, args ...interface{}) ([]string, error) {

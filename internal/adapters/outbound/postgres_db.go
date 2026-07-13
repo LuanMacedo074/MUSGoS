@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
 
 	"github.com/google/uuid"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -49,55 +48,6 @@ func NewPostgresDB(dsn string) (*PostgresDB, error) {
 
 func (p *PostgresDB) init() error {
 	return p.ensureMigrationsTable()
-}
-
-// --- DBPlayer ---
-
-func (p *PostgresDB) SetPlayerAttribute(appName, userID, attrName string, value lingo.LValue) error {
-	appID, err := p.getAppID(appName)
-	if err != nil {
-		return err
-	}
-
-	jsonBytes, err := lingo.MarshalLValue(value)
-	if err != nil {
-		return err
-	}
-
-	_, err = p.db.Exec(`
-		INSERT INTO player_attributes (app_id, user_id, attr_name, value_json)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT(app_id, user_id, attr_name) DO UPDATE SET value_json=excluded.value_json`,
-		appID, userID, attrName, string(jsonBytes))
-	return err
-}
-
-func (p *PostgresDB) GetPlayerAttribute(appName, userID, attrName string) (lingo.LValue, error) {
-	appID, err := p.getAppID(appName)
-	if err != nil {
-		return lingo.NewLVoid(), err
-	}
-
-	return p.scanAttribute(
-		"SELECT value_json FROM player_attributes WHERE app_id = $1 AND user_id = $2 AND attr_name = $3",
-		appID, userID, attrName)
-}
-
-func (p *PostgresDB) GetPlayerAttributeNames(appName, userID string) ([]string, error) {
-	appID, err := p.getAppID(appName)
-	if err != nil {
-		return nil, err
-	}
-	return p.queryNames("SELECT attr_name FROM player_attributes WHERE app_id = $1 AND user_id = $2", appID, userID)
-}
-
-func (p *PostgresDB) DeletePlayerAttribute(appName, userID, attrName string) error {
-	appID, err := p.getAppID(appName)
-	if err != nil {
-		return err
-	}
-	_, err = p.db.Exec("DELETE FROM player_attributes WHERE app_id = $1 AND user_id = $2 AND attr_name = $3", appID, userID, attrName)
-	return err
 }
 
 // --- DBUser ---

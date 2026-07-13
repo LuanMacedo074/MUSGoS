@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
 
 	"github.com/google/uuid"
 	_ "modernc.org/sqlite"
@@ -69,55 +68,6 @@ func (s *SQLiteDB) init() error {
 	}
 
 	return s.ensureMigrationsTable()
-}
-
-// --- DBPlayer ---
-
-func (s *SQLiteDB) SetPlayerAttribute(appName, userID, attrName string, value lingo.LValue) error {
-	appID, err := s.getAppID(appName)
-	if err != nil {
-		return err
-	}
-
-	jsonBytes, err := lingo.MarshalLValue(value)
-	if err != nil {
-		return err
-	}
-
-	_, err = s.db.Exec(`
-		INSERT INTO player_attributes (app_id, user_id, attr_name, value_json)
-		VALUES (?, ?, ?, ?)
-		ON CONFLICT(app_id, user_id, attr_name) DO UPDATE SET value_json=excluded.value_json`,
-		appID, userID, attrName, string(jsonBytes))
-	return err
-}
-
-func (s *SQLiteDB) GetPlayerAttribute(appName, userID, attrName string) (lingo.LValue, error) {
-	appID, err := s.getAppID(appName)
-	if err != nil {
-		return lingo.NewLVoid(), err
-	}
-
-	return s.scanAttribute(
-		"SELECT value_json FROM player_attributes WHERE app_id = ? AND user_id = ? AND attr_name = ?",
-		appID, userID, attrName)
-}
-
-func (s *SQLiteDB) GetPlayerAttributeNames(appName, userID string) ([]string, error) {
-	appID, err := s.getAppID(appName)
-	if err != nil {
-		return nil, err
-	}
-	return s.queryNames("SELECT attr_name FROM player_attributes WHERE app_id = ? AND user_id = ?", appID, userID)
-}
-
-func (s *SQLiteDB) DeletePlayerAttribute(appName, userID, attrName string) error {
-	appID, err := s.getAppID(appName)
-	if err != nil {
-		return err
-	}
-	_, err = s.db.Exec("DELETE FROM player_attributes WHERE app_id = ? AND user_id = ? AND attr_name = ?", appID, userID, attrName)
-	return err
 }
 
 // --- DBUser ---
