@@ -257,6 +257,60 @@ func (d *sqlDB) UpdateUserPassword(username, passwordHash string) error {
 	return nil
 }
 
+// --- DBBan ---
+
+func (d *sqlDB) CreateBan(userID *int64, ipAddress *string, reason string, expiresAt *time.Time) error {
+	_, err := d.db.Exec(
+		d.dialect.Rebind("INSERT INTO bans (uuid, user_id, ip_address, reason, expires_at) VALUES (?, ?, ?, ?, ?)"),
+		uuid.New().String(), userID, ipAddress, reason, expiresAt)
+	return err
+}
+
+func (d *sqlDB) GetActiveBanByUserID(userID int64) (*ports.Ban, error) {
+	return d.getActiveBan("user_id", userID)
+}
+
+func (d *sqlDB) GetActiveBanByIP(ipAddress string) (*ports.Ban, error) {
+	return d.getActiveBan("ip_address", ipAddress)
+}
+
+// getActiveBan looks up the newest unrevoked, unexpired ban by the given
+// column ("user_id" or "ip_address" — fixed strings, never caller input).
+func (d *sqlDB) getActiveBan(column string, value interface{}) (*ports.Ban, error) {
+	var b ports.Ban
+	query := fmt.Sprintf(`
+		SELECT id, uuid, user_id, ip_address, reason, expires_at, revoked_at, created_at
+		FROM bans
+		WHERE %s = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > %s)
+		ORDER BY created_at DESC LIMIT 1`, column, d.dialect.NowExpr())
+	err := d.db.QueryRow(d.dialect.Rebind(query),
+		value).Scan(&b.ID, &b.UUID, &b.UserID, &b.IPAddress, &b.Reason, &b.ExpiresAt, &b.RevokedAt, &b.CreatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ports.ErrBanNotFound
+		}
+		return nil, err
+	}
+	return &b, nil
+}
+
+func (d *sqlDB) RevokeBan(banID int64) error {
+	result, err := d.db.Exec(
+		d.dialect.Rebind(fmt.Sprintf("UPDATE bans SET revoked_at = %s WHERE id = ? AND revoked_at IS NULL", d.dialect.NowExpr())),
+		banID)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ports.ErrBanNotFound
+	}
+	return nil
+}
+
 // --- helpers ---
 
 func (d *sqlDB) queryNames(query string, args ...interface{}) ([]string, error) {

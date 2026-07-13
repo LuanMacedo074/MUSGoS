@@ -7,11 +7,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"fsos-server/internal/domain/ports"
 
-	"github.com/google/uuid"
 	_ "modernc.org/sqlite"
 )
 
@@ -73,64 +71,6 @@ func (s *SQLiteDB) init() error {
 // --- DBUser ---
 
 // --- DBBan ---
-
-func (s *SQLiteDB) CreateBan(userID *int64, ipAddress *string, reason string, expiresAt *time.Time) error {
-	_, err := s.db.Exec(
-		"INSERT INTO bans (uuid, user_id, ip_address, reason, expires_at) VALUES (?, ?, ?, ?, ?)",
-		uuid.New().String(), userID, ipAddress, reason, expiresAt)
-	return err
-}
-
-func (s *SQLiteDB) GetActiveBanByUserID(userID int64) (*ports.Ban, error) {
-	var b ports.Ban
-	err := s.db.QueryRow(`
-		SELECT id, uuid, user_id, ip_address, reason, expires_at, revoked_at, created_at
-		FROM bans
-		WHERE user_id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > datetime('now'))
-		ORDER BY created_at DESC LIMIT 1`,
-		userID).Scan(&b.ID, &b.UUID, &b.UserID, &b.IPAddress, &b.Reason, &b.ExpiresAt, &b.RevokedAt, &b.CreatedAt)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, ports.ErrBanNotFound
-		}
-		return nil, err
-	}
-	return &b, nil
-}
-
-func (s *SQLiteDB) GetActiveBanByIP(ipAddress string) (*ports.Ban, error) {
-	var b ports.Ban
-	err := s.db.QueryRow(`
-		SELECT id, uuid, user_id, ip_address, reason, expires_at, revoked_at, created_at
-		FROM bans
-		WHERE ip_address = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > datetime('now'))
-		ORDER BY created_at DESC LIMIT 1`,
-		ipAddress).Scan(&b.ID, &b.UUID, &b.UserID, &b.IPAddress, &b.Reason, &b.ExpiresAt, &b.RevokedAt, &b.CreatedAt)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, ports.ErrBanNotFound
-		}
-		return nil, err
-	}
-	return &b, nil
-}
-
-func (s *SQLiteDB) RevokeBan(banID int64) error {
-	result, err := s.db.Exec(
-		"UPDATE bans SET revoked_at = datetime('now') WHERE id = ? AND revoked_at IS NULL",
-		banID)
-	if err != nil {
-		return err
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return ports.ErrBanNotFound
-	}
-	return nil
-}
 
 // --- Schema operations ---
 
