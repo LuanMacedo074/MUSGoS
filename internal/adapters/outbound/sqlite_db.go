@@ -72,74 +72,6 @@ func (s *SQLiteDB) init() error {
 
 // --- DBUser ---
 
-func (s *SQLiteDB) CreateUser(username, passwordHash string, userLevel int) error {
-	_, err := s.db.Exec(
-		"INSERT INTO users (uuid, username, password_hash, user_level) VALUES (?, ?, ?, ?)",
-		uuid.New().String(), username, passwordHash, userLevel)
-	return err
-}
-
-func (s *SQLiteDB) GetUser(username string) (*ports.User, error) {
-	var u ports.User
-	err := s.db.QueryRow(
-		"SELECT id, uuid, username, password_hash, user_level, created_at FROM users WHERE username = ?",
-		username).Scan(&u.ID, &u.UUID, &u.Username, &u.PasswordHash, &u.UserLevel, &u.CreatedAt)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, ports.ErrUserNotFound
-		}
-		return nil, err
-	}
-	return &u, nil
-}
-
-func (s *SQLiteDB) DeleteUser(username string) error {
-	result, err := s.db.Exec("DELETE FROM users WHERE username = ?", username)
-	if err != nil {
-		return err
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return ports.ErrUserNotFound
-	}
-	return nil
-}
-
-func (s *SQLiteDB) UpdateUserLevel(username string, level int) error {
-	result, err := s.db.Exec("UPDATE users SET user_level = ? WHERE username = ?", level, username)
-	if err != nil {
-		return err
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return ports.ErrUserNotFound
-	}
-	return nil
-}
-
-func (s *SQLiteDB) UpdateUserPassword(username, passwordHash string) error {
-	result, err := s.db.Exec(
-		"UPDATE users SET password_hash = ? WHERE username = ?",
-		passwordHash, username)
-	if err != nil {
-		return err
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return ports.ErrUserNotFound
-	}
-	return nil
-}
-
 // --- DBBan ---
 
 func (s *SQLiteDB) CreateBan(userID *int64, ipAddress *string, reason string, expiresAt *time.Time) error {
@@ -418,4 +350,3 @@ func (s *SQLiteDB) QueryBuilder() ports.QueryBuilder {
 func (s *SQLiteDB) Close() error {
 	return s.db.Close()
 }
-

@@ -52,74 +52,6 @@ func (p *PostgresDB) init() error {
 
 // --- DBUser ---
 
-func (p *PostgresDB) CreateUser(username, passwordHash string, userLevel int) error {
-	_, err := p.db.Exec(
-		"INSERT INTO users (uuid, username, password_hash, user_level) VALUES ($1, $2, $3, $4)",
-		uuid.New().String(), username, passwordHash, userLevel)
-	return err
-}
-
-func (p *PostgresDB) GetUser(username string) (*ports.User, error) {
-	var u ports.User
-	err := p.db.QueryRow(
-		"SELECT id, uuid, username, password_hash, user_level, created_at FROM users WHERE username = $1",
-		username).Scan(&u.ID, &u.UUID, &u.Username, &u.PasswordHash, &u.UserLevel, &u.CreatedAt)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, ports.ErrUserNotFound
-		}
-		return nil, err
-	}
-	return &u, nil
-}
-
-func (p *PostgresDB) DeleteUser(username string) error {
-	result, err := p.db.Exec("DELETE FROM users WHERE username = $1", username)
-	if err != nil {
-		return err
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return ports.ErrUserNotFound
-	}
-	return nil
-}
-
-func (p *PostgresDB) UpdateUserLevel(username string, level int) error {
-	result, err := p.db.Exec("UPDATE users SET user_level = $1 WHERE username = $2", level, username)
-	if err != nil {
-		return err
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return ports.ErrUserNotFound
-	}
-	return nil
-}
-
-func (p *PostgresDB) UpdateUserPassword(username, passwordHash string) error {
-	result, err := p.db.Exec(
-		"UPDATE users SET password_hash = $1 WHERE username = $2",
-		passwordHash, username)
-	if err != nil {
-		return err
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return ports.ErrUserNotFound
-	}
-	return nil
-}
-
 // --- DBBan ---
 
 func (p *PostgresDB) CreateBan(userID *int64, ipAddress *string, reason string, expiresAt *time.Time) error {
@@ -387,4 +319,3 @@ func (p *PostgresDB) QueryBuilder() ports.QueryBuilder {
 func (p *PostgresDB) Close() error {
 	return p.db.Close()
 }
-

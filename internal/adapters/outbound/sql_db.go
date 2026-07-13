@@ -7,6 +7,8 @@ import (
 
 	"fsos-server/internal/domain/ports"
 	"fsos-server/internal/domain/types/lingo"
+
+	"github.com/google/uuid"
 )
 
 // sqlDB is the storage core shared by the SQL-backed adapters (RFC-007). It
@@ -183,6 +185,76 @@ func (d *sqlDB) DeletePlayerAttribute(appName, userID, attrName string) error {
 	}
 	_, err = d.db.Exec(d.dialect.Rebind("DELETE FROM player_attributes WHERE app_id = ? AND user_id = ? AND attr_name = ?"), appID, userID, attrName)
 	return err
+}
+
+// --- DBUser ---
+
+func (d *sqlDB) CreateUser(username, passwordHash string, userLevel int) error {
+	_, err := d.db.Exec(
+		d.dialect.Rebind("INSERT INTO users (uuid, username, password_hash, user_level) VALUES (?, ?, ?, ?)"),
+		uuid.New().String(), username, passwordHash, userLevel)
+	return err
+}
+
+func (d *sqlDB) GetUser(username string) (*ports.User, error) {
+	var u ports.User
+	err := d.db.QueryRow(
+		d.dialect.Rebind("SELECT id, uuid, username, password_hash, user_level, created_at FROM users WHERE username = ?"),
+		username).Scan(&u.ID, &u.UUID, &u.Username, &u.PasswordHash, &u.UserLevel, &u.CreatedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, ports.ErrUserNotFound
+		}
+		return nil, err
+	}
+	return &u, nil
+}
+
+func (d *sqlDB) DeleteUser(username string) error {
+	result, err := d.db.Exec(d.dialect.Rebind("DELETE FROM users WHERE username = ?"), username)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ports.ErrUserNotFound
+	}
+	return nil
+}
+
+func (d *sqlDB) UpdateUserLevel(username string, level int) error {
+	result, err := d.db.Exec(d.dialect.Rebind("UPDATE users SET user_level = ? WHERE username = ?"), level, username)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ports.ErrUserNotFound
+	}
+	return nil
+}
+
+func (d *sqlDB) UpdateUserPassword(username, passwordHash string) error {
+	result, err := d.db.Exec(
+		d.dialect.Rebind("UPDATE users SET password_hash = ? WHERE username = ?"),
+		passwordHash, username)
+	if err != nil {
+		return err
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rows == 0 {
+		return ports.ErrUserNotFound
+	}
+	return nil
 }
 
 // --- helpers ---
