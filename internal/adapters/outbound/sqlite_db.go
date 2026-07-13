@@ -35,7 +35,7 @@ func validateIdentifier(name string) error {
 }
 
 type SQLiteDB struct {
-	db *sql.DB
+	sqlDB
 }
 
 func NewSQLiteDB(dbPath string) (*SQLiteDB, error) {
@@ -48,7 +48,7 @@ func NewSQLiteDB(dbPath string) (*SQLiteDB, error) {
 		return nil, fmt.Errorf("failed to open sqlite database: %w", err)
 	}
 
-	s := &SQLiteDB{db: db}
+	s := &SQLiteDB{sqlDB{db: db, dialect: sqliteDialect{}}}
 	if err := s.init(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize database: %w", err)

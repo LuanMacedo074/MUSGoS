@@ -17,7 +17,7 @@ import (
 // PostgreSQL server. It mirrors SQLiteDB but speaks Postgres SQL: $N
 // placeholders, BIGSERIAL identities, TIMESTAMPTZ, and now() defaults.
 type PostgresDB struct {
-	db *sql.DB
+	sqlDB
 }
 
 // NewPostgresDB opens a connection pool for the given DSN. The DSN may be a
@@ -38,7 +38,7 @@ func NewPostgresDB(dsn string) (*PostgresDB, error) {
 		return nil, fmt.Errorf("failed to connect to postgres: %w", err)
 	}
 
-	p := &PostgresDB{db: db}
+	p := &PostgresDB{sqlDB{db: db, dialect: postgresDialect{}}}
 	if err := p.init(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize database: %w", err)
