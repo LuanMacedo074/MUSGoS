@@ -44,6 +44,18 @@ func (postgresDialect) AutoIncrPKSQL() string {
 	return "BIGSERIAL PRIMARY KEY"
 }
 
+func (postgresDialect) AddColumnClause() string {
+	return "ADD COLUMN IF NOT EXISTS "
+}
+
+func (postgresDialect) SkipAddColumn(db *sql.DB, table, column string) (bool, error) {
+	return false, nil // the IF NOT EXISTS clause handles idempotency
+}
+
+func (postgresDialect) SupportsUniqueInAddColumn() bool {
+	return true
+}
+
 func (postgresDialect) Init(db *sql.DB) error {
 	return nil
 }

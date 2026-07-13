@@ -45,6 +45,36 @@ func (sqliteDialect) AutoIncrPKSQL() string {
 	return "INTEGER PRIMARY KEY AUTOINCREMENT"
 }
 
+func (sqliteDialect) AddColumnClause() string {
+	return "ADD COLUMN "
+}
+
+// SkipAddColumn checks PRAGMA table_info because SQLite has no ADD COLUMN IF
+// NOT EXISTS; skipping when the column exists keeps migrations re-runnable.
+func (sqliteDialect) SkipAddColumn(db *sql.DB, table, column string) (bool, error) {
+	rows, err := db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, ctype string
+		var dflt interface{}
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
+}
+
+func (sqliteDialect) SupportsUniqueInAddColumn() bool {
+	return false
+}
+
 func (sqliteDialect) Init(db *sql.DB) error {
 	pragmas := []string{
 		"PRAGMA foreign_keys = ON",

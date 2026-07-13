@@ -29,6 +29,16 @@ type dialect interface {
 	// AutoIncrPKSQL is the full column definition fragment (type + constraints)
 	// for a single-column auto-increment primary key.
 	AutoIncrPKSQL() string
+	// AddColumnClause is the ALTER TABLE fragment for adding a column
+	// ("ADD COLUMN IF NOT EXISTS " where the backend supports it).
+	AddColumnClause() string
+	// SkipAddColumn reports whether AddColumn should silently no-op because the
+	// column already exists — the pre-check backends without ADD COLUMN IF NOT
+	// EXISTS need so re-running a migration stays idempotent.
+	SkipAddColumn(db *sql.DB, table, column string) (bool, error)
+	// SupportsUniqueInAddColumn reports whether ADD COLUMN may carry a UNIQUE
+	// constraint (SQLite cannot add one via ALTER TABLE).
+	SupportsUniqueInAddColumn() bool
 	// Init applies per-connection setup right after the pool is opened
 	// (pragmas on SQLite; nothing on Postgres).
 	Init(db *sql.DB) error
