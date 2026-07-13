@@ -17,26 +17,21 @@ type dbExecutor interface {
 	QueryRow(query string, args ...interface{}) *sql.Row
 }
 
-// SQLiteQueryBuilder implements ports.QueryBuilder (and, over a *sql.DB,
-// ports.TransactionalQueryBuilder) for SQLite.
-type SQLiteQueryBuilder struct {
-	exec dbExecutor
+// sqlQueryBuilder implements ports.QueryBuilder (and, over a *sql.DB,
+// ports.TransactionalQueryBuilder) for any backend: queries are built with
+// ?-placeholders and rebound per dialect at execution time.
+type sqlQueryBuilder struct {
+	exec    dbExecutor
+	dialect dialect
 }
 
-func NewSQLiteQueryBuilder(db *sql.DB) *SQLiteQueryBuilder {
-	return &SQLiteQueryBuilder{exec: db}
-}
-
-func (qb *SQLiteQueryBuilder) Table(name string) ports.Query {
-	return &sqliteQuery{
-		tableName: name,
-		exec:      qb.exec,
-	}
+func (qb *sqlQueryBuilder) Table(name string) ports.Query {
+	return &sqlQuery{tableName: name, exec: qb.exec, dialect: qb.dialect}
 }
 
 // Begin opens a transaction and returns a ports.Tx whose queries run inside it.
 // Only valid on a builder backed by the root *sql.DB (not an already-tx one).
-func (qb *SQLiteQueryBuilder) Begin() (ports.Tx, error) {
+func (qb *sqlQueryBuilder) Begin() (ports.Tx, error) {
 	db, ok := qb.exec.(*sql.DB)
 	if !ok {
 		return nil, fmt.Errorf("cannot begin transaction: query builder is not backed by a root connection")
@@ -45,45 +40,48 @@ func (qb *SQLiteQueryBuilder) Begin() (ports.Tx, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &sqliteTx{tx: tx}, nil
+	return &sqlTx{tx: tx, dialect: qb.dialect}, nil
 }
 
-// sqliteTx implements ports.Tx: a query builder bound to a *sql.Tx.
-type sqliteTx struct {
-	tx *sql.Tx
+// sqlTx implements ports.Tx: a query builder bound to a *sql.Tx.
+type sqlTx struct {
+	tx      *sql.Tx
+	dialect dialect
 }
 
-func (t *sqliteTx) Table(name string) ports.Query {
-	return &sqliteQuery{tableName: name, exec: t.tx}
+func (t *sqlTx) Table(name string) ports.Query {
+	return &sqlQuery{tableName: name, exec: t.tx, dialect: t.dialect}
 }
 
-func (t *sqliteTx) Commit() error   { return t.tx.Commit() }
-func (t *sqliteTx) Rollback() error { return t.tx.Rollback() }
+func (t *sqlTx) Commit() error   { return t.tx.Commit() }
+func (t *sqlTx) Rollback() error { return t.tx.Rollback() }
 
 type whereClause struct {
 	column string
 	value  interface{}
 }
 
-// sqliteQuery implements ports.Query for SQLite.
-type sqliteQuery struct {
+// sqlQuery implements ports.Query over a dialect.
+type sqlQuery struct {
 	tableName string
 	wheres    []whereClause
 	exec      dbExecutor
+	dialect   dialect
 }
 
-func (q *sqliteQuery) Where(column string, value interface{}) ports.Query {
+func (q *sqlQuery) Where(column string, value interface{}) ports.Query {
 	newWheres := make([]whereClause, len(q.wheres), len(q.wheres)+1)
 	copy(newWheres, q.wheres)
 	newWheres = append(newWheres, whereClause{column, value})
-	return &sqliteQuery{
+	return &sqlQuery{
 		tableName: q.tableName,
 		wheres:    newWheres,
 		exec:      q.exec,
+		dialect:   q.dialect,
 	}
 }
 
-func (q *sqliteQuery) Insert(data map[string]interface{}) error {
+func (q *sqlQuery) Insert(data map[string]interface{}) error {
 	if err := validateIdentifier(q.tableName); err != nil {
 		return fmt.Errorf("invalid table name: %w", err)
 	}
@@ -100,11 +98,11 @@ func (q *sqliteQuery) Insert(data map[string]interface{}) error {
 	}
 	query := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)",
 		q.tableName, strings.Join(cols, ", "), strings.Join(placeholders, ", "))
-	_, err := q.exec.Exec(query, vals...)
+	_, err := q.exec.Exec(q.dialect.Rebind(query), vals...)
 	return err
 }
 
-func (q *sqliteQuery) Update(data map[string]interface{}) (int64, error) {
+func (q *sqlQuery) Update(data map[string]interface{}) (int64, error) {
 	if err := validateIdentifier(q.tableName); err != nil {
 		return 0, fmt.Errorf("invalid table name: %w", err)
 	}
@@ -124,14 +122,14 @@ func (q *sqliteQuery) Update(data map[string]interface{}) (int64, error) {
 	vals = append(vals, whereVals...)
 
 	query := fmt.Sprintf("UPDATE %s SET %s%s", q.tableName, strings.Join(sets, ", "), whereSQL)
-	result, execErr := q.exec.Exec(query, vals...)
+	result, execErr := q.exec.Exec(q.dialect.Rebind(query), vals...)
 	if execErr != nil {
 		return 0, execErr
 	}
 	return result.RowsAffected()
 }
 
-func (q *sqliteQuery) Increment(column string, delta int64) (int64, error) {
+func (q *sqlQuery) Increment(column string, delta int64) (int64, error) {
 	if err := validateIdentifier(q.tableName); err != nil {
 		return 0, fmt.Errorf("invalid table name: %w", err)
 	}
@@ -146,14 +144,14 @@ func (q *sqliteQuery) Increment(column string, delta int64) (int64, error) {
 	vals = append(vals, whereVals...)
 
 	query := fmt.Sprintf("UPDATE %s SET %s = %s + ?%s", q.tableName, column, column, whereSQL)
-	result, execErr := q.exec.Exec(query, vals...)
+	result, execErr := q.exec.Exec(q.dialect.Rebind(query), vals...)
 	if execErr != nil {
 		return 0, execErr
 	}
 	return result.RowsAffected()
 }
 
-func (q *sqliteQuery) Delete() (int64, error) {
+func (q *sqlQuery) Delete() (int64, error) {
 	if err := validateIdentifier(q.tableName); err != nil {
 		return 0, fmt.Errorf("invalid table name: %w", err)
 	}
@@ -162,14 +160,14 @@ func (q *sqliteQuery) Delete() (int64, error) {
 		return 0, err
 	}
 	query := fmt.Sprintf("DELETE FROM %s%s", q.tableName, whereSQL)
-	result, execErr := q.exec.Exec(query, vals...)
+	result, execErr := q.exec.Exec(q.dialect.Rebind(query), vals...)
 	if execErr != nil {
 		return 0, execErr
 	}
 	return result.RowsAffected()
 }
 
-func (q *sqliteQuery) First() (ports.QueryResult, error) {
+func (q *sqlQuery) First() (ports.QueryResult, error) {
 	if err := validateIdentifier(q.tableName); err != nil {
 		return nil, fmt.Errorf("invalid table name: %w", err)
 	}
@@ -178,7 +176,7 @@ func (q *sqliteQuery) First() (ports.QueryResult, error) {
 		return nil, err
 	}
 	query := fmt.Sprintf("SELECT * FROM %s%s LIMIT 1", q.tableName, whereSQL)
-	rows, err := q.exec.Query(query, vals...)
+	rows, err := q.exec.Query(q.dialect.Rebind(query), vals...)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +192,7 @@ func (q *sqliteQuery) First() (ports.QueryResult, error) {
 	return results[0], nil
 }
 
-func (q *sqliteQuery) Get() ([]ports.QueryResult, error) {
+func (q *sqlQuery) Get() ([]ports.QueryResult, error) {
 	if err := validateIdentifier(q.tableName); err != nil {
 		return nil, fmt.Errorf("invalid table name: %w", err)
 	}
@@ -203,7 +201,7 @@ func (q *sqliteQuery) Get() ([]ports.QueryResult, error) {
 		return nil, err
 	}
 	query := fmt.Sprintf("SELECT * FROM %s%s", q.tableName, whereSQL)
-	rows, err := q.exec.Query(query, vals...)
+	rows, err := q.exec.Query(q.dialect.Rebind(query), vals...)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +209,7 @@ func (q *sqliteQuery) Get() ([]ports.QueryResult, error) {
 	return scanRows(rows)
 }
 
-func (q *sqliteQuery) Count() (int64, error) {
+func (q *sqlQuery) Count() (int64, error) {
 	if err := validateIdentifier(q.tableName); err != nil {
 		return 0, fmt.Errorf("invalid table name: %w", err)
 	}
@@ -221,11 +219,11 @@ func (q *sqliteQuery) Count() (int64, error) {
 	}
 	query := fmt.Sprintf("SELECT COUNT(*) FROM %s%s", q.tableName, whereSQL)
 	var count int64
-	err = q.exec.QueryRow(query, vals...).Scan(&count)
+	err = q.exec.QueryRow(q.dialect.Rebind(query), vals...).Scan(&count)
 	return count, err
 }
 
-func (q *sqliteQuery) buildWhere() (string, []interface{}, error) {
+func (q *sqlQuery) buildWhere() (string, []interface{}, error) {
 	if len(q.wheres) == 0 {
 		return "", nil, nil
 	}

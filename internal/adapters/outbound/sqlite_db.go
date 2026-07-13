@@ -40,5 +40,5 @@ func NewSQLiteDB(dbPath string) (*SQLiteDB, error) {
 
 // QueryBuilder returns a generic query builder for this database.
 func (s *SQLiteDB) QueryBuilder() ports.QueryBuilder {
-	return NewSQLiteQueryBuilder(s.db)
+	return &sqlQueryBuilder{exec: s.db, dialect: sqliteDialect{}}
 }
