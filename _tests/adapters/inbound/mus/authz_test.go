@@ -20,7 +20,7 @@ func newNonAdminService(t *testing.T, db *testutil.MockDBAdapter, userID string)
 	mm := mus.NewMovieManager(sessionStore, logger)
 	gm := mus.NewGroupManager(sessionStore, logger)
 	cw := &testutil.MockConnectionWriter{}
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, mm, gm, cw, services.NewLogonService(db, sessionStore, cw, logger, "none", 20),
+	svc := mus.NewSystemService(db, sessionStore, logger, mm, gm, cw, services.NewLogonService(db, sessionStore, cw, logger, "none", 20),
 		services.NewAuthorizer(sessionStore, dbCommandLevels), nil, nil)
 
 	logon := buildLogonMsg(userID, "")
@@ -95,7 +95,7 @@ func TestLogon_DuplicateUserID_Rejected(t *testing.T) {
 	mm := mus.NewMovieManager(sessionStore, logger)
 	gm := mus.NewGroupManager(sessionStore, logger)
 	cw := &testutil.MockConnectionWriter{}
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, mm, gm, cw, services.NewLogonService(db, sessionStore, cw, logger, "none", 40),
+	svc := mus.NewSystemService(db, sessionStore, logger, mm, gm, cw, services.NewLogonService(db, sessionStore, cw, logger, "none", 40),
 		services.NewAuthorizer(sessionStore, nil), nil, nil)
 
 	resp1, err := svc.Handle("conn-1", buildLogonMsg("dupuser", ""))

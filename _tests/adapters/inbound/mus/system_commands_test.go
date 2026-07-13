@@ -22,7 +22,7 @@ func setupSystemCommandsService(t *testing.T) (*mus.SystemService, *testutil.Moc
 	groupManager := mus.NewGroupManager(sessionStore, logger)
 	connWriter := &testutil.MockConnectionWriter{}
 
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 40),
+	svc := mus.NewSystemService(db, sessionStore, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 40),
 		services.NewAuthorizer(sessionStore, nil), nil, nil)
 
 	// Logon user1 to join movie "testMovie"
@@ -204,7 +204,7 @@ func TestSystemCommand_MovieNotInMovie(t *testing.T) {
 	movieManager := mus.NewMovieManager(sessionStore, logger)
 	groupManager := mus.NewGroupManager(sessionStore, logger)
 	connWriter := &testutil.MockConnectionWriter{}
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 40),
+	svc := mus.NewSystemService(db, sessionStore, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 40),
 		services.NewAuthorizer(sessionStore, nil), nil, nil)
 
 	resp, err := svc.Handle("lonely", buildSystemMsg("system.movie.getUserCount", lingo.NewLVoid()))
@@ -388,7 +388,7 @@ func TestSystemCommand_UserDelete_Admin(t *testing.T) {
 	groupManager := mus.NewGroupManager(sessionStore, logger)
 	connWriter := &testutil.MockConnectionWriter{}
 	cmdLevels := map[string]int{"system.user.delete": 80}
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 80),
+	svc := mus.NewSystemService(db, sessionStore, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 80),
 		services.NewAuthorizer(sessionStore, cmdLevels), nil, nil)
 
 	// Logon admin (defaultUserLevel=80)
@@ -419,7 +419,7 @@ func TestSystemCommand_UserDelete_NonAdmin(t *testing.T) {
 	groupManager := mus.NewGroupManager(sessionStore, logger)
 	connWriter := &testutil.MockConnectionWriter{}
 	cmdLevels := map[string]int{"system.user.delete": 80}
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 40),
+	svc := mus.NewSystemService(db, sessionStore, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 40),
 		services.NewAuthorizer(sessionStore, cmdLevels), nil, nil)
 
 	// Logon user1 (level 40) to join movie

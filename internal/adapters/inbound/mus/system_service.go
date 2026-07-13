@@ -14,7 +14,6 @@ type handlerFunc func(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, 
 type SystemService struct {
 	db            ports.DBAdapter
 	sessionStore  ports.SessionStore
-	cipher        ports.Cipher
 	logger        ports.Logger
 	movieManager  *MovieManager
 	groupManager  *GroupManager
@@ -29,7 +28,6 @@ type SystemService struct {
 func NewSystemService(
 	db ports.DBAdapter,
 	sessionStore ports.SessionStore,
-	cipher ports.Cipher,
 	logger ports.Logger,
 	movieManager *MovieManager,
 	groupManager *GroupManager,
@@ -42,7 +40,6 @@ func NewSystemService(
 	s := &SystemService{
 		db:           db,
 		sessionStore: sessionStore,
-		cipher:       cipher,
 		logger:       logger,
 		movieManager: movieManager,
 		groupManager: groupManager,

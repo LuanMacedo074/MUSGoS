@@ -58,7 +58,7 @@ func newSMUSTestDispatcher(scriptEngine ports.ScriptEngine, connWriter ports.Con
 	logger := &testutil.MockLogger{}
 	sessionStore := testutil.NewMockSessionStore()
 	sender := mus.NewSender(connWriter, sessionStore, logger, nil, false, "faria")
-	systemService := mus.NewSystemService(nil, sessionStore, nil, logger, nil, nil, connWriter,
+	systemService := mus.NewSystemService(nil, sessionStore, logger, nil, nil, connWriter,
 		services.NewLogonService(nil, sessionStore, connWriter, logger, "none", 40),
 		services.NewAuthorizer(sessionStore, nil), nil, nil)
 	return mus.NewDispatcher(logger, scriptEngine, systemService, sender, nil)

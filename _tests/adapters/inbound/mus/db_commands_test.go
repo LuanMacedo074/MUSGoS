@@ -41,7 +41,7 @@ func setupDBCommandsService(t *testing.T, db *testutil.MockDBAdapter) (*mus.Syst
 	groupManager := mus.NewGroupManager(sessionStore, logger)
 	connWriter := &testutil.MockConnectionWriter{}
 
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 80),
+	svc := mus.NewSystemService(db, sessionStore, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 80),
 		services.NewAuthorizer(sessionStore, dbCommandLevels), nil, nil)
 
 	// Logon admin to join movie "testMovie"
@@ -484,7 +484,7 @@ func TestDBAdmin_PermissionDenied(t *testing.T) {
 
 	// defaultUserLevel=20 — below the 80 required for DBAdmin commands
 	cmdLevels := map[string]int{"DBAdmin.createApplication": 80}
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 20),
+	svc := mus.NewSystemService(db, sessionStore, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 20),
 		services.NewAuthorizer(sessionStore, cmdLevels), nil, nil)
 
 	logonMsg := buildLogonMsg("lowuser", "")

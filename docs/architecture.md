@@ -63,12 +63,14 @@ internal/
 │   │   ├── script_engine.go          ← ScriptEngine interface
 │   │   └── session_store.go          ← SessionStore interface
 │   └── services/
-│       └── migration_runner.go       ← runs pending migrations in order
+│       ├── migration_runner.go       ← runs pending migrations in order
+│       ├── logon_service.go          ← LogonService: auth modes, credential validation, session takeover
+│       └── authorizer.go             ← Authorizer: command levels, owner-or-admin policy
 │
 └── adapters/                         ← concrete implementations
     ├── inbound/                      ← INBOUND adapters
     │   ├── mus/                      ← MUS-protocol-specific logic
-    │   │   ├── system_service.go     ← SystemService (handler map, logon, permission checks, DB command helper)
+    │   │   ├── system_service.go     ← SystemService (handler map, SMUS credential parsing, DB command helper; logon/permissions delegate to domain services)
     │   │   ├── system_service_server.go  ← handlers: getVersion, getTime, getUserCount, getMovieCount, getMovies
     │   │   ├── system_service_movie.go   ← handlers: movie.getUserCount, movie.getGroups, movie.getGroupCount
     │   │   ├── system_service_group.go   ← handlers: group.join/leave/getUsers/getUserCount/set/get/deleteAttribute
@@ -300,7 +302,7 @@ These are the adapters that **receive** data from the outside world and deliver 
 - **`smus_handler.go`** — receives the raw bytes from the TCP server and uses the domain (`smus.ParseMUSMessageWithDecryption`) to interpret the message. It delegates all routing logic to the `Dispatcher`. It's inbound because it's on the "receive and process" side of the request.
 
 - **`mus/`** — sub-package with MUS-protocol-specific logic:
-  - **`system_service.go`** — `SystemService` with a handler map (`map[string]handlerFunc`) for routing commands by subject. It includes logon with 3 modes (`none`/`open`/`strict`), a deny-by-default permission system (`checkCommandLevel` via `commandLevels` map), a generic helper `handleDBCommand` for DB commands (parse proplist + extract fields + execute + error mapping), and a `#movieID` cache in the session for O(1) lookup. `dbErrorCode` maps domain errors (`ErrUserNotFound`, `ErrBanNotFound`) to MUS protocol codes using `errors.Is`.
+  - **`system_service.go`** — `SystemService` with a handler map (`map[string]handlerFunc`) for routing commands by subject. It is protocol translation only: it parses SMUS credentials into a `services.LogonRequest` and maps the domain outcome back to MUS codes (`logonErrCode`), delegates permission checks to `services.Authorizer`, provides the generic `handleDBCommand` helper for DB commands (parse proplist + extract fields + execute + error mapping), and keeps a `#movieID` cache in the session for O(1) lookup. `dbErrorCode` maps domain errors (`ErrUserNotFound`, `ErrBanNotFound`) to MUS protocol codes using `errors.Is`.
   - **`system_service_*.go`** — handlers organized by domain: `_server` (version, time, counts), `_movie` (movie users/groups), `_group` (join/leave/attributes), `_user` (address, groups, delete with session cleanup), `_db_player`/`_db_application`/`_db_admin` (DB operations via `handleDBCommand`).
   - **`dispatcher.go`** — central routing by first recipient: `System` → SystemService, `system.script` → ScriptEngine, `@Group` → Sender broadcast, `userName` → Sender direct.
   - **`sender.go`** — message sending. `SendMessage()` routes: groups (`@`) via `deliverToGroup()` (serializes once, delivers to all members), user-to-user via `ConnectionWriter.WriteToClient()`. Implements `ports.MessageSender`.
@@ -435,7 +437,7 @@ MUS servers are **script-driven**: the Shockwave/Director client sends Lingo scr
 Currently the `domain/services/` layer contains:
 
 - **`MigrationRunner`** — orchestrates the execution of pending migrations in order.
+- **`LogonService`** — the full logon use case (RFC-008): the three auth modes (`none`/`open`/`strict`), bcrypt credential validation, active-ban rejection, the unparseable-credentials fallback policy, the session-takeover guard, connection remapping, session re-registration preserving the client's real IP, and user-level stamping. Protocol-neutral: it takes a `LogonRequest` and returns a `LogonResult` with a domain outcome code; only the adapter speaks MUS error codes.
+- **`Authorizer`** — permission policy (RFC-008): deny-by-default command levels, the session-backed user-level lookup, the DBAdmin-derived admin threshold, and the owner-or-admin rule for cross-user data access. It shares the session user-level attribute definition with `LogonService`, so the write and read sides cannot drift.
 
-MUS-protocol-specific logic (such as `LogonService` and response helpers) lives in `adapters/inbound/mus/`, since it depends directly on the SMUS types and is not pure domain logic.
-
-MUS-protocol-specific logic (`Dispatcher`, `Sender`, `SystemService`, `MovieManager`, `GroupManager`) lives in `adapters/inbound/mus/`, since it depends directly on the SMUS types. Future protocol-agnostic domain services will be added under `domain/services/`.
+MUS-protocol-specific logic (`Dispatcher`, `Sender`, `SystemService`, `MovieManager`, `GroupManager`) lives in `adapters/inbound/mus/`, since it depends directly on the SMUS types: it parses wire messages, calls the domain services, and formats responses.

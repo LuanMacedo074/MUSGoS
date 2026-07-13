@@ -32,7 +32,7 @@ func NewHandler(
 		groupManager := mus.NewGroupManager(sessionStore, log)
 		logonService := services.NewLogonService(db, sessionStore, connWriter, log, authMode, defaultUserLevel)
 		authorizer := services.NewAuthorizer(sessionStore, commandLevels)
-		systemService := mus.NewSystemService(db, sessionStore, cipher, log, movieManager, groupManager, connWriter, logonService, authorizer, emailSender, timerManager)
+		systemService := mus.NewSystemService(db, sessionStore, log, movieManager, groupManager, connWriter, logonService, authorizer, emailSender, timerManager)
 		dispatcher := mus.NewDispatcher(log, scriptEngine, systemService, sender, queue)
 		return inbound.NewSMUSHandler(log, cipher, dispatcher, allEncrypted), nil
 	default:

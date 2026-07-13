@@ -20,7 +20,7 @@ func setupSystemService(db *testutil.MockDBAdapter, authMode string) *mus.System
 	movieManager := mus.NewMovieManager(sessionStore, logger)
 	groupManager := mus.NewGroupManager(sessionStore, logger)
 	connWriter := &testutil.MockConnectionWriter{}
-	return mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter,
+	return mus.NewSystemService(db, sessionStore, logger, movieManager, groupManager, connWriter,
 		services.NewLogonService(db, sessionStore, connWriter, logger, authMode, 40),
 		services.NewAuthorizer(sessionStore, nil), nil, nil)
 }
@@ -221,7 +221,7 @@ func TestSystemService_Logon_JoinsMovie(t *testing.T) {
 	movieManager := mus.NewMovieManager(sessionStore, logger)
 	groupManager := mus.NewGroupManager(sessionStore, logger)
 	connWriter := &testutil.MockConnectionWriter{}
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 40),
+	svc := mus.NewSystemService(db, sessionStore, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 40),
 		services.NewAuthorizer(sessionStore, nil), nil, nil)
 
 	msg := buildLogonMsg("testuser", "nopass")
@@ -288,7 +288,7 @@ func TestSystemService_Logon_RemapsClientID(t *testing.T) {
 	sessionStore.RegisterConnection("client-1", "192.168.1.1")
 	movieManager := mus.NewMovieManager(sessionStore, logger)
 	groupManager := mus.NewGroupManager(sessionStore, logger)
-	svc := mus.NewSystemService(db, sessionStore, nil, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 40),
+	svc := mus.NewSystemService(db, sessionStore, logger, movieManager, groupManager, connWriter, services.NewLogonService(db, sessionStore, connWriter, logger, "none", 40),
 		services.NewAuthorizer(sessionStore, nil), nil, nil)
 
 	msg := buildLogonMsg("testuser", "nopass")
