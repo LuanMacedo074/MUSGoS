@@ -45,9 +45,9 @@ type dialect interface {
 }
 
 // RebindDollar rewrites ?-style placeholders as $1..$N, leaving question marks
-// inside single-quoted string literals untouched ('' escapes a quote within a
-// literal). It backs the Postgres dialect's Rebind and is exported only so the
-// unit suite in _tests can exercise it directly.
+// inside single-quoted string literals untouched (a doubled single quote
+// escapes a quote within a literal). It backs the Postgres dialect's Rebind
+// and is exported only so the unit suite in _tests can exercise it directly.
 func RebindDollar(query string) string {
 	var b strings.Builder
 	b.Grow(len(query) + 8)

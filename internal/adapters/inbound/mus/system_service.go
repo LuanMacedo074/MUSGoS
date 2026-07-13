@@ -12,11 +12,11 @@ import (
 type handlerFunc func(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error)
 
 type SystemService struct {
-	db            ports.DBAdapter
-	sessionStore  ports.SessionStore
-	logger        ports.Logger
-	movieManager  *MovieManager
-	groupManager  *GroupManager
+	db           ports.DBAdapter
+	sessionStore ports.SessionStore
+	logger       ports.Logger
+	movieManager *MovieManager
+	groupManager *GroupManager
 	connWriter   ports.ConnectionWriter
 	logon        *services.LogonService
 	authz        *services.Authorizer
