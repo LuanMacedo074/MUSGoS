@@ -3,6 +3,7 @@ package outbound
 import (
 	"database/sql"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -12,6 +13,24 @@ import (
 	"github.com/google/uuid"
 )
 
+var validIdentifier = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
+
+var validOnDelete = map[string]bool{
+	"":            true,
+	"CASCADE":     true,
+	"SET NULL":    true,
+	"SET DEFAULT": true,
+	"RESTRICT":    true,
+	"NO ACTION":   true,
+}
+
+func validateIdentifier(name string) error {
+	if !validIdentifier.MatchString(name) {
+		return fmt.Errorf("identifier must match [a-zA-Z_][a-zA-Z0-9_]*")
+	}
+	return nil
+}
+
 // sqlDB is the storage core shared by the SQL-backed adapters (RFC-007). It
 // owns the connection pool and defers backend differences to its dialect; the
 // duplicated method bodies in the sqlite/postgres adapters migrate here group
@@ -19,6 +38,19 @@ import (
 type sqlDB struct {
 	db      *sql.DB
 	dialect dialect
+}
+
+// init runs per-connection setup for the backend and bootstraps the
+// migrations table; called from the adapters' constructors.
+func (d *sqlDB) init() error {
+	if err := d.dialect.Init(d.db); err != nil {
+		return err
+	}
+	return d.ensureMigrationsTable()
+}
+
+func (d *sqlDB) Close() error {
+	return d.db.Close()
 }
 
 // ensureMigrationsTable bootstraps the table the MigrationTracker records

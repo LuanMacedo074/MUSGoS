@@ -5,31 +5,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 
 	"fsos-server/internal/domain/ports"
 
 	_ "modernc.org/sqlite"
 )
 
-var validIdentifier = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
-
-var validOnDelete = map[string]bool{
-	"":            true,
-	"CASCADE":     true,
-	"SET NULL":    true,
-	"SET DEFAULT": true,
-	"RESTRICT":    true,
-	"NO ACTION":   true,
-}
-
-func validateIdentifier(name string) error {
-	if !validIdentifier.MatchString(name) {
-		return fmt.Errorf("identifier must match [a-zA-Z_][a-zA-Z0-9_]*")
-	}
-	return nil
-}
-
+// SQLiteDB implements ports.DBAdapter and ports.MigrationTracker against
+// SQLite. All persistence logic lives on the embedded storage core; this type
+// only owns construction (file path handling) and the backend-specific query
+// builder.
 type SQLiteDB struct {
 	sqlDB
 }
@@ -53,27 +38,7 @@ func NewSQLiteDB(dbPath string) (*SQLiteDB, error) {
 	return s, nil
 }
 
-func (s *SQLiteDB) init() error {
-	pragmas := []string{
-		"PRAGMA foreign_keys = ON",
-		"PRAGMA journal_mode = WAL",
-	}
-	for _, p := range pragmas {
-		if _, err := s.db.Exec(p); err != nil {
-			return fmt.Errorf("failed to set %s: %w", p, err)
-		}
-	}
-
-	return s.ensureMigrationsTable()
-}
-
 // QueryBuilder returns a generic query builder for this database.
 func (s *SQLiteDB) QueryBuilder() ports.QueryBuilder {
 	return NewSQLiteQueryBuilder(s.db)
-}
-
-// --- Close ---
-
-func (s *SQLiteDB) Close() error {
-	return s.db.Close()
 }

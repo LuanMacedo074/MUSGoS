@@ -11,8 +11,9 @@ import (
 )
 
 // PostgresDB implements ports.DBAdapter and ports.MigrationTracker against a
-// PostgreSQL server. It mirrors SQLiteDB but speaks Postgres SQL: $N
-// placeholders, BIGSERIAL identities, TIMESTAMPTZ, and now() defaults.
+// PostgreSQL server. All persistence logic lives on the embedded storage
+// core; this type only owns construction (DSN validation, fail-fast ping) and
+// the backend-specific query builder.
 type PostgresDB struct {
 	sqlDB
 }
@@ -44,17 +45,7 @@ func NewPostgresDB(dsn string) (*PostgresDB, error) {
 	return p, nil
 }
 
-func (p *PostgresDB) init() error {
-	return p.ensureMigrationsTable()
-}
-
 // QueryBuilder returns a generic query builder for this database.
 func (p *PostgresDB) QueryBuilder() ports.QueryBuilder {
 	return NewPostgresQueryBuilder(p.db)
-}
-
-// --- Close ---
-
-func (p *PostgresDB) Close() error {
-	return p.db.Close()
 }
