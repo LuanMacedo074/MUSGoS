@@ -11,8 +11,7 @@ import (
 
 // SQLiteDB implements ports.DBAdapter and ports.MigrationTracker against
 // SQLite. All persistence logic lives on the embedded storage core; this type
-// only owns construction (file path handling) and the backend-specific query
-// builder.
+// only owns construction (file path handling).
 type SQLiteDB struct {
 	sqlDB
 }

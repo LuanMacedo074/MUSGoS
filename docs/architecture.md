@@ -223,7 +223,7 @@ type DBAdapter interface {
     Close() error
 }
 ```
-Complete persistence interface. It manages users (creation, authentication with bcrypt), bans (by user/IP, temporary or permanent), application and player attributes (stored as LValue via JSON), and schema operations for migrations. Implemented via SQLite (`sqlite_db.go`).
+Complete persistence interface. It manages users (creation, authentication with bcrypt), bans (by user/IP, temporary or permanent), application and player attributes (stored as LValue via JSON), and schema operations for migrations. Implemented once by the storage core (`sql_db.go`) over the SQLite and Postgres dialects.
 
 #### `QueryBuilder` + `Query` (outbound port)
 ```go
@@ -240,7 +240,7 @@ type Query interface {
     Count() (int64, error)
 }
 ```
-Fluent interface for generic operations on tables. Exposed to Lua scripts via `mus.db.table("name")`, allowing arbitrary queries on custom tables without needing specific methods on `DBAdapter`. Implemented by `SQLiteQueryBuilder` with identifier validation via a whitelist regex.
+Fluent interface for generic operations on tables. Exposed to Lua scripts via `mus.db.table("name")`, allowing arbitrary queries on custom tables without needing specific methods on `DBAdapter`. Implemented once by the dialect-parameterized query builder (`sql_query_builder.go`) with identifier validation via a whitelist regex.
 
 #### `Migration` + `MigrationTracker` (outbound ports)
 ```go

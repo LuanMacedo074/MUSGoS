@@ -10,8 +10,7 @@ import (
 
 // PostgresDB implements ports.DBAdapter and ports.MigrationTracker against a
 // PostgreSQL server. All persistence logic lives on the embedded storage
-// core; this type only owns construction (DSN validation, fail-fast ping) and
-// the backend-specific query builder.
+// core; this type only owns construction (DSN validation, fail-fast ping).
 type PostgresDB struct {
 	sqlDB
 }
