@@ -91,14 +91,19 @@ internal/
         ├── lua_script_engine.go      ← Lua script execution (gopher-lua)
         ├── lua_db_module.go          ← mus.db module for Lua (query builder + DB ops + bcrypt)
         ├── lua_server_module.go      ← mus.server module for Lua
-        ├── sqlite_query_builder.go   ← fluent query builder for SQLite
+        ├── sql_db.go                 ← storage core: users, bans, attributes, schema DSL — written once, dialect-agnostic
+        ├── sql_dialect.go            ← dialect seam: placeholders, column types, now-expressions, DDL quirks
+        ├── sql_dialect_sqlite.go     ← SQLite dialect
+        ├── sql_dialect_postgres.go   ← Postgres dialect
+        ├── sql_query_builder.go      ← fluent query builder + transactions (dialect-parameterized)
+        ├── sqlite_db.go              ← SQLite constructor (file path handling; pragmas via the dialect)
+        ├── postgres_db.go            ← Postgres constructor (DSN validation, fail-fast ping)
         ├── memory_queue.go           ← in-memory message queue (dev)
         ├── redis_queue.go            ← message queue via Redis pub/sub
         ├── rabbitmq_queue.go         ← message queue via RabbitMQ (AMQP)
         ├── queue_errors.go           ← shared errors for the queue adapters
         ├── memory_session_store.go   ← in-memory session store (dev)
-        ├── redis_session_store.go    ← session store via Redis (production)
-        └── sqlite_db.go             ← SQLite: users, bans, attributes, schema DSL
+        └── redis_session_store.go    ← session store via Redis (production)
 
 external/
 ├── migrations/                       ← versioned SQL migrations
@@ -311,7 +316,7 @@ These are the adapters that the domain **uses** to do things it doesn't know (or
 
 - **`file_logger.go`** — the concrete file logger implementation. Implements the `ports.Logger` interface. Writes formatted logs to a file and to stdout. It's outbound because logging is an **infrastructure resource** the system consumes.
 
-- **`sqlite_db.go`** — complete implementation of `ports.DBAdapter` via SQLite. Manages users (with bcrypt), bans (by user/IP, with expiration), application and player attributes (LValues serialized as JSON), and schema operations (CREATE TABLE, CREATE INDEX) for the migration system. It also implements `MigrationTracker`.
+- **`sql_db.go` + `sql_dialect*.go`** — one storage core implements `ports.DBAdapter` and `ports.MigrationTracker` for every SQL backend (RFC-007). All persistence logic — users (with bcrypt), bans (by user/IP, with expiration), application and player attributes (LValues serialized as JSON), and schema operations for the migration system — is written once with `?`-placeholders; an internal `dialect` seam supplies the per-backend differences (placeholder rebinding, column types, now-expressions, DDL quirks). `sqlite_db.go` and `postgres_db.go` are thin constructors that pair a connection pool with their dialect. Adding a backend means writing a new dialect, not a new adapter.
 
 - **`memory_session_store.go`** — in-memory session store with `sync.RWMutex`. Implements `ports.SessionStore`. Ideal for local development — no external dependencies, but no persistence across restarts.
 
@@ -323,7 +328,7 @@ These are the adapters that the domain **uses** to do things it doesn't know (or
 
 - **`lua_server_module.go`** — `mus.server` module for Lua scripts with server information.
 
-- **`sqlite_query_builder.go`** — implementation of `ports.QueryBuilder` with parameterized queries and identifier validation via a whitelist regex.
+- **`sql_query_builder.go`** — one implementation of `ports.QueryBuilder`, `ports.Query`, and `ports.Tx` for every backend: statements are built with `?`-placeholders (parameterized, identifiers validated via a whitelist regex) and rebound through the dialect at execution time.
 
 - **`memory_queue.go`** — in-memory message queue with `sync.RWMutex`. Implements `ports.MessageQueue`. Ideal for development and tests — no external dependencies.
 
