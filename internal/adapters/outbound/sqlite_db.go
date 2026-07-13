@@ -68,39 +68,7 @@ func (s *SQLiteDB) init() error {
 		}
 	}
 
-	_, err := s.db.Exec(`
-		CREATE TABLE IF NOT EXISTS migrations (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL UNIQUE,
-			applied_at DATETIME NOT NULL
-		)
-	`)
-	return err
-}
-
-// --- MigrationTracker ---
-
-func (s *SQLiteDB) GetAppliedMigrations() ([]string, error) {
-	rows, err := s.db.Query("SELECT name FROM migrations ORDER BY name")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var names []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		names = append(names, name)
-	}
-	return names, rows.Err()
-}
-
-func (s *SQLiteDB) MarkMigrationApplied(name string) error {
-	_, err := s.db.Exec("INSERT INTO migrations (name, applied_at) VALUES (?, ?)", name, time.Now())
-	return err
+	return s.ensureMigrationsTable()
 }
 
 // --- DBAdmin ---

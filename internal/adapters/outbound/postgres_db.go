@@ -48,39 +48,7 @@ func NewPostgresDB(dsn string) (*PostgresDB, error) {
 }
 
 func (p *PostgresDB) init() error {
-	_, err := p.db.Exec(`
-		CREATE TABLE IF NOT EXISTS migrations (
-			id BIGSERIAL PRIMARY KEY,
-			name TEXT NOT NULL UNIQUE,
-			applied_at TIMESTAMPTZ NOT NULL
-		)
-	`)
-	return err
-}
-
-// --- MigrationTracker ---
-
-func (p *PostgresDB) GetAppliedMigrations() ([]string, error) {
-	rows, err := p.db.Query("SELECT name FROM migrations ORDER BY name")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var names []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		names = append(names, name)
-	}
-	return names, rows.Err()
-}
-
-func (p *PostgresDB) MarkMigrationApplied(name string) error {
-	_, err := p.db.Exec("INSERT INTO migrations (name, applied_at) VALUES ($1, $2)", name, time.Now())
-	return err
+	return p.ensureMigrationsTable()
 }
 
 // --- DBAdmin ---

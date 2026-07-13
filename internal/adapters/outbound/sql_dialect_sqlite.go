@@ -41,6 +41,10 @@ func (sqliteDialect) DropTableSuffix() string {
 	return ""
 }
 
+func (sqliteDialect) AutoIncrPKSQL() string {
+	return "INTEGER PRIMARY KEY AUTOINCREMENT"
+}
+
 func (sqliteDialect) Init(db *sql.DB) error {
 	pragmas := []string{
 		"PRAGMA foreign_keys = ON",

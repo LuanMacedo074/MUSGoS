@@ -40,6 +40,10 @@ func (postgresDialect) DropTableSuffix() string {
 	return " CASCADE"
 }
 
+func (postgresDialect) AutoIncrPKSQL() string {
+	return "BIGSERIAL PRIMARY KEY"
+}
+
 func (postgresDialect) Init(db *sql.DB) error {
 	return nil
 }

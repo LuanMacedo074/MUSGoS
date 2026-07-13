@@ -26,6 +26,9 @@ type dialect interface {
 	// DropTableSuffix is appended to DROP TABLE statements (" CASCADE" on
 	// Postgres, empty on SQLite).
 	DropTableSuffix() string
+	// AutoIncrPKSQL is the full column definition fragment (type + constraints)
+	// for a single-column auto-increment primary key.
+	AutoIncrPKSQL() string
 	// Init applies per-connection setup right after the pool is opened
 	// (pragmas on SQLite; nothing on Postgres).
 	Init(db *sql.DB) error
