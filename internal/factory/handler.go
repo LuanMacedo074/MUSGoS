@@ -31,7 +31,8 @@ func NewHandler(
 		movieManager := mus.NewMovieManager(sessionStore, log)
 		groupManager := mus.NewGroupManager(sessionStore, log)
 		logonService := services.NewLogonService(db, sessionStore, connWriter, log, authMode, defaultUserLevel)
-		systemService := mus.NewSystemService(db, sessionStore, cipher, log, movieManager, groupManager, connWriter, logonService, commandLevels, emailSender, timerManager)
+		authorizer := services.NewAuthorizer(sessionStore, commandLevels)
+		systemService := mus.NewSystemService(db, sessionStore, cipher, log, movieManager, groupManager, connWriter, logonService, authorizer, emailSender, timerManager)
 		dispatcher := mus.NewDispatcher(log, scriptEngine, systemService, sender, queue)
 		return inbound.NewSMUSHandler(log, cipher, dispatcher, allEncrypted), nil
 	default:

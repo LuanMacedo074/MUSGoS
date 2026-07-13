@@ -41,7 +41,7 @@ func (s *SystemService) handleUserGetGroups(senderID string, msg *smus.MUSMessag
 }
 
 func (s *SystemService) handleUserDelete(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
-	if !s.checkCommandLevel(senderID, msg.Subject.Value) {
+	if !s.authz.CanRun(senderID, msg.Subject.Value) {
 		return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidServerCommand, lingo.NewLVoid()), nil
 	}
 
@@ -62,7 +62,7 @@ func (s *SystemService) handleUserDelete(senderID string, msg *smus.MUSMessage) 
 }
 
 func (s *SystemService) handleUserSetKillTimer(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
-	if !s.checkCommandLevel(senderID, msg.Subject.Value) {
+	if !s.authz.CanRun(senderID, msg.Subject.Value) {
 		return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidServerCommand, lingo.NewLVoid()), nil
 	}
 
@@ -96,7 +96,7 @@ func (s *SystemService) handleUserSetKillTimer(senderID string, msg *smus.MUSMes
 }
 
 func (s *SystemService) handleUserCancelKillTimer(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
-	if !s.checkCommandLevel(senderID, msg.Subject.Value) {
+	if !s.authz.CanRun(senderID, msg.Subject.Value) {
 		return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidServerCommand, lingo.NewLVoid()), nil
 	}
 

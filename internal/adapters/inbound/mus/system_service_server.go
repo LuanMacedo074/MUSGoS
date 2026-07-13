@@ -42,7 +42,7 @@ func (s *SystemService) handleServerGetMovies(senderID string, msg *smus.MUSMess
 }
 
 func (s *SystemService) handleServerSendEmail(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
-	if !s.checkCommandLevel(senderID, msg.Subject.Value) {
+	if !s.authz.CanRun(senderID, msg.Subject.Value) {
 		return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidServerCommand, lingo.NewLVoid()), nil
 	}
 
@@ -87,7 +87,7 @@ func (s *SystemService) handleServerSendEmail(senderID string, msg *smus.MUSMess
 }
 
 func (s *SystemService) handleServerSetKillTimer(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
-	if !s.checkCommandLevel(senderID, msg.Subject.Value) {
+	if !s.authz.CanRun(senderID, msg.Subject.Value) {
 		return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidServerCommand, lingo.NewLVoid()), nil
 	}
 
@@ -105,7 +105,7 @@ func (s *SystemService) handleServerSetKillTimer(senderID string, msg *smus.MUSM
 }
 
 func (s *SystemService) handleServerCancelKillTimer(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {
-	if !s.checkCommandLevel(senderID, msg.Subject.Value) {
+	if !s.authz.CanRun(senderID, msg.Subject.Value) {
 		return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidServerCommand, lingo.NewLVoid()), nil
 	}
 

@@ -18,12 +18,12 @@ type SystemService struct {
 	logger        ports.Logger
 	movieManager  *MovieManager
 	groupManager  *GroupManager
-	connWriter    ports.ConnectionWriter
-	logon         *services.LogonService
-	commandLevels map[string]int
-	handlers      map[string]handlerFunc
-	emailSender   ports.EmailSender
-	timerManager  ports.TimerManager
+	connWriter   ports.ConnectionWriter
+	logon        *services.LogonService
+	authz        *services.Authorizer
+	handlers     map[string]handlerFunc
+	emailSender  ports.EmailSender
+	timerManager ports.TimerManager
 }
 
 func NewSystemService(
@@ -35,22 +35,22 @@ func NewSystemService(
 	groupManager *GroupManager,
 	connWriter ports.ConnectionWriter,
 	logon *services.LogonService,
-	commandLevels map[string]int,
+	authz *services.Authorizer,
 	emailSender ports.EmailSender,
 	timerManager ports.TimerManager,
 ) *SystemService {
 	s := &SystemService{
-		db:            db,
-		sessionStore:  sessionStore,
-		cipher:        cipher,
-		logger:        logger,
-		movieManager:  movieManager,
-		groupManager:  groupManager,
-		connWriter:    connWriter,
-		logon:         logon,
-		commandLevels: commandLevels,
-		emailSender:   emailSender,
-		timerManager:  timerManager,
+		db:           db,
+		sessionStore: sessionStore,
+		cipher:       cipher,
+		logger:       logger,
+		movieManager: movieManager,
+		groupManager: groupManager,
+		connWriter:   connWriter,
+		logon:        logon,
+		authz:        authz,
+		emailSender:  emailSender,
+		timerManager: timerManager,
 	}
 
 	s.handlers = map[string]handlerFunc{
@@ -214,42 +214,10 @@ func (s *SystemService) getUserMovieID(userID string) (string, error) {
 	return "", fmt.Errorf("user %q is not in any movie", userID)
 }
 
-func (s *SystemService) getUserLevel(userID string) int {
-	val, err := s.sessionStore.GetUserAttribute(userID, "#userLevel")
-	if err != nil {
-		return 0
-	}
-	return int(val.ToInteger())
-}
-
-func (s *SystemService) checkCommandLevel(senderID, command string) bool {
-	requiredLevel, ok := s.commandLevels[command]
-	if !ok {
-		return false
-	}
-	return s.getUserLevel(senderID) >= requiredLevel
-}
-
 // errCrossUserDenied is returned by a DB action when the caller tries to touch
 // another user's data without an admin-level session; dbErrorCode maps it to a
 // command-refused response. (backlog H2)
 var errCrossUserDenied = errors.New("cross-user access denied")
-
-// adminLevel is the level required to act on data the caller does not own. It
-// tracks the configured DBAdmin level (default 80) so cross-user player-data
-// access needs the same privilege as user administration.
-func (s *SystemService) adminLevel() int {
-	if lvl, ok := s.commandLevels["DBAdmin.createUser"]; ok {
-		return lvl
-	}
-	return 80
-}
-
-// ownerOrAdmin reports whether senderID may operate on targetUserID's data: only
-// when it is their own data, or they hold an admin-level session. (H2)
-func (s *SystemService) ownerOrAdmin(senderID, targetUserID string) bool {
-	return targetUserID == senderID || s.getUserLevel(senderID) >= s.adminLevel()
-}
 
 // handleDBCommand is a generic helper for DB command handlers that follow the pattern:
 // check permissions → parse proplist → extract required fields → execute action → return response.
@@ -257,7 +225,7 @@ func (s *SystemService) handleDBCommand(senderID string, msg *smus.MUSMessage,
 	requiredFields []string,
 	action func(fields map[string]lingo.LValue) (lingo.LValue, error),
 ) (*smus.MUSMessage, error) {
-	if !s.checkCommandLevel(senderID, msg.Subject.Value) {
+	if !s.authz.CanRun(senderID, msg.Subject.Value) {
 		return NewResponse(msg.Subject.Value, "System", []string{senderID}, smus.ErrInvalidServerCommand, lingo.NewLVoid()), nil
 	}
 	fields := make(map[string]lingo.LValue, len(requiredFields))
