@@ -4,9 +4,10 @@ package ports
 type ColumnType int
 
 const (
-	ColInteger  ColumnType = iota
+	ColInteger ColumnType = iota
 	ColText
 	ColDatetime
+	ColJSONB // structured JSON; native JSONB on Postgres, TEXT on SQLite
 )
 
 // DefaultType represents how a column's default value is determined.

@@ -24,6 +24,9 @@ func (sqliteDialect) ColumnType(t ports.ColumnType) string {
 		return "TEXT"
 	case ports.ColDatetime:
 		return "DATETIME"
+	case ports.ColJSONB:
+		// SQLite has no JSONB storage type; store as TEXT and use json1 funcs.
+		return "TEXT"
 	default:
 		return "TEXT"
 	}

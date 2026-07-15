@@ -23,6 +23,8 @@ func (postgresDialect) ColumnType(t ports.ColumnType) string {
 		return "TEXT"
 	case ports.ColDatetime:
 		return "TIMESTAMPTZ"
+	case ports.ColJSONB:
+		return "JSONB"
 	default:
 		return "TEXT"
 	}
