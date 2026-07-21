@@ -470,6 +470,7 @@ func (m *MockDBAdapter) RevokeBan(banID int64) error {
 func (m *MockDBAdapter) CreateTable(def ports.Table) error              { return nil }
 func (m *MockDBAdapter) DropTable(name string) error                    { return nil }
 func (m *MockDBAdapter) AddColumn(table string, col ports.Column) error { return nil }
+func (m *MockDBAdapter) DropColumn(table, column string) error          { return nil }
 func (m *MockDBAdapter) CreateIndex(def ports.Index) error              { return nil }
 func (m *MockDBAdapter) Close() error                                   { return nil }
 

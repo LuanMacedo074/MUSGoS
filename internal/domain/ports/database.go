@@ -72,6 +72,12 @@ type DBAdapter interface {
 	// preserving existing rows — use this to evolve a populated table instead of
 	// DropTable+CreateTable, which silently discards data on re-run (backlog M10).
 	AddColumn(table string, col Column) error
+	// DropColumn removes one column from an existing table (ALTER TABLE ...
+	// DROP COLUMN), supported natively by Postgres and by SQLite 3.35+. It is
+	// the additive adapter's counterpart to AddColumn, so a migration can retire
+	// a column instead of the DropTable+CreateTable workaround, which silently
+	// discards data on re-run (backlog M10).
+	DropColumn(table, column string) error
 	CreateIndex(def Index) error
 
 	Close() error

@@ -291,6 +291,39 @@ func TestPG_Schema_And_QueryBuilder(t *testing.T) {
 	}
 }
 
+func TestPG_DropColumn_RemovesColumn(t *testing.T) {
+	db := newTestPG(t)
+
+	// tx_test is on resetPGSchema's drop list, so it is cleaned up next run.
+	mustNoErr(t, db.CreateTable(ports.Table{
+		Name: "tx_test",
+		Columns: []ports.Column{
+			ports.Col("k", ports.ColText).NotNull(),
+			ports.Col("keep", ports.ColInteger).NotNull().Default(0),
+			ports.Col("goner", ports.ColInteger).NotNull().Default(0),
+		},
+		PrimaryKeys: []string{"k"},
+	}))
+
+	qb := db.QueryBuilder()
+	mustNoErr(t, qb.Table("tx_test").Insert(map[string]interface{}{"k": "a", "keep": 1, "goner": 9}))
+
+	mustNoErr(t, db.DropColumn("tx_test", "goner"))
+
+	row, err := qb.Table("tx_test").Where("k", "a").First()
+	mustNoErr(t, err)
+	if row == nil {
+		t.Fatal("expected the row to survive the column drop")
+	}
+	if _, ok := row["goner"]; ok {
+		t.Error("dropped column 'goner' should no longer appear in a selected row")
+	}
+
+	// Dropping an already-absent column is a no-op (DROP COLUMN IF EXISTS),
+	// mirroring AddColumn's idempotent re-run.
+	mustNoErr(t, db.DropColumn("tx_test", "goner"))
+}
+
 // --- transactions ---
 
 func createPGTxTable(t *testing.T, db *outbound.PostgresDB) {

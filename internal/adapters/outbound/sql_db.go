@@ -499,6 +499,27 @@ func (d *sqlDB) AddColumn(table string, col ports.Column) error {
 	return err
 }
 
+func (d *sqlDB) DropColumn(table, column string) error {
+	if err := validateIdentifier(table); err != nil {
+		return fmt.Errorf("invalid table name %q: %w", table, err)
+	}
+	if err := validateIdentifier(column); err != nil {
+		return fmt.Errorf("invalid column name %q: %w", column, err)
+	}
+	if skip, err := d.dialect.SkipDropColumn(d.db, table, column); err != nil || skip {
+		return err
+	}
+
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(table)
+	b.WriteString(" ")
+	b.WriteString(d.dialect.DropColumnClause())
+	b.WriteString(column)
+	_, err := d.db.Exec(b.String())
+	return err
+}
+
 func (d *sqlDB) CreateIndex(def ports.Index) error {
 	if err := validateIdentifier(def.Name); err != nil {
 		return fmt.Errorf("invalid index name %q: %w", def.Name, err)

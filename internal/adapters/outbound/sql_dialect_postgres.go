@@ -58,6 +58,14 @@ func (postgresDialect) SupportsUniqueInAddColumn() bool {
 	return true
 }
 
+func (postgresDialect) DropColumnClause() string {
+	return "DROP COLUMN IF EXISTS "
+}
+
+func (postgresDialect) SkipDropColumn(db *sql.DB, table, column string) (bool, error) {
+	return false, nil // the IF EXISTS clause handles idempotency
+}
+
 func (postgresDialect) Init(db *sql.DB) error {
 	return nil
 }

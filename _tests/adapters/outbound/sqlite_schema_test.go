@@ -121,6 +121,51 @@ func TestDropTable_InvalidName(t *testing.T) {
 	}
 }
 
+func TestDropColumn_RemovesColumn(t *testing.T) {
+	db := newTestDB(t)
+
+	mustNoErr(t, db.CreateTable(ports.Table{
+		Name: "drop_test",
+		Columns: []ports.Column{
+			ports.Col("k", ports.ColText).NotNull(),
+			ports.Col("keep", ports.ColInteger).NotNull().Default(0),
+			ports.Col("goner", ports.ColInteger).NotNull().Default(0),
+		},
+		PrimaryKeys: []string{"k"},
+	}))
+
+	qb := db.QueryBuilder()
+	mustNoErr(t, qb.Table("drop_test").Insert(map[string]interface{}{"k": "a", "keep": 1, "goner": 9}))
+
+	mustNoErr(t, db.DropColumn("drop_test", "goner"))
+
+	row, err := qb.Table("drop_test").Where("k", "a").First()
+	mustNoErr(t, err)
+	if row == nil {
+		t.Fatal("expected the row to survive the column drop")
+	}
+	if _, ok := row["goner"]; ok {
+		t.Error("dropped column 'goner' should no longer appear in a selected row")
+	}
+	if _, ok := row["keep"]; !ok {
+		t.Error("surviving column 'keep' should still be present")
+	}
+
+	// Dropping an already-absent column is a no-op, mirroring AddColumn's
+	// idempotent re-run so migrations stay re-runnable.
+	mustNoErr(t, db.DropColumn("drop_test", "goner"))
+}
+
+func TestDropColumn_InvalidIdentifiers(t *testing.T) {
+	db := newTestDB(t)
+	if err := db.DropColumn("users; DROP TABLE bans", "x"); err == nil {
+		t.Error("expected error for invalid table name in DropColumn")
+	}
+	if err := db.DropColumn("users", "col; DROP TABLE bans"); err == nil {
+		t.Error("expected error for invalid column name in DropColumn")
+	}
+}
+
 func TestCreateIndex_InvalidIdentifiers(t *testing.T) {
 	db := newTestDB(t)
 
