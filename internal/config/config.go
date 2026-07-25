@@ -98,6 +98,9 @@ type ServerConfig struct {
 	RateLimitWindow   int
 	MetricsPort       string
 	MetricsBindAddr   string
+	HTTPPort          string
+	HTTPBindAddr      string
+	HTTPScriptsPath   string
 	JobsEnabled       bool
 	DefaultMovieID    string
 	SMTPHost          string
@@ -236,6 +239,13 @@ func LoadServerConfig() ServerConfig {
 	cfg.RateLimitWindow = getEnvInt("RATE_LIMIT_WINDOW", 60)
 	cfg.MetricsPort = getEnv("METRICS_PORT", "")
 	cfg.MetricsBindAddr = getEnv("METRICS_BIND_ADDR", "127.0.0.1")
+	// Optional generic HTTP inbound adapter: empty port = adapter off, mirroring
+	// the METRICS_PORT idiom. Dispatches requests to Lua under HTTP_SCRIPTS_PATH
+	// with no MUS session; loopback-bound by default like the metrics server. The
+	// engine stays agnostic to what the scripts do (auth lives in FsosServer Lua).
+	cfg.HTTPPort = getEnv("HTTP_PORT", "")
+	cfg.HTTPBindAddr = getEnv("HTTP_BIND_ADDR", "127.0.0.1")
+	cfg.HTTPScriptsPath = getEnv("HTTP_SCRIPTS_PATH", "external/https")
 	cfg.JobsEnabled = getEnv("JOBS_ENABLED", "1") == "1"
 	// Movie used to resolve @group sends from senders that aren't in any movie
 	// (system.script broadcasts, scheduler jobs). The FSOS client always

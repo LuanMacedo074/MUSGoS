@@ -186,6 +186,38 @@ func TestLoadServerConfig_RateLimitDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadServerConfig_HTTPDefaults(t *testing.T) {
+	cfg := config.LoadServerConfig()
+
+	if cfg.HTTPPort != "" {
+		t.Errorf("HTTPPort = %q, want empty (disabled)", cfg.HTTPPort)
+	}
+	if cfg.HTTPBindAddr != "127.0.0.1" {
+		t.Errorf("HTTPBindAddr = %q, want 127.0.0.1", cfg.HTTPBindAddr)
+	}
+	if cfg.HTTPScriptsPath != "external/https" {
+		t.Errorf("HTTPScriptsPath = %q, want external/https", cfg.HTTPScriptsPath)
+	}
+}
+
+func TestLoadServerConfig_HTTPCustom(t *testing.T) {
+	t.Setenv("HTTP_PORT", "8443")
+	t.Setenv("HTTP_BIND_ADDR", "0.0.0.0")
+	t.Setenv("HTTP_SCRIPTS_PATH", "custom/https")
+
+	cfg := config.LoadServerConfig()
+
+	if cfg.HTTPPort != "8443" {
+		t.Errorf("HTTPPort = %q, want 8443", cfg.HTTPPort)
+	}
+	if cfg.HTTPBindAddr != "0.0.0.0" {
+		t.Errorf("HTTPBindAddr = %q, want 0.0.0.0", cfg.HTTPBindAddr)
+	}
+	if cfg.HTTPScriptsPath != "custom/https" {
+		t.Errorf("HTTPScriptsPath = %q, want custom/https", cfg.HTTPScriptsPath)
+	}
+}
+
 func TestLoadServerConfig_RateLimitCustom(t *testing.T) {
 	t.Setenv("RATE_LIMIT_REQUESTS", "100")
 	t.Setenv("RATE_LIMIT_WINDOW", "30")

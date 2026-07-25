@@ -231,6 +231,27 @@ func main() {
 		metrics = ms
 	}
 
+	// 9b. Generic HTTP inbound adapter (optional). Its own script engine over
+	// HTTP_SCRIPTS_PATH with NO sender and NO session store, so bridged scripts
+	// run without a MUS session. Empty HTTP_PORT = adapter off; an empty scripts
+	// path would make factory.NewScriptEngine return nil, so guard against it.
+	if cfg.HTTPPort != "" {
+		if cfg.HTTPScriptsPath == "" {
+			gameLogger.Error("HTTP server disabled: HTTP_PORT set but HTTP_SCRIPTS_PATH is empty")
+		} else {
+			httpEngine := factory.NewScriptEngine(cfg.HTTPScriptsPath, gameLogger, cfg.ScriptTimeout, queue, nil, dbResult.Adapter, dbResult.QueryBuilder, nil, cache, emailSender)
+			httpServer := inbound.NewHTTPServer(cfg.HTTPPort, cfg.HTTPBindAddr, httpEngine, gameLogger)
+			go func() {
+				if err := httpServer.Start(); err != nil {
+					gameLogger.Error("HTTP server error", map[string]interface{}{
+						"error": err.Error(),
+					})
+				}
+			}()
+			defer httpServer.Shutdown()
+		}
+	}
+
 	// 10. TCPServer — fully constructed
 	server := inbound.NewTCPServer(inbound.TCPServerConfig{
 		Port:           cfg.Port,
