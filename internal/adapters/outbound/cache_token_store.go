@@ -42,6 +42,7 @@ func NewCacheTokenStore(cache ports.Cache, ttl time.Duration) *CacheTokenStore {
 type tokenRecord struct {
 	CharacterName string `json:"character_name"`
 	UserLevel     int    `json:"user_level"`
+	AccountID     int    `json:"account_id"`
 }
 
 func (s *CacheTokenStore) Issue(payload ports.TokenPayload) (string, error) {
@@ -54,6 +55,7 @@ func (s *CacheTokenStore) Issue(payload ports.TokenPayload) (string, error) {
 	rec, err := json.Marshal(tokenRecord{
 		CharacterName: payload.CharacterName,
 		UserLevel:     payload.UserLevel,
+		AccountID:     payload.AccountID,
 	})
 	if err != nil {
 		return "", err
@@ -86,5 +88,6 @@ func (s *CacheTokenStore) Validate(token string) (ports.TokenPayload, error) {
 	return ports.TokenPayload{
 		CharacterName: rec.CharacterName,
 		UserLevel:     rec.UserLevel,
+		AccountID:     rec.AccountID,
 	}, nil
 }

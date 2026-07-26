@@ -50,9 +50,9 @@ func TestExecute_BcryptVerify_WrongPassword(t *testing.T) {
 func TestExecute_TokenIssueAndValidate_Roundtrip(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "tok", `
-		local token = mus.token.issue({ character_name = "Frodo", user_level = 55 })
+		local token = mus.token.issue({ character_name = "Frodo", user_level = 55, account_id = 9 })
 		local p = mus.token.validate(token)
-		mus.response(p.character_name .. ":" .. tostring(p.user_level))
+		mus.response(p.character_name .. ":" .. tostring(p.user_level) .. ":" .. tostring(p.account_id))
 	`)
 
 	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, outbound.NewMemoryCache(), nil)
@@ -61,8 +61,8 @@ func TestExecute_TokenIssueAndValidate_Roundtrip(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	got := lingo.StringValue(result.Content)
-	if got != "Frodo:55" {
-		t.Errorf("roundtrip = %q, want Frodo:55", got)
+	if got != "Frodo:55:9" {
+		t.Errorf("roundtrip = %q, want Frodo:55:9", got)
 	}
 }
 

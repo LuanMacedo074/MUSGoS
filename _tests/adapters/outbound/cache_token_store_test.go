@@ -15,7 +15,7 @@ func newTokenStore(ttl time.Duration) *outbound.CacheTokenStore {
 func TestCacheTokenStore_IssueThenValidate(t *testing.T) {
 	store := newTokenStore(time.Minute)
 
-	token, err := store.Issue(ports.TokenPayload{CharacterName: "Aragorn", UserLevel: 40})
+	token, err := store.Issue(ports.TokenPayload{CharacterName: "Aragorn", UserLevel: 40, AccountID: 7})
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -32,6 +32,9 @@ func TestCacheTokenStore_IssueThenValidate(t *testing.T) {
 	}
 	if payload.UserLevel != 40 {
 		t.Errorf("UserLevel = %d, want 40", payload.UserLevel)
+	}
+	if payload.AccountID != 7 {
+		t.Errorf("AccountID = %d, want 7", payload.AccountID)
 	}
 }
 

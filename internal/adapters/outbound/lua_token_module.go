@@ -7,13 +7,16 @@ import (
 )
 
 // registerTokenModule exposes mus.token — issue/validate single-use auth tokens
-// carrying a {character_name, user_level} payload. The HTTP login script mints a
-// token here; the MUS Logon token path validates (consumes) it against the same
-// store, so the identity crosses the HTTP→MUS socket gap.
+// carrying a {character_name, user_level, account_id} payload. The HTTP login
+// script mints a token here; the MUS Logon token path validates (consumes) it
+// against the same store, so the identity crosses the HTTP→MUS socket gap.
+// account_id is carried for the pre-Logon create-character flow (a character-less
+// account attaches its new character to the account the token authenticated); the
+// Logon path itself reads only character_name + user_level.
 func registerTokenModule(L *lua.LState, musMod *lua.LTable, store ports.TokenStore) {
 	mod := L.NewTable()
 
-	// mus.token.issue({ character_name = ..., user_level = ... }) -> token string
+	// mus.token.issue({ character_name = ..., user_level = ..., account_id = ... }) -> token string
 	mod.RawSetString("issue", L.NewFunction(func(L *lua.LState) int {
 		tbl := L.CheckTable(1)
 		payload := ports.TokenPayload{}
@@ -22,6 +25,9 @@ func registerTokenModule(L *lua.LState, musMod *lua.LTable, store ports.TokenSto
 		}
 		if n, ok := tbl.RawGetString("user_level").(lua.LNumber); ok {
 			payload.UserLevel = int(n)
+		}
+		if n, ok := tbl.RawGetString("account_id").(lua.LNumber); ok {
+			payload.AccountID = int(n)
 		}
 		token, err := store.Issue(payload)
 		if err != nil {
@@ -32,7 +38,7 @@ func registerTokenModule(L *lua.LState, musMod *lua.LTable, store ports.TokenSto
 		return 1
 	}))
 
-	// mus.token.validate(token) -> { character_name = ..., user_level = ... } | nil
+	// mus.token.validate(token) -> { character_name = ..., user_level = ..., account_id = ... } | nil
 	mod.RawSetString("validate", L.NewFunction(func(L *lua.LState) int {
 		token := L.CheckString(1)
 		payload, err := store.Validate(token)
@@ -43,6 +49,7 @@ func registerTokenModule(L *lua.LState, musMod *lua.LTable, store ports.TokenSto
 		res := L.NewTable()
 		res.RawSetString("character_name", lua.LString(payload.CharacterName))
 		res.RawSetString("user_level", lua.LNumber(payload.UserLevel))
+		res.RawSetString("account_id", lua.LNumber(payload.AccountID))
 		L.Push(res)
 		return 1
 	}))
