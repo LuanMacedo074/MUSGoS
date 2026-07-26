@@ -216,6 +216,15 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 		registerCacheModule(L, musMod, e.cache)
 	}
 
+	// Register mus.bcrypt module (password-verify primitive; no deps)
+	registerBcryptModule(L, musMod)
+
+	// Register mus.token module — issue/validate single-use tokens over the same
+	// cache the MUS Logon token path validates against.
+	if e.cache != nil {
+		registerTokenModule(L, musMod, NewCacheTokenStore(e.cache, DefaultTokenTTL))
+	}
+
 	// Register mus.log module
 	registerLogModule(L, musMod, e.logger)
 

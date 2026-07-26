@@ -70,8 +70,18 @@ type LogonService struct {
 	sessions     ports.SessionStore
 	connWriter   ports.ConnectionWriter
 	logger       ports.Logger
-	mode         string // "none", "open" (default), or "strict"
+	mode         string // "none", "open" (default), "strict", or "token"
 	defaultLevel int
+	tokens       ports.TokenStore // required only for "token" mode
+}
+
+// LogonOption configures optional LogonService collaborators.
+type LogonOption func(*LogonService)
+
+// WithTokenStore supplies the token store the "token" auth mode validates
+// against. Only the token path uses it; the other modes ignore it.
+func WithTokenStore(tokens ports.TokenStore) LogonOption {
+	return func(s *LogonService) { s.tokens = tokens }
 }
 
 func NewLogonService(
@@ -81,8 +91,9 @@ func NewLogonService(
 	logger ports.Logger,
 	mode string,
 	defaultLevel int,
+	opts ...LogonOption,
 ) *LogonService {
-	return &LogonService{
+	s := &LogonService{
 		db:           db,
 		sessions:     sessions,
 		connWriter:   connWriter,
@@ -90,6 +101,10 @@ func NewLogonService(
 		mode:         mode,
 		defaultLevel: defaultLevel,
 	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // Logon runs the full logon use case and reports the outcome. On LogonOK the
@@ -98,9 +113,9 @@ func NewLogonService(
 func (s *LogonService) Logon(req LogonRequest) LogonResult {
 	var userID, password, movieID string
 	if req.Credentials == nil {
-		// Strict mode requires parseable credentials; the other modes fall
-		// back to the wire sender identity with an empty password.
-		if s.mode == "strict" {
+		// Strict and token modes require parseable credentials (a password /
+		// token); the other modes fall back to the wire sender identity.
+		if s.mode == "strict" || s.mode == "token" {
 			parseErr := ""
 			if req.ParseErr != nil {
 				parseErr = req.ParseErr.Error()
@@ -124,6 +139,26 @@ func (s *LogonService) Logon(req LogonRequest) LogonResult {
 	switch s.mode {
 	case "none":
 		// Accept any user without DB lookup
+
+	case "token":
+		// The credential is a token minted by the HTTP login step. Validate and
+		// consume it; the payload is authoritative for both the character the
+		// session binds to and its level — the engine never reads any account.
+		if s.tokens == nil {
+			s.logger.Error("Logon failed: token mode without a token store", map[string]interface{}{
+				"client": req.ConnectionID,
+			})
+			return LogonResult{Code: LogonInternalError, UserID: userID}
+		}
+		payload, err := s.tokens.Validate(password)
+		if err != nil {
+			s.logger.Info("Logon failed: invalid or expired token", map[string]interface{}{
+				"client": req.ConnectionID,
+			})
+			return LogonResult{Code: LogonInvalidPassword, UserID: userID}
+		}
+		userID = payload.CharacterName
+		userLevel = payload.UserLevel
 
 	case "strict":
 		user, err := s.db.GetUser(userID)

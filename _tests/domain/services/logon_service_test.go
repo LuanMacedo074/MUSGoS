@@ -3,8 +3,10 @@ package services_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"fsos-server/_tests/testutil"
+	"fsos-server/internal/adapters/outbound"
 	"fsos-server/internal/domain/ports"
 	"fsos-server/internal/domain/services"
 
@@ -325,5 +327,177 @@ func TestLogonService_SameIDAsConnection_SkipsTakeoverGuard(t *testing.T) {
 
 	if res.Code != services.LogonOK {
 		t.Fatalf("Code = %v, want LogonOK", res.Code)
+	}
+}
+
+// tokenLogonSvc builds a "token"-mode LogonService backed by a real
+// cache-backed token store, and returns both so a test can mint tokens.
+func tokenLogonSvc(t *testing.T) (*services.LogonService, ports.TokenStore, *testutil.MockSessionStore) {
+	t.Helper()
+	sessions := testutil.NewMockSessionStore()
+	sessions.RegisterConnection("client-1", "192.168.1.1")
+	store := outbound.NewCacheTokenStore(outbound.NewMemoryCache(), time.Minute)
+	svc := services.NewLogonService(
+		&testutil.MockDBAdapter{}, sessions, &testutil.MockConnectionWriter{}, &testutil.MockLogger{},
+		"token", 20, services.WithTokenStore(store),
+	)
+	return svc, store, sessions
+}
+
+func TestLogonService_TokenMode_ValidToken_BindsCarriedCharacter(t *testing.T) {
+	svc, store, sessions := tokenLogonSvc(t)
+
+	token, err := store.Issue(ports.TokenPayload{CharacterName: "Frodo", UserLevel: 55})
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+
+	// The client sends Logon(userID = character_name, password = token).
+	res := svc.Logon(services.LogonRequest{
+		ConnectionID: "client-1", SenderID: "client-1",
+		Credentials: creds("shire", "Frodo", token),
+	})
+
+	if res.Code != services.LogonOK {
+		t.Fatalf("Code = %v, want LogonOK", res.Code)
+	}
+	if res.UserID != "Frodo" {
+		t.Errorf("UserID = %q, want the token's Frodo", res.UserID)
+	}
+	if res.UserLevel != 55 {
+		t.Errorf("UserLevel = %d, want the token's 55", res.UserLevel)
+	}
+	if res.MovieID != "shire" {
+		t.Errorf("MovieID = %q, want shire", res.MovieID)
+	}
+	// Session is registered under the carried character with the carried level.
+	if conn, err := sessions.GetConnection("Frodo"); err != nil || conn == nil {
+		t.Fatalf("GetConnection(Frodo) = %v, %v; want a live session", conn, err)
+	}
+	if lvl, _ := sessions.GetUserAttribute("Frodo", services.UserLevelAttribute); lvl == nil || lvl.ToInteger() != 55 {
+		t.Errorf("stamped level = %v, want 55", lvl)
+	}
+}
+
+func TestLogonService_TokenMode_SharedCacheInterop(t *testing.T) {
+	// Mirrors main.go: the login script's token store and the Logon service's
+	// token store are separate instances over the SAME cache. A token issued by
+	// one must validate through the other.
+	cache := outbound.NewMemoryCache()
+	issuer := outbound.NewCacheTokenStore(cache, time.Minute)    // stands in for the engine/login side
+	validator := outbound.NewCacheTokenStore(cache, time.Minute) // the Logon side
+
+	token, err := issuer.Issue(ports.TokenPayload{CharacterName: "Merry", UserLevel: 30})
+	if err != nil {
+		t.Fatalf("Issue: %v", err)
+	}
+
+	sessions := testutil.NewMockSessionStore()
+	sessions.RegisterConnection("client-1", "192.168.1.1")
+	svc := services.NewLogonService(
+		&testutil.MockDBAdapter{}, sessions, &testutil.MockConnectionWriter{}, &testutil.MockLogger{},
+		"token", 20, services.WithTokenStore(validator),
+	)
+
+	res := svc.Logon(services.LogonRequest{
+		ConnectionID: "client-1", SenderID: "client-1",
+		Credentials: creds("", "Merry", token),
+	})
+	if res.Code != services.LogonOK {
+		t.Fatalf("Code = %v, want LogonOK", res.Code)
+	}
+	if res.UserID != "Merry" || res.UserLevel != 30 {
+		t.Errorf("result = %+v, want UserID=Merry UserLevel=30", res)
+	}
+}
+
+func TestLogonService_TokenMode_TokenCharacterIsAuthoritative(t *testing.T) {
+	// The token payload — not the client-supplied userID — decides the identity.
+	// A client claiming "Sauron" while presenting a token for "Frodo" binds to
+	// Frodo; the client name is ignored.
+	svc, store, sessions := tokenLogonSvc(t)
+
+	token, _ := store.Issue(ports.TokenPayload{CharacterName: "Frodo", UserLevel: 55})
+
+	res := svc.Logon(services.LogonRequest{
+		ConnectionID: "client-1", SenderID: "client-1",
+		Credentials: creds("", "Sauron", token),
+	})
+
+	if res.Code != services.LogonOK {
+		t.Fatalf("Code = %v, want LogonOK", res.Code)
+	}
+	if res.UserID != "Frodo" {
+		t.Errorf("UserID = %q, want the token's Frodo (client-claimed Sauron ignored)", res.UserID)
+	}
+	if conn, err := sessions.GetConnection("Frodo"); err != nil || conn == nil {
+		t.Errorf("session should bind to Frodo, got %v (err %v)", conn, err)
+	}
+	if conn, _ := sessions.GetConnection("Sauron"); conn != nil {
+		t.Errorf("no session should exist for the client-claimed Sauron, got %+v", conn)
+	}
+}
+
+func TestLogonService_TokenMode_TokenIsSingleUse(t *testing.T) {
+	svc, store, _ := tokenLogonSvc(t)
+
+	token, _ := store.Issue(ports.TokenPayload{CharacterName: "Sam", UserLevel: 20})
+
+	if res := svc.Logon(services.LogonRequest{
+		ConnectionID: "client-1", SenderID: "client-1",
+		Credentials: creds("", "Sam", token),
+	}); res.Code != services.LogonOK {
+		t.Fatalf("first logon Code = %v, want LogonOK", res.Code)
+	}
+
+	// The token was consumed; replaying it must be refused.
+	res := svc.Logon(services.LogonRequest{
+		ConnectionID: "client-2", SenderID: "client-2",
+		Credentials: creds("", "Sam", token),
+	})
+	if res.Code != services.LogonInvalidPassword {
+		t.Errorf("replay Code = %v, want LogonInvalidPassword", res.Code)
+	}
+}
+
+func TestLogonService_TokenMode_InvalidToken_Refused(t *testing.T) {
+	svc, _, _ := tokenLogonSvc(t)
+
+	res := svc.Logon(services.LogonRequest{
+		ConnectionID: "client-1", SenderID: "client-1",
+		Credentials: creds("", "Frodo", "not-a-real-token"),
+	})
+	if res.Code != services.LogonInvalidPassword {
+		t.Errorf("Code = %v, want LogonInvalidPassword", res.Code)
+	}
+}
+
+func TestLogonService_TokenMode_MissingCredentials_BadFormat(t *testing.T) {
+	svc, _, _ := tokenLogonSvc(t)
+
+	res := svc.Logon(services.LogonRequest{
+		ConnectionID: "client-1", SenderID: "client-1",
+		Credentials: nil, ParseErr: errors.New("no creds"),
+	})
+	if res.Code != services.LogonBadCredentialsFormat {
+		t.Errorf("Code = %v, want LogonBadCredentialsFormat", res.Code)
+	}
+}
+
+func TestLogonService_TokenMode_NoStore_InternalError(t *testing.T) {
+	sessions := testutil.NewMockSessionStore()
+	sessions.RegisterConnection("client-1", "192.168.1.1")
+	// Token mode but the store option was never supplied.
+	svc := services.NewLogonService(
+		&testutil.MockDBAdapter{}, sessions, &testutil.MockConnectionWriter{}, &testutil.MockLogger{},
+		"token", 20,
+	)
+
+	res := svc.Logon(services.LogonRequest{
+		ConnectionID: "client-1", SenderID: "client-1",
+		Credentials: creds("", "Frodo", "whatever"),
+	})
+	if res.Code != services.LogonInternalError {
+		t.Errorf("Code = %v, want LogonInternalError", res.Code)
 	}
 }

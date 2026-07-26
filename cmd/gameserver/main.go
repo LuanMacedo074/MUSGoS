@@ -137,6 +137,11 @@ func main() {
 	gameLogger.Info("Cache initialized", map[string]interface{}{
 		"type": cfg.CacheType,
 	})
+
+	// Token store for the Logon token path (RFC-021): the same cache-backed,
+	// single-use token scheme the external/https login script issues against.
+	tokenStore := outbound.NewCacheTokenStore(cache, outbound.DefaultTokenTTL)
+
 	// 1. BanChecker — uses DB + Cache
 	banChecker := inbound.NewBanChecker(dbResult.Adapter, cache)
 
@@ -191,7 +196,7 @@ func main() {
 	defer timerManager.Stop()
 
 	// 7. Handler — Dispatcher receives ScriptEngine + Sender + pool
-	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine, dbResult.Adapter, sessionStore, queue, pool, sender, cfg.AuthMode, cfg.DefaultUserLevel, cfg.AllEncrypted, cfg.CommandLevels, emailSender, timerManager)
+	handler, err := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine, dbResult.Adapter, sessionStore, queue, pool, sender, cfg.AuthMode, cfg.DefaultUserLevel, cfg.AllEncrypted, cfg.CommandLevels, emailSender, timerManager, tokenStore)
 	if err != nil {
 		gameLogger.Fatal("Failed to initialize protocol handler", map[string]interface{}{
 			"error": err,

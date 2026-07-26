@@ -25,12 +25,17 @@ func NewHandler(
 	commandLevels map[string]int,
 	emailSender ports.EmailSender,
 	timerManager ports.TimerManager,
+	tokenStore ports.TokenStore,
 ) (ports.MessageHandler, error) {
 	switch protocol {
 	case "smus":
 		movieManager := mus.NewMovieManager(sessionStore, log)
 		groupManager := mus.NewGroupManager(sessionStore, log)
-		logonService := services.NewLogonService(db, sessionStore, connWriter, log, authMode, defaultUserLevel)
+		var logonOpts []services.LogonOption
+		if tokenStore != nil {
+			logonOpts = append(logonOpts, services.WithTokenStore(tokenStore))
+		}
+		logonService := services.NewLogonService(db, sessionStore, connWriter, log, authMode, defaultUserLevel, logonOpts...)
 		authorizer := services.NewAuthorizer(sessionStore, commandLevels)
 		systemService := mus.NewSystemService(db, sessionStore, log, movieManager, groupManager, connWriter, logonService, authorizer, emailSender, timerManager)
 		dispatcher := mus.NewDispatcher(log, scriptEngine, systemService, sender, queue)
