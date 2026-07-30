@@ -1,6 +1,8 @@
 package outbound
 
 import (
+	"time"
+
 	"fsos-server/internal/domain/ports"
 	"fsos-server/internal/domain/types/lingo"
 
@@ -277,6 +279,14 @@ func rowToLuaTable(L *lua.LState, row ports.QueryResult) *lua.LTable {
 			tbl.RawSetString(k, lua.LString(val))
 		case []byte:
 			tbl.RawSetString(k, lua.LString(string(val)))
+		case time.Time:
+			// Datetime columns: the pgx driver scans TIMESTAMPTZ into a time.Time
+			// (SQLite hands back a string and hits the case above). Without this the
+			// value fell through to `default` and reached Lua as nil, so on Postgres
+			// a script could neither read a timestamp nor tell a set datetime from a
+			// NULL one. Surface it as an RFC3339 UTC string — a stable, lexically
+			// sortable form scripts can compare or parse.
+			tbl.RawSetString(k, lua.LString(val.UTC().Format(time.RFC3339)))
 		case nil:
 			tbl.RawSetString(k, lua.LNil)
 		default:
