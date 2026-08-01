@@ -10,7 +10,7 @@ import (
 	"fsos-server/internal/domain/types/lingo"
 )
 
-// header padrão do MUS, vem em todas as messagem
+// standard MUS header, present in every message
 var MUSHeader = []byte{0x72, 0x00}
 
 type MUSMessage struct {
@@ -34,7 +34,7 @@ func ParseMUSMessageWithDecryption(rawmsg []byte, decrypt ports.Cipher) (*MUSMes
 		return nil, errors.New("message too short")
 	}
 
-	// verifica header mus
+	// verify the MUS header
 	if rawmsg[0] != MUSHeader[0] || rawmsg[1] != MUSHeader[1] {
 		// #All mode: entire packet is encrypted, try decrypting
 		if decrypt != nil {
@@ -47,11 +47,11 @@ func ParseMUSMessageWithDecryption(rawmsg []byte, decrypt ports.Cipher) (*MUSMes
 		}
 	}
 
-	// é importante pular os 6 primeiros bytes que é o header padrão + o tamanho da mensagem, ai começamos a parsear a partir do offset 6
+	// skip the first 6 bytes (standard header + message size); parsing begins at offset 6
 	msg := &MUSMessage{}
 	readPtr := 2
 
-	// le tamanho do conteudo
+	// read the content size
 	msg.ContentSize = int32(binary.BigEndian.Uint32(rawmsg[readPtr:]))
 	readPtr += 4
 
@@ -62,14 +62,14 @@ func ParseMUSMessageWithDecryption(rawmsg []byte, decrypt ports.Cipher) (*MUSMes
 		return nil, fmt.Errorf("message truncated or invalid content size: %d (have %d bytes)", msg.ContentSize, len(rawmsg))
 	}
 
-	// campos obrigatorios do header
+	// required header fields
 	msg.ErrCode = int32(binary.BigEndian.Uint32(rawmsg[readPtr:]))
 	readPtr += 4
 
 	msg.TimeStamp = int32(binary.BigEndian.Uint32(rawmsg[readPtr:]))
 	readPtr += 4
 
-	// strings do header usam metodos proprios de extracao
+	// header strings use their own extraction methods
 	consumed, err := msg.Subject.ExtractMUSMsgHeaderString(rawmsg, readPtr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract subject: %w", err)

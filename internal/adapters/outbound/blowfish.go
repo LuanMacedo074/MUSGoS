@@ -1,10 +1,10 @@
 package outbound
 
-//Este código é um de-para (port/adaptação) da implementação original em C do projeto orignal da macromedia.
-//Gostaria de expressar meus sinceros agradecimentos ao Mauricio Piacentini (mauricio@tabuleiro.com), autor original do OpenSMUS, cujo trabalho serviu como base fundamental para esta implementação.
-//O projeto original OpenSMUS está licenciado sob a Licença MIT, sendo compatível tanto com desenvolvimento open source (GPL ou não) quanto comercial.
-//Copyright original: © 2001-2008 Mauricio Piacentini
-//Utilizei o projeto dele como base e referência para desenvolver esta versão, além de ter entrado e contato e recebido os arquivos originais em C.
+//This code is a port/adaptation of the original C implementation from Macromedia's original project.
+//I would like to express my sincere thanks to Mauricio Piacentini (mauricio@tabuleiro.com), the original author of OpenSMUS, whose work served as the fundamental basis for this implementation.
+//The original OpenSMUS project is licensed under the MIT License, making it compatible with both open source development (GPL or otherwise) and commercial use.
+//Original copyright: © 2001-2008 Mauricio Piacentini
+//I used his project as the basis and reference for developing this version, and I also reached out to him and received the original C files.
 
 import (
 	"encoding/binary"
