@@ -12,16 +12,18 @@ import (
 	"fsos-server/internal/domain/types/smus"
 )
 
-// dbCommandLevels maps all DB commands to level 20 so the admin (level 80) can execute them.
+// dbCommandLevels mirrors the production required-levels (internal/config): DBPlayer
+// commands are level 20, DBApplication and DBAdmin commands are admin-only (level 80).
+// The admin (level 80) used in these tests can execute all of them.
 var dbCommandLevels = map[string]int{
 	"DBPlayer.getAttribute":           20,
 	"DBPlayer.setAttribute":           20,
 	"DBPlayer.deleteAttribute":        20,
 	"DBPlayer.getAttributeNames":      20,
-	"DBApplication.getAttribute":      20,
-	"DBApplication.setAttribute":      20,
-	"DBApplication.deleteAttribute":   20,
-	"DBApplication.getAttributeNames": 20,
+	"DBApplication.getAttribute":      80,
+	"DBApplication.setAttribute":      80,
+	"DBApplication.deleteAttribute":   80,
+	"DBApplication.getAttributeNames": 80,
 	"DBAdmin.createApplication":       80,
 	"DBAdmin.deleteApplication":       80,
 	"DBAdmin.createUser":              80,
@@ -287,6 +289,80 @@ func TestDBApplication_GetAttributeNames(t *testing.T) {
 	}
 	if len(list.Values) != 2 {
 		t.Fatalf("names count = %d, want 2", len(list.Values))
+	}
+}
+
+// TestDBApplication_PermissionDenied proves the H2/L25 scoping: application
+// attributes are not user-owned, so DBApplication.* commands are admin-only
+// (level 80). A level-20 session must be denied; an admin (level 80) is allowed.
+func TestDBApplication_PermissionDenied(t *testing.T) {
+	setCalled := false
+	db := &testutil.MockDBAdapter{
+		SetApplicationAttributeFunc: func(app, attr string, value lingo.LValue) error {
+			setCalled = true
+			return nil
+		},
+	}
+
+	logger := &testutil.MockLogger{}
+	sessionStore := testutil.NewMockSessionStore()
+	sessionStore.RegisterConnection("conn-low", "192.168.1.11")
+	sessionStore.RegisterConnection("conn-admin", "192.168.1.12")
+	movieManager := mus.NewMovieManager(sessionStore, logger)
+	groupManager := mus.NewGroupManager(sessionStore, logger)
+	connWriter := &testutil.MockConnectionWriter{}
+
+	// DBApplication.setAttribute requires the admin tier (level 80).
+	cmdLevels := map[string]int{"DBApplication.setAttribute": 80}
+
+	buildSetMsg := func(sender string) *smus.MUSMessage {
+		plist := lingo.NewLPropList()
+		plist.AddElement(lingo.NewLSymbol("application"), lingo.NewLString("myApp"))
+		plist.AddElement(lingo.NewLSymbol("attribute"), lingo.NewLString("maxPlayers"))
+		plist.AddElement(lingo.NewLSymbol("value"), lingo.NewLInteger(50))
+		msg := buildDBMsg("DBApplication.setAttribute", plist)
+		msg.SenderID = smus.MUSMsgHeaderString{Length: len(sender), Value: sender}
+		return msg
+	}
+
+	// --- level-20 session is DENIED ---
+	lowSvc := mus.NewSystemService(db, sessionStore, logger, movieManager, groupManager, connWriter,
+		services.NewLogonService(db, sessionStore, connWriter, logger, "none", 20),
+		services.NewAuthorizer(sessionStore, cmdLevels), nil, nil)
+
+	lowLogon := buildLogonMsg("lowuser", "")
+	lowLogon.MsgContent.(*lingo.LList).Values[0] = lingo.NewLString("testMovie")
+	lowSvc.Handle("conn-low", lowLogon)
+
+	resp, err := lowSvc.Handle("lowuser", buildSetMsg("lowuser"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.ErrCode != smus.ErrInvalidServerCommand {
+		t.Errorf("level-20 ErrCode = %d, want %d (permission denied)", resp.ErrCode, smus.ErrInvalidServerCommand)
+	}
+	if setCalled {
+		t.Error("SetApplicationAttribute must not run for a level-20 session")
+	}
+
+	// --- admin (level 80) session is ALLOWED ---
+	adminSvc := mus.NewSystemService(db, sessionStore, logger, movieManager, groupManager, connWriter,
+		services.NewLogonService(db, sessionStore, connWriter, logger, "none", 80),
+		services.NewAuthorizer(sessionStore, cmdLevels), nil, nil)
+
+	adminLogon := buildLogonMsg("admin", "")
+	adminLogon.MsgContent.(*lingo.LList).Values[0] = lingo.NewLString("testMovie")
+	adminSvc.Handle("conn-admin", adminLogon)
+
+	resp, err = adminSvc.Handle("admin", buildSetMsg("admin"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.ErrCode != smus.ErrNoError {
+		t.Errorf("admin ErrCode = %d, want %d (allowed)", resp.ErrCode, smus.ErrNoError)
+	}
+	if !setCalled {
+		t.Error("expected SetApplicationAttribute to run for the admin session")
 	}
 }
 
