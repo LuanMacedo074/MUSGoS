@@ -213,7 +213,12 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 
 	// Register mus.cache module
 	if e.cache != nil {
-		registerCacheModule(L, musMod, e.cache)
+		releaseLocks := registerCacheModule(L, musMod, e.cache)
+		defer func() {
+			if err := releaseLocks(); err != nil {
+				e.logger.Warn("cache lock release failed", map[string]interface{}{"error": err.Error()})
+			}
+		}()
 	}
 
 	// Register mus.bcrypt module (password-verify primitive; no deps)
