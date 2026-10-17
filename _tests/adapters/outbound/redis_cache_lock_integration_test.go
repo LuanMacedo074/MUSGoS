@@ -92,6 +92,19 @@ func (c *nativeCacheWriteBarrier) Set(key string, value []byte, ttl time.Duratio
 	return c.Cache.Set(key, value, ttl)
 }
 
+// releaseBarrierOnCleanup unblocks a paused cache barrier when a test fails
+// before it got there, so the execution under test can never outlive the test.
+func releaseBarrierOnCleanup(t *testing.T, release chan struct{}) {
+	t.Helper()
+	t.Cleanup(func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	})
+}
+
 func awaitCacheBarrier(t *testing.T, signal <-chan struct{}) {
 	t.Helper()
 	select {
