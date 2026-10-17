@@ -21,6 +21,7 @@ type MemoryCache struct {
 	mu            sync.RWMutex
 	entries       map[string]*cacheEntry
 	sets          map[string]map[string]struct{}
+	locks         map[string]*cacheLock
 	closed        bool
 	writeCount    int
 	sweepInterval int
@@ -30,6 +31,7 @@ func NewMemoryCache() *MemoryCache {
 	return &MemoryCache{
 		entries:       make(map[string]*cacheEntry),
 		sets:          make(map[string]map[string]struct{}),
+		locks:         make(map[string]*cacheLock),
 		sweepInterval: 1000,
 	}
 }

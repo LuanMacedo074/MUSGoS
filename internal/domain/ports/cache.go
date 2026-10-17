@@ -1,8 +1,22 @@
 package ports
 
-import "time"
+import (
+	"context"
+	"time"
+)
+
+// CacheLock owns an operation scope. Context is canceled if ownership is lost.
+// Release ends ownership and is safe to call more than once.
+type CacheLock struct {
+	Context context.Context
+	Release func() error
+}
 
 type Cache interface {
+	// AcquireLock serializes operations sharing a key until release is called.
+	// The caller must stop work when the lock's Context ends; ctx needs a deadline.
+	// Release is idempotent and must run on every exit, including errors.
+	AcquireLock(ctx context.Context, key string) (*CacheLock, error)
 	Get(key string) ([]byte, error)
 	Set(key string, value []byte, ttl time.Duration) error
 	Delete(key string) error

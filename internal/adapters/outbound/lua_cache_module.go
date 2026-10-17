@@ -8,8 +8,24 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-func registerCacheModule(L *lua.LState, musMod *lua.LTable, cache ports.Cache) {
+func registerCacheModule(L *lua.LState, musMod *lua.LTable, cache ports.Cache) func() error {
 	cacheMod := L.NewTable()
+	locks := make(map[string]*ports.CacheLock)
+	// Locks belong to this execution, including early returns and script errors.
+	cacheMod.RawSetString("lock", L.NewFunction(func(L *lua.LState) int {
+		key := L.CheckString(1)
+		if locks[key] != nil {
+			return 0
+		}
+		lease, err := cache.AcquireLock(L.Context(), key)
+		if err != nil {
+			L.RaiseError("cache lock: %v", err)
+			return 0
+		}
+		locks[key] = lease
+		L.SetContext(lease.Context)
+		return 0
+	}))
 
 	// mus.cache.get(key) -> string|nil
 	cacheMod.RawSetString("get", L.NewFunction(func(L *lua.LState) int {
@@ -114,4 +130,13 @@ func registerCacheModule(L *lua.LState, musMod *lua.LTable, cache ports.Cache) {
 	}))
 
 	musMod.RawSetString("cache", cacheMod)
+	return func() error {
+		var firstErr error
+		for _, lease := range locks {
+			if err := lease.Release(); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+		return firstErr
+	}
 }
