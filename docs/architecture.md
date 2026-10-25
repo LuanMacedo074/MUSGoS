@@ -50,6 +50,7 @@ internal/
 │   │   └── smus/                     ← SMUS protocol types (MUSMessage, headers)
 │   │       └── mus_error_code.go     ← ~54 MUS protocol error constants
 │   ├── ports/                        ← interfaces (contracts)
+│   │   ├── boot_hook.go              ← BootHook + BootHookEnv (game code run at boot and on console reload)
 │   │   ├── cipher.go                 ← Cipher interface
 │   │   ├── connection_writer.go      ← ConnectionWriter interface (write + remap + disconnect)
 │   │   ├── database.go               ← DBAdapter interface (users, bans, attributes)
@@ -64,6 +65,7 @@ internal/
 │   │   └── session_store.go          ← SessionStore interface
 │   └── services/
 │       ├── migration_runner.go       ← runs pending migrations in order
+│       ├── boot_hooks.go             ← RunBootHooks: runs every hook, joins the failures
 │       ├── logon_service.go          ← LogonService: auth modes, credential validation, session takeover
 │       └── authorizer.go             ← Authorizer: command levels, owner-or-admin policy
 │
@@ -86,7 +88,7 @@ internal/
     │   ├── tcp_server.go             ← TCP server, delegates connections to ConnPool
     │   ├── conn_pool.go              ← connection pool with per-conn write mutex
     │   ├── smus_handler.go           ← parses SMUS messages, delegates routing to Dispatcher
-    │   └── console.go                ← interactive CLI (create user, etc.)
+    │   └── console.go                ← interactive CLI (create user, reload, etc.)
     └── outbound/                     ← OUTBOUND adapters
         ├── blowfish.go               ← Blowfish cryptography implementation
         ├── file_logger.go            ← file logger implementation
@@ -109,6 +111,8 @@ internal/
         └── redis_session_store.go    ← session store via Redis (production)
 
 external/
+├── hooks/                            ← registry of boot hooks
+│   └── registry.go                   ← hooks run at boot and on console "reload"
 ├── migrations/                       ← versioned SQL migrations
 │   └── 00000000000000_initial_schema.go
 ├── queues/                           ← registry of queue consumers
@@ -333,7 +337,11 @@ These are the adapters that **receive** data from the outside world and deliver 
   - **`sender.go`** — message sending. `SendMessage()` routes: groups (`@`) via `deliverToGroup()` (serializes once, delivers to all members), user-to-user via `ConnectionWriter.WriteToClient()`. Implements `ports.MessageSender`.
   - **`response.go`** — helpers for building SMUS responses (`NewResponse`), used by the handler and services.
 
-- **`console.go`** — interactive CLI for server administration. Supports commands like `create user <username> <password>`. Uses bcrypt for password hashing. Accesses `DBAdapter` directly.
+- **`console.go`** — interactive CLI for server administration. Supports commands like `create user <username> <password>`. Uses bcrypt for password hashing. Accesses `DBAdapter` directly. `reload` re-runs the boot hooks (see below) without a restart.
+
+#### Boot hooks
+
+A `ports.BootHook` is game code the engine runs once at boot, after the migrations, and again on the console `reload` command. Game code registers hooks from an `init()` in `external/hooks`; `main.go` runs `hooks.All` through `services.RunBootHooks` with a `ports.BootHookEnv` (scripts path, query builder, logger). Use a hook for state derived from the game's own files, such as publishing a catalog of the scripts on disk to a table an admin tool reads. Hooks must be idempotent. A failing hook does not stop the others; the failures are joined and logged as a warning, so a broken hook never prevents the server from starting.
 
 #### Outbound — "the system accessing external resources"
 
