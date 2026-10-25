@@ -70,6 +70,10 @@ func (c *RedisCache) Delete(key string) error {
 	return c.client.Del(ctx, c.key(key)).Err()
 }
 
+func (c *RedisCache) Increment(key string) (int64, error) {
+	return c.client.Incr(context.Background(), c.key(key)).Result()
+}
+
 func (c *RedisCache) Exists(key string) (bool, error) {
 	ctx := context.Background()
 	n, err := c.client.Exists(ctx, c.key(key)).Result()
@@ -82,6 +86,11 @@ func (c *RedisCache) Exists(key string) (bool, error) {
 func (c *RedisCache) SetAdd(key, member string) error {
 	ctx := context.Background()
 	return c.client.SAdd(ctx, c.key(key), member).Err()
+}
+
+func (c *RedisCache) SetAddOnce(key, member string) (bool, error) {
+	added, err := c.client.SAdd(context.Background(), c.key(key), member).Result()
+	return added > 0, err
 }
 
 func (c *RedisCache) SetRemove(key, member string) error {

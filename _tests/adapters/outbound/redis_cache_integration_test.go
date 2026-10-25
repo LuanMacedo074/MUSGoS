@@ -8,6 +8,14 @@ import (
 	"time"
 )
 
+func TestIntegrationRedisCache_Increment(t *testing.T) {
+	testCacheIncrement(t, newRedisCache(t))
+}
+
+func TestIntegrationRedisCache_SetAddOnce(t *testing.T) {
+	testCacheSetAddOnce(t, newRedisCache(t))
+}
+
 func TestIntegrationRedisCache_SetGet(t *testing.T) {
 	c := newRedisCache(t)
 

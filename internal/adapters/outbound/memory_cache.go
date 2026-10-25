@@ -1,6 +1,9 @@
 package outbound
 
 import (
+	"fmt"
+	"math"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -80,11 +83,39 @@ func (c *MemoryCache) sweep() {
 	}
 }
 
+func (c *MemoryCache) Increment(key string) (int64, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if _, exists := c.sets[key]; exists {
+		return 0, fmt.Errorf("cache increment: key holds a set")
+	}
+	entry := c.entries[key]
+	var value int64
+	if entry == nil || entry.expired() {
+		entry = &cacheEntry{}
+	} else {
+		var err error
+		value, err = strconv.ParseInt(string(entry.value), 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("cache increment: %w", err)
+		}
+	}
+	if value == math.MaxInt64 {
+		return 0, fmt.Errorf("cache increment: integer overflow")
+	}
+	value++
+	entry.value = []byte(strconv.FormatInt(value, 10))
+	c.entries[key] = entry
+	return value, nil
+}
+
 func (c *MemoryCache) Delete(key string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	delete(c.entries, key)
+	delete(c.sets, key)
 	return nil
 }
 
@@ -100,6 +131,11 @@ func (c *MemoryCache) Exists(key string) (bool, error) {
 }
 
 func (c *MemoryCache) SetAdd(key, member string) error {
+	_, err := c.SetAddOnce(key, member)
+	return err
+}
+
+func (c *MemoryCache) SetAddOnce(key, member string) (bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -108,8 +144,11 @@ func (c *MemoryCache) SetAdd(key, member string) error {
 		s = make(map[string]struct{})
 		c.sets[key] = s
 	}
+	if _, exists := s[member]; exists {
+		return false, nil
+	}
 	s[member] = struct{}{}
-	return nil
+	return true, nil
 }
 
 func (c *MemoryCache) SetRemove(key, member string) error {
