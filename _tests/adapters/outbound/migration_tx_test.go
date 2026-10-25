@@ -188,8 +188,8 @@ func sqlExecutor(db ports.DBAdapter) (ports.SQLMigrationExecutor, error) {
 
 // migTxSQL creates migTxTable on either backend.
 var migTxSQL = ports.MigrationSQL{
-	SQLite:   []string{"CREATE TABLE mig_tx_test (k TEXT PRIMARY KEY)"},
-	Postgres: []string{"CREATE TABLE mig_tx_test (k TEXT PRIMARY KEY)"},
+	SQLite:   []string{"CREATE TABLE " + migTxTable + " (k TEXT PRIMARY KEY)"},
+	Postgres: []string{"CREATE TABLE " + migTxTable + " (k TEXT PRIMARY KEY)"},
 }
 
 func checkRootAdapterHasNoSQLExecutor(t *testing.T, db migrationDB) {
@@ -206,8 +206,8 @@ func checkSQLStatementsCommitWithMigration(t *testing.T, db migrationDB) {
 			return err
 		}
 		return executor.ExecuteMigrationSQL(ports.MigrationSQL{
-			SQLite:   []string{"CREATE TABLE mig_tx_test (k TEXT PRIMARY KEY)", "INSERT INTO mig_tx_test (k) VALUES ('sqlite')"},
-			Postgres: []string{"CREATE TABLE mig_tx_test (k TEXT PRIMARY KEY)", "INSERT INTO mig_tx_test (k) VALUES ('postgres')"},
+			SQLite:   append(migTxSQL.SQLite, "INSERT INTO "+migTxTable+" (k) VALUES ('sqlite')"),
+			Postgres: append(migTxSQL.Postgres, "INSERT INTO "+migTxTable+" (k) VALUES ('postgres')"),
 		})
 	}}))
 	if !isApplied(t, db, name) {

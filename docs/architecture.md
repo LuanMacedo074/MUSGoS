@@ -57,7 +57,7 @@ internal/
 │   │   ├── handler.go                ← MessageHandler interface
 │   │   ├── logger.go                 ← Logger interface + LogLevel
 │   │   ├── message_sender.go         ← MessageSender interface (message sending)
-│   │   ├── migration.go              ← Migration, MigrationTracker, MigrationTx interfaces
+│   │   ├── migration.go              ← Migration, MigrationTracker, MigrationTx, SQLMigrationExecutor interfaces
 │   │   ├── schema.go                 ← DSL for table/index definitions
 │   │   ├── queue.go                  ← QueuePublisher, QueueConsumer, MessageQueue interfaces
 │   │   ├── script_engine.go          ← ScriptEngine interface

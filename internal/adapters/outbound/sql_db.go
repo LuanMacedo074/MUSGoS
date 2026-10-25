@@ -80,7 +80,8 @@ func (d *sqlDB) BeginMigration() (ports.MigrationTx, error) {
 
 // sqlMigrationTx implements ports.MigrationTx: the storage core bound to one
 // *sql.Tx. Its QueryBuilder's Begin opens a savepoint, so a migration that
-// manages its own transaction keeps working inside the runner's.
+// manages its own transaction keeps working inside the runner's. It is also
+// the only ports.SQLMigrationExecutor (sql_migration.go).
 type sqlMigrationTx struct {
 	sqlDB
 	tx *sql.Tx
