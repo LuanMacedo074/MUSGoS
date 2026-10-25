@@ -176,6 +176,104 @@ func checkOwnTransactionUndoneWhenUpFails(t *testing.T, db migrationDB) {
 	}
 }
 
+// sqlExecutor returns the raw-SQL capability of the adapter a migration was
+// handed; the runner's migration transaction must provide it.
+func sqlExecutor(db ports.DBAdapter) (ports.SQLMigrationExecutor, error) {
+	executor, ok := db.(ports.SQLMigrationExecutor)
+	if !ok {
+		return nil, errors.New("migration adapter cannot execute SQL migrations")
+	}
+	return executor, nil
+}
+
+// migTxSQL creates migTxTable on either backend.
+var migTxSQL = ports.MigrationSQL{
+	SQLite:   []string{"CREATE TABLE mig_tx_test (k TEXT PRIMARY KEY)"},
+	Postgres: []string{"CREATE TABLE mig_tx_test (k TEXT PRIMARY KEY)"},
+}
+
+func checkRootAdapterHasNoSQLExecutor(t *testing.T, db migrationDB) {
+	if _, ok := db.(ports.SQLMigrationExecutor); ok {
+		t.Error("raw migration SQL must only run inside the runner's migration transaction")
+	}
+}
+
+func checkSQLStatementsCommitWithMigration(t *testing.T, db migrationDB) {
+	const name = "29990105000000_sql"
+	mustNoErr(t, runMigrations(db, &funcMigration{name: name, up: func(mdb ports.DBAdapter) error {
+		executor, err := sqlExecutor(mdb)
+		if err != nil {
+			return err
+		}
+		return executor.ExecuteMigrationSQL(ports.MigrationSQL{
+			SQLite:   []string{"CREATE TABLE mig_tx_test (k TEXT PRIMARY KEY)", "INSERT INTO mig_tx_test (k) VALUES ('sqlite')"},
+			Postgres: []string{"CREATE TABLE mig_tx_test (k TEXT PRIMARY KEY)", "INSERT INTO mig_tx_test (k) VALUES ('postgres')"},
+		})
+	}}))
+	if !isApplied(t, db, name) {
+		t.Error("migration running raw SQL must be recorded")
+	}
+	if n := countRows(t, db, migTxTable); n != 1 {
+		t.Fatalf("expected the dialect's statements to run once, got %d rows", n)
+	}
+}
+
+func checkSQLStatementsRunForTheBackendOnly(t *testing.T, db migrationDB, want string) {
+	checkSQLStatementsCommitWithMigration(t, db)
+	row, err := db.QueryBuilder().Table(migTxTable).First()
+	mustNoErr(t, err)
+	if row == nil || row["k"] != want {
+		t.Errorf("expected only the %s statements to run, got %v", want, row)
+	}
+}
+
+func checkSQLStatementsRollBackWithFailedUp(t *testing.T, db migrationDB) {
+	const name = "29990106000000_sql_then_fail"
+	err := runMigrations(db, &funcMigration{name: name, up: func(mdb ports.DBAdapter) error {
+		executor, err := sqlExecutor(mdb)
+		if err != nil {
+			return err
+		}
+		if err := executor.ExecuteMigrationSQL(migTxSQL); err != nil {
+			return err
+		}
+		return errors.New("failure after SQL DDL")
+	}})
+	if err == nil {
+		t.Fatal("expected upgrade failure")
+	}
+	if tableExists(db, migTxTable) || isApplied(t, db, name) {
+		t.Error("SQL DDL and tracker must roll back with the migration")
+	}
+}
+
+// A failing statement undoes only its own call: the migration may handle the
+// error and go on, and the runner's transaction stays usable (on Postgres an
+// error would otherwise abort it).
+func checkFailedSQLCallIsScoped(t *testing.T, db migrationDB) {
+	const name = "29990107000000_sql_call_fails"
+	mustNoErr(t, runMigrations(db, &funcMigration{name: name, up: func(mdb ports.DBAdapter) error {
+		executor, err := sqlExecutor(mdb)
+		if err != nil {
+			return err
+		}
+		failing := ports.MigrationSQL{
+			SQLite:   []string{"CREATE TABLE mig_tx_partial (k TEXT)", "SELECT * FROM mig_tx_missing"},
+			Postgres: []string{"CREATE TABLE mig_tx_partial (k TEXT)", "SELECT * FROM mig_tx_missing"},
+		}
+		if err := executor.ExecuteMigrationSQL(failing); err == nil {
+			return errors.New("expected the failing statement to surface its error")
+		}
+		return executor.ExecuteMigrationSQL(migTxSQL)
+	}}))
+	if tableExists(db, "mig_tx_partial") {
+		t.Error("a failed SQL call must undo its earlier statements")
+	}
+	if !tableExists(db, migTxTable) || !isApplied(t, db, name) {
+		t.Error("the migration must go on after handling a failed SQL call")
+	}
+}
+
 func countRows(t *testing.T, db migrationDB, table string) int64 {
 	t.Helper()
 	n, err := db.QueryBuilder().Table(table).Count()
@@ -213,4 +311,36 @@ func TestPG_Migration_OwnTransactionRollbackIsScoped(t *testing.T) {
 
 func TestPG_Migration_OwnTransactionUndoneWhenUpFails(t *testing.T) {
 	checkOwnTransactionUndoneWhenUpFails(t, newTestPG(t))
+}
+
+func TestSQLite_Migration_RootAdapterHasNoSQLExecutor(t *testing.T) {
+	checkRootAdapterHasNoSQLExecutor(t, newTestDB(t))
+}
+
+func TestSQLite_Migration_SQLStatementsRunForTheBackendOnly(t *testing.T) {
+	checkSQLStatementsRunForTheBackendOnly(t, newTestDB(t), "sqlite")
+}
+
+func TestSQLite_Migration_SQLStatementsRollBackWithFailedUp(t *testing.T) {
+	checkSQLStatementsRollBackWithFailedUp(t, newTestDB(t))
+}
+
+func TestSQLite_Migration_FailedSQLCallIsScoped(t *testing.T) {
+	checkFailedSQLCallIsScoped(t, newTestDB(t))
+}
+
+func TestPG_Migration_RootAdapterHasNoSQLExecutor(t *testing.T) {
+	checkRootAdapterHasNoSQLExecutor(t, newTestPG(t))
+}
+
+func TestPG_Migration_SQLStatementsRunForTheBackendOnly(t *testing.T) {
+	checkSQLStatementsRunForTheBackendOnly(t, newTestPG(t), "postgres")
+}
+
+func TestPG_Migration_SQLStatementsRollBackWithFailedUp(t *testing.T) {
+	checkSQLStatementsRollBackWithFailedUp(t, newTestPG(t))
+}
+
+func TestPG_Migration_FailedSQLCallIsScoped(t *testing.T) {
+	checkFailedSQLCallIsScoped(t, newTestPG(t))
 }

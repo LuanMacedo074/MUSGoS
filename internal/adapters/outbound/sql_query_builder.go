@@ -43,14 +43,19 @@ func (qb *sqlQueryBuilder) Begin() (ports.Tx, error) {
 		}
 		return &sqlTx{tx: tx, dialect: qb.dialect}, nil
 	case *sql.Tx:
-		name := fmt.Sprintf("sp_%d", savepointSeq.Add(1))
-		if _, err := exec.Exec("SAVEPOINT " + name); err != nil {
-			return nil, err
-		}
-		return &sqlSavepoint{tx: exec, name: name, dialect: qb.dialect}, nil
+		return beginSavepoint(exec, qb.dialect)
 	default:
 		return nil, fmt.Errorf("cannot begin transaction: query builder is not backed by a connection or transaction")
 	}
+}
+
+// beginSavepoint opens a uniquely named savepoint inside tx.
+func beginSavepoint(tx *sql.Tx, d dialect) (*sqlSavepoint, error) {
+	name := fmt.Sprintf("sp_%d", savepointSeq.Add(1))
+	if _, err := tx.Exec("SAVEPOINT " + name); err != nil {
+		return nil, err
+	}
+	return &sqlSavepoint{tx: tx, name: name, dialect: d}, nil
 }
 
 // savepointSeq keeps savepoint names unique, so nested Begins don't shadow
