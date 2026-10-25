@@ -503,6 +503,42 @@ func TestExecute_JsonDecodeInvalidJSON(t *testing.T) {
 	}
 }
 
+func TestExecute_DBQueryBuilderPredicates(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "qbpred", `
+		local items = mus.db.table("predicate_items")
+		items:insert({ name = "stick", power = 1 })
+		items:insert({ name = "sword", power = 10 })
+		items:insert({ name = "relic" })
+		local weak = items:whereLessThan("power", 5):get()
+		local unpowered = items:where("power", nil):first()
+		mus.response(#weak .. ":" .. weak[1].name .. ":" .. unpowered.name)
+	`)
+
+	db := newTestDB(t)
+	mustNoErr(t, db.CreateTable(ports.Table{
+		Name: "predicate_items",
+		Columns: []ports.Column{
+			{Name: "id", Type: ports.ColInteger, IsPK: true, IsAutoIncr: true},
+			{Name: "name", Type: ports.ColText, IsNotNull: true},
+			{Name: "power", Type: ports.ColInteger},
+		},
+	}))
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, db.QueryBuilder(), nil, nil, nil)
+
+	result, err := engine.Execute(&ports.ScriptMessage{Subject: "qbpred", SenderID: "user1", Content: lingo.NewLVoid()})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	strResult, ok := result.Content.(*lingo.LString)
+	if !ok {
+		t.Fatalf("expected *LString, got %T", result.Content)
+	}
+	if strResult.Value != "1:stick:relic" {
+		t.Errorf("response = %q, want %q", strResult.Value, "1:stick:relic")
+	}
+}
+
 func TestExecute_DBQueryBuilder(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "qbtest", `

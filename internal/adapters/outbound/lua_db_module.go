@@ -121,6 +121,8 @@ func queryIndex(L *lua.LState) int {
 	switch method {
 	case "where":
 		L.Push(L.NewFunction(queryWhere))
+	case "whereLessThan":
+		L.Push(L.NewFunction(queryWhereLessThan))
 	case "first":
 		L.Push(L.NewFunction(queryFirst))
 	case "get":
@@ -148,6 +150,14 @@ func queryWhere(L *lua.LState) int {
 	val := luaToGoValue(L.Get(3))
 	newQ := q.Where(col, val)
 	L.Push(wrapQuery(L, newQ))
+	return 1
+}
+
+func queryWhereLessThan(L *lua.LState) int {
+	q := checkQuery(L)
+	col := L.CheckString(2)
+	val := luaToGoValue(L.Get(3))
+	L.Push(wrapQuery(L, q.WhereLessThan(col, val)))
 	return 1
 }
 

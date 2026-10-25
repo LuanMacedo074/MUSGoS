@@ -10,7 +10,10 @@ type QueryBuilder interface {
 
 // Query represents a chainable query on a single table.
 type Query interface {
+	// Where adds a bound column = value predicate; a nil value adds column IS NULL.
 	Where(column string, value interface{}) Query
+	// WhereLessThan adds a bound column < value predicate.
+	WhereLessThan(column string, value interface{}) Query
 	Insert(data map[string]interface{}) error
 	Update(data map[string]interface{}) (int64, error)
 	// Increment atomically adds delta to a numeric column (SET col = col + delta) in a

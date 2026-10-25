@@ -107,8 +107,9 @@ func (t *sqlTx) Commit() error   { return t.tx.Commit() }
 func (t *sqlTx) Rollback() error { return t.tx.Rollback() }
 
 type whereClause struct {
-	column string
-	value  interface{}
+	column   string
+	operator string
+	value    interface{}
 }
 
 // sqlQuery implements ports.Query over a dialect.
@@ -120,9 +121,17 @@ type sqlQuery struct {
 }
 
 func (q *sqlQuery) Where(column string, value interface{}) ports.Query {
+	return q.where(column, "=", value)
+}
+
+func (q *sqlQuery) WhereLessThan(column string, value interface{}) ports.Query {
+	return q.where(column, "<", value)
+}
+
+func (q *sqlQuery) where(column, operator string, value interface{}) ports.Query {
 	newWheres := make([]whereClause, len(q.wheres), len(q.wheres)+1)
 	copy(newWheres, q.wheres)
-	newWheres = append(newWheres, whereClause{column, value})
+	newWheres = append(newWheres, whereClause{column: column, operator: operator, value: value})
 	return &sqlQuery{
 		tableName: q.tableName,
 		wheres:    newWheres,
@@ -278,13 +287,17 @@ func (q *sqlQuery) buildWhere() (string, []interface{}, error) {
 		return "", nil, nil
 	}
 	parts := make([]string, len(q.wheres))
-	vals := make([]interface{}, len(q.wheres))
+	vals := make([]interface{}, 0, len(q.wheres))
 	for i, w := range q.wheres {
 		if err := validateIdentifier(w.column); err != nil {
 			return "", nil, fmt.Errorf("invalid column name %q: %w", w.column, err)
 		}
-		parts[i] = w.column + " = ?"
-		vals[i] = w.value
+		if w.value == nil && w.operator == "=" {
+			parts[i] = w.column + " IS NULL"
+		} else {
+			parts[i] = w.column + " " + w.operator + " ?"
+			vals = append(vals, w.value)
+		}
 	}
 	return " WHERE " + strings.Join(parts, " AND "), vals, nil
 }
