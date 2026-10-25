@@ -21,19 +21,33 @@ func registerSandboxedLoader(L *lua.LState, musMod *lua.LTable, scriptsDir, chun
 			L.ArgError(1, "invalid sandboxed chunk id")
 			return 0
 		}
-		// The id cannot leave chunkDir, so containing chunkDir strictly inside
-		// scriptsDir (never the root itself) contains every chunk.
-		absChunkDir, err := filepath.Abs(filepath.Join(scriptsDir, chunkDir))
+		// Containment is checked on symlink-resolved paths: chunkDir must sit
+		// strictly inside scriptsDir (never the root itself), and the chunk file
+		// must resolve inside chunkDir.
+		realScriptsDir, err := resolveRealPath(scriptsDir)
 		if err != nil {
 			L.RaiseError("load sandboxed chunk %q: %s", id, err)
 			return 0
 		}
-		absScriptsDir, _ := filepath.Abs(scriptsDir)
-		if !isSubpath(absScriptsDir, absChunkDir) {
+		realChunkDir, err := resolveRealPath(filepath.Join(scriptsDir, chunkDir))
+		if err != nil {
+			L.RaiseError("load sandboxed chunk %q: %s", id, err)
+			return 0
+		}
+		if !isSubpath(realScriptsDir, realChunkDir) {
 			L.RaiseError("load sandboxed chunk %q: directory is outside the scripts directory", id)
 			return 0
 		}
-		fn, err := L.LoadFile(filepath.Join(absChunkDir, id+".lua"))
+		realChunk, err := resolveRealPath(filepath.Join(realChunkDir, id+".lua"))
+		if err != nil {
+			L.RaiseError("load sandboxed chunk %q: %s", id, err)
+			return 0
+		}
+		if !isSubpath(realChunkDir, realChunk) {
+			L.RaiseError("load sandboxed chunk %q: file is outside the sandboxed directory", id)
+			return 0
+		}
+		fn, err := L.LoadFile(realChunk)
 		if err != nil {
 			L.RaiseError("load sandboxed chunk %q: %s", id, err)
 			return 0
@@ -69,4 +83,14 @@ func registerSandboxedLoader(L *lua.LState, musMod *lua.LTable, scriptsDir, chun
 		}
 		return 1
 	}))
+}
+
+// resolveRealPath returns the absolute path with every symlink resolved, so a
+// containment check sees where the file actually lives.
+func resolveRealPath(path string) (string, error) {
+	real, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Abs(real)
 }

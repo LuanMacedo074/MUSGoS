@@ -201,3 +201,47 @@ mus.response(tostring(ok) .. "|" .. tostring(err))`)
 		})
 	}
 }
+
+func TestLoadSandboxed_RejectsAChunkSymlinkedOutside(t *testing.T) {
+	engine, dir := sandboxedEngine(t)
+	outside := t.TempDir()
+	writeScript(t, outside, "escape", `return {}`)
+	if err := os.Symlink(filepath.Join(outside, "escape.lua"), filepath.Join(dir, "chunks", "escape.lua")); err != nil {
+		t.Fatal(err)
+	}
+
+	got := probe(t, engine, dir, `local ok, err = pcall(mus.loadSandboxed, "escape")
+mus.response(tostring(ok) .. "|" .. tostring(err))`)
+	if !strings.HasPrefix(got, "false|") || !strings.Contains(got, "outside the sandboxed directory") {
+		t.Errorf("response = %q, want containment error", got)
+	}
+}
+
+func TestLoadSandboxed_RejectsADirectorySymlinkedOutside(t *testing.T) {
+	dir := setupScriptsDir(t)
+	outside := t.TempDir()
+	writeScript(t, outside, "escape", `return {}`)
+	if err := os.Symlink(outside, filepath.Join(dir, "linked")); err != nil {
+		t.Fatal(err)
+	}
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil).
+		WithSandboxedChunkDir("linked")
+
+	got := probe(t, engine, dir, `local ok, err = pcall(mus.loadSandboxed, "escape")
+mus.response(tostring(ok) .. "|" .. tostring(err))`)
+	if !strings.HasPrefix(got, "false|") || !strings.Contains(got, "outside the scripts directory") {
+		t.Errorf("response = %q, want containment error", got)
+	}
+}
+
+func TestLoadSandboxed_FollowsASymlinkThatStaysInside(t *testing.T) {
+	engine, dir := sandboxedEngine(t)
+	writeChunk(t, dir, "real", `return { name = "real" }`)
+	if err := os.Symlink("real.lua", filepath.Join(dir, "chunks", "alias.lua")); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := probe(t, engine, dir, `mus.response(mus.loadSandboxed("alias").name)`); got != "real" {
+		t.Errorf("response = %q, want real", got)
+	}
+}
