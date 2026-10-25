@@ -158,7 +158,7 @@ func main() {
 	}
 
 	// 4. ScriptEngine — can send messages via Sender + access DB + server info + cache
-	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout, queue, sender, dbResult.Adapter, dbResult.QueryBuilder, sessionStore, cache, emailSender)
+	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, cfg.SandboxedScriptsDir, gameLogger, cfg.ScriptTimeout, queue, sender, dbResult.Adapter, dbResult.QueryBuilder, sessionStore, cache, emailSender)
 	if cfg.ScriptsPath != "" {
 		scripts, _ := filepath.Glob(filepath.Join(cfg.ScriptsPath, "*.lua"))
 		gameLogger.Info("Script engine initialized", map[string]interface{}{
@@ -244,7 +244,7 @@ func main() {
 		if cfg.HTTPScriptsPath == "" {
 			gameLogger.Error("HTTP server disabled: HTTP_PORT set but HTTP_SCRIPTS_PATH is empty")
 		} else {
-			httpEngine := factory.NewScriptEngine(cfg.HTTPScriptsPath, gameLogger, cfg.ScriptTimeout, queue, nil, dbResult.Adapter, dbResult.QueryBuilder, nil, cache, emailSender)
+			httpEngine := factory.NewScriptEngine(cfg.HTTPScriptsPath, "", gameLogger, cfg.ScriptTimeout, queue, nil, dbResult.Adapter, dbResult.QueryBuilder, nil, cache, emailSender)
 			httpServer := inbound.NewHTTPServer(cfg.HTTPPort, cfg.HTTPBindAddr, httpEngine, gameLogger)
 			go func() {
 				if err := httpServer.Start(); err != nil {

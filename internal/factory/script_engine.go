@@ -7,6 +7,7 @@ import (
 
 func NewScriptEngine(
 	scriptsPath string,
+	sandboxedDir string,
 	logger ports.Logger,
 	scriptTimeoutSeconds int,
 	publisher ports.QueuePublisher,
@@ -20,5 +21,6 @@ func NewScriptEngine(
 	if scriptsPath == "" {
 		return nil
 	}
-	return outbound.NewLuaScriptEngine(scriptsPath, logger, scriptTimeoutSeconds, publisher, sender, db, queryBuilder, sessionStore, cache, emailSender)
+	return outbound.NewLuaScriptEngine(scriptsPath, logger, scriptTimeoutSeconds, publisher, sender, db, queryBuilder, sessionStore, cache, emailSender).
+		WithSandboxedChunkDir(sandboxedDir)
 }

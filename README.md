@@ -63,6 +63,7 @@ set** (Redis, RabbitMQ, cache, rate limiting, metrics, UDP, and more).
 | `DATABASE_SSLMODE` | `disable` | Postgres SSL mode |
 | `SCRIPTS_PATH` | `external/scripts` | Lua scripts path |
 | `SCRIPT_TIMEOUT` | `5` | Lua script timeout (seconds) |
+| `SANDBOXED_SCRIPTS_DIR` | _(empty)_ | Directory under `SCRIPTS_PATH` that `mus.loadSandboxed(id)` reads; empty disables it |
 | `JOBS_ENABLED` | `1` | Enable scheduled jobs |
 | `DISCONNECT_HOOK` | `users/onDisconnect` | Script subject invoked when a client disconnects |
 | `AUTH_MODE` | `open` | Auth mode (`none`, `open`, `strict`) |
