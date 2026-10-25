@@ -291,6 +291,14 @@ func TestPG_Schema_And_QueryBuilder(t *testing.T) {
 	}
 }
 
+func TestPG_QueryBuilder_WhereLessThanFiltersBelowBound(t *testing.T) {
+	assertWhereLessThanFiltersBelowBound(t, newTestPG(t))
+}
+
+func TestPG_QueryBuilder_WhereNilMatchesNull(t *testing.T) {
+	assertWhereNilMatchesNull(t, newTestPG(t))
+}
+
 func TestPG_DropColumn_RemovesColumn(t *testing.T) {
 	db := newTestPG(t)
 
