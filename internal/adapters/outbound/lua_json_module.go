@@ -7,8 +7,19 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
+const luaJSONArrayTypeName = "json.array"
+
 func registerJsonModule(L *lua.LState, musMod *lua.LTable) {
 	jsonMod := L.NewTable()
+	arrayMeta := L.NewTypeMetatable(luaJSONArrayTypeName)
+
+	// Preserve array shape for a sequence even when it has no elements.
+	jsonMod.RawSetString("array", L.NewFunction(func(L *lua.LState) int {
+		tbl := L.NewTable()
+		L.SetMetatable(tbl, arrayMeta)
+		L.Push(tbl)
+		return 1
+	}))
 
 	jsonMod.RawSetString("encode", L.NewFunction(func(L *lua.LState) int {
 		lv := L.Get(1)
@@ -62,7 +73,7 @@ func luaValueToJsonable(L *lua.LState, lv lua.LValue) interface{} {
 	case lua.LString:
 		return string(v)
 	case *lua.LTable:
-		if isSequentialTable(v) {
+		if isSequentialTable(v) || (v.Metatable != lua.LNil && v.Metatable == L.GetTypeMetatable(luaJSONArrayTypeName)) {
 			arr := make([]interface{}, 0, v.MaxN())
 			for i := 1; i <= v.MaxN(); i++ {
 				arr = append(arr, luaValueToJsonable(L, v.RawGetInt(i)))
