@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"fsos-server/internal/domain/ports"
+	"fsos-server/internal/domain/services"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -16,6 +17,11 @@ type Console struct {
 	logger           ports.Logger
 	reader           io.Reader
 	defaultUserLevel int
+
+	// bootHooks + hookEnv back the "reload" command, which re-runs the game's
+	// boot hooks without a restart. Empty when no hooks are registered.
+	bootHooks []ports.BootHook
+	hookEnv   ports.BootHookEnv
 }
 
 func NewConsole(db ports.DBAdapter, logger ports.Logger, reader io.Reader, defaultUserLevel int) *Console {
@@ -25,6 +31,14 @@ func NewConsole(db ports.DBAdapter, logger ports.Logger, reader io.Reader, defau
 		reader:           reader,
 		defaultUserLevel: defaultUserLevel,
 	}
+}
+
+// WithBootHooks wires the "reload" command to re-run hooks with env. Returns the
+// console for chaining at construction.
+func (c *Console) WithBootHooks(hooks []ports.BootHook, env ports.BootHookEnv) *Console {
+	c.bootHooks = hooks
+	c.hookEnv = env
+	return c
 }
 
 func (c *Console) Run() {
@@ -62,6 +76,8 @@ func (c *Console) execute(line string) {
 		c.banUser(parts[2:])
 	case "revoke ban":
 		c.revokeBan(parts[2:])
+	case "reload":
+		c.reload()
 	case "help":
 		c.help()
 	case "quit", "exit":
@@ -158,11 +174,26 @@ func (c *Console) revokeBan(args []string) {
 	})
 }
 
+// reload re-runs the boot hooks, so state they derive from the game's files
+// (e.g. a script catalog) is refreshed without restarting the server.
+func (c *Console) reload() {
+	if len(c.bootHooks) == 0 {
+		fmt.Println("No boot hooks registered.")
+		return
+	}
+	if err := services.RunBootHooks(c.bootHooks, c.hookEnv); err != nil {
+		fmt.Printf("Error reloading: %v\n", err)
+		return
+	}
+	fmt.Printf("Ran %d boot hook(s).\n", len(c.bootHooks))
+}
+
 func (c *Console) help() {
 	fmt.Println("Available commands:")
 	fmt.Println("  create user <username> <password>  - Create a new user")
 	fmt.Println("  ban user <username> [reason]        - Ban a user")
 	fmt.Println("  revoke ban <username>               - Revoke active ban for a user")
+	fmt.Println("  reload                              - Re-run the boot hooks")
 	fmt.Println("  help                                - Show this help")
 }
 

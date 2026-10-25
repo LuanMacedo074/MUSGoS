@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"fsos-server/external/hooks"
 	"fsos-server/external/migrations"
 	"fsos-server/external/queues"
 	"fsos-server/internal/adapters/inbound"
@@ -16,6 +17,7 @@ import (
 	"fsos-server/internal/adapters/outbound"
 	"fsos-server/internal/config"
 	"fsos-server/internal/domain/ports"
+	"fsos-server/internal/domain/services"
 	"fsos-server/internal/factory"
 )
 
@@ -167,6 +169,19 @@ func main() {
 		})
 	} else {
 		gameLogger.Info("Script engine disabled (no scripts path configured)")
+	}
+
+	// 4b. Boot hooks — game code registered in external/hooks, re-run by the
+	// console "reload" command. A failing hook is logged, not fatal.
+	hookEnv := ports.BootHookEnv{
+		ScriptsPath:  cfg.ScriptsPath,
+		QueryBuilder: dbResult.QueryBuilder,
+		Logger:       gameLogger,
+	}
+	if err := services.RunBootHooks(hooks.All, hookEnv); err != nil {
+		gameLogger.Warn("Boot hooks failed", map[string]interface{}{
+			"error": err.Error(),
+		})
 	}
 
 	var registeredTopics []string
@@ -340,7 +355,8 @@ func main() {
 		<-udpReady
 	}
 
-	console := inbound.NewConsole(dbResult.Adapter, gameLogger, os.Stdin, cfg.DefaultUserLevel)
+	console := inbound.NewConsole(dbResult.Adapter, gameLogger, os.Stdin, cfg.DefaultUserLevel).
+		WithBootHooks(hooks.All, hookEnv)
 	go console.Run()
 
 	<-c
