@@ -31,7 +31,7 @@ func TestExtractMUSMsgHeaderString_Even(t *testing.T) {
 }
 
 func TestExtractMUSMsgHeaderString_Odd(t *testing.T) {
-	str := "hey" // odd length
+	str := "hey"                      // odd length
 	buf := make([]byte, 4+len(str)+1) // +1 for padding
 	binary.BigEndian.PutUint32(buf, uint32(len(str)))
 	copy(buf[4:], str)
