@@ -309,8 +309,8 @@ func TestCreateTable_InvalidInCheck(t *testing.T) {
 }
 
 // assertRangeCheckBoundsColumn checks that a RangeCheck emits an inclusive
-// bound: both ends accepted, one past either end rejected. check_test is on
-// the Postgres reset list, so the table never outlives a run.
+// bound: both ends accepted, one past either end rejected. The Postgres
+// test reset drops check_test, so the table never outlives a run.
 func assertRangeCheckBoundsColumn(t *testing.T, db predicateDB) {
 	t.Helper()
 	mustNoErr(t, db.CreateTable(ports.Table{
