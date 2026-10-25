@@ -68,6 +68,18 @@ func testCacheIncrement(t *testing.T, cache ports.Cache) {
 			}
 		}
 	})
+	t.Run("set keys are rejected", func(t *testing.T) {
+		if err := cache.SetAdd("members", "hero"); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := cache.Increment("members"); err == nil {
+			t.Fatal("increment accepted a set key")
+		}
+		present, err := cache.SetIsMember("members", "hero")
+		if err != nil || !present {
+			t.Fatalf("SetIsMember = %t, %v; want true", present, err)
+		}
+	})
 	t.Run("existing expiry is preserved", func(t *testing.T) {
 		if err := cache.Set("expiring", []byte("7"), 100*time.Millisecond); err != nil {
 			t.Fatal(err)
