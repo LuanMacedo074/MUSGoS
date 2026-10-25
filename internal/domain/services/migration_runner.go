@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 
 	"fsos-server/internal/domain/ports"
@@ -73,8 +74,7 @@ func (r *MigrationRunner) RunPending() (MigrationResult, error) {
 // cannot switch foreign keys off for a table rebuild.
 func (r *MigrationRunner) apply(m ports.Migration) (err error) {
 	transactor, ok := r.db.(ports.MigrationTransactor)
-	dbTracker, _ := r.db.(ports.MigrationTracker)
-	if !ok || dbTracker != r.tracker {
+	if !ok || !sameAdapter(r.db, r.tracker) {
 		return runMigration(m, r.db, r.tracker)
 	}
 
@@ -101,6 +101,17 @@ func (r *MigrationRunner) apply(m ports.Migration) (err error) {
 		return fmt.Errorf("failed to commit migration %s: %w", m.Name(), err)
 	}
 	return nil
+}
+
+// sameAdapter reports whether a and b hold the same comparable value. An
+// uncomparable dynamic type counts as different (== on it would panic), which
+// sends the runner down the two-step path.
+func sameAdapter(a, b any) bool {
+	ta, tb := reflect.TypeOf(a), reflect.TypeOf(b)
+	if ta == nil || ta != tb || !ta.Comparable() {
+		return false
+	}
+	return a == b
 }
 
 // runMigration applies m's Up against db and records it in tracker.

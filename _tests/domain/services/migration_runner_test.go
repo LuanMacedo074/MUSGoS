@@ -294,3 +294,35 @@ func TestMigrationRunner_SeparateTrackerSkipsTransaction(t *testing.T) {
 		t.Errorf("the row must land in the tracker the runner reads from, got %v", tracker.applied)
 	}
 }
+
+// valueTransactionalDB is a transactional adapter used by value whose dynamic
+// type is not comparable (it holds a slice), the case where comparing two
+// interfaces with == would panic.
+type valueTransactionalDB struct {
+	ports.DBAdapter
+	log *[]string
+	_   []string
+}
+
+func (db valueTransactionalDB) GetAppliedMigrations() ([]string, error) { return nil, nil }
+func (db valueTransactionalDB) MarkMigrationApplied(name string) error {
+	*db.log = append(*db.log, name)
+	return nil
+}
+func (db valueTransactionalDB) BeginMigration() (ports.MigrationTx, error) {
+	return &fakeMigrationTx{}, nil
+}
+
+func TestMigrationRunner_UncomparableAdapterDoesNotPanic(t *testing.T) {
+	var log []string
+	db := valueTransactionalDB{log: &log}
+	m1 := &fakeMigration{name: "20260101_first"}
+
+	runner := services.NewMigrationRunner(db, db, []ports.Migration{m1})
+	if _, err := runner.RunPending(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if m1.upCalls != 1 {
+		t.Errorf("expected Up called once, got %d", m1.upCalls)
+	}
+}
