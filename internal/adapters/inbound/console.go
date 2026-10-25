@@ -185,7 +185,7 @@ func (c *Console) reload() {
 		fmt.Printf("Error reloading: %v\n", err)
 		return
 	}
-	fmt.Printf("Reloaded %d boot hook(s).\n", len(c.bootHooks))
+	fmt.Printf("Ran %d boot hook(s).\n", len(c.bootHooks))
 }
 
 func (c *Console) help() {

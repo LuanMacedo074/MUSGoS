@@ -50,7 +50,7 @@ func TestConsole_ReloadReRunsTheBootHooksWithTheirEnv(t *testing.T) {
 	if len(got) != 2 || got[0] != "/srv/scripts" || got[1] != "/srv/scripts" {
 		t.Fatalf("hook runs = %v, want two runs with the console's env", got)
 	}
-	if !strings.Contains(out, "Reloaded 1 boot hook(s).") {
+	if !strings.Contains(out, "Ran 1 boot hook(s).") {
 		t.Fatalf("output = %q, want a reload confirmation", out)
 	}
 }

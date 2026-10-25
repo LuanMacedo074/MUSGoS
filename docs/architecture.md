@@ -435,15 +435,16 @@ The golden rule is that `import` arrows **always point inward**:
 ```
 adapters/inbound   ──imports──►  domain/ports
 adapters/inbound   ──imports──►  domain/types
+adapters/inbound   ──imports──►  domain/services
 adapters/outbound  ──imports──►  domain/ports
 domain/types/smus  ──imports──►  domain/ports
 domain/types/smus  ──imports──►  domain/types/lingo
 config/            ──imports──►  (nothing from domain, only stdlib)
 factory/           ──imports──►  adapters + domain/ports (resolves implementations)
-cmd/main.go        ──imports──►  config + factory + adapters/inbound (is the glue)
+cmd/main.go        ──imports──►  config + factory + adapters/inbound + domain/services + external registries (is the glue)
 ```
 
-The domain **never** imports adapters, config, or factory. Adapters import the domain. The factories import adapters and ports to assemble the pieces. `main.go` imports config, factory, inbound adapters (TCP server, console), and the external migrations.
+The domain **never** imports adapters, config, or factory. Adapters import the domain. The factories import adapters and ports to assemble the pieces. `main.go` imports config, factory, inbound adapters (TCP server, console), and the external registries (migrations, queues, boot hooks).
 
 ---
 
