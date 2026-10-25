@@ -71,7 +71,7 @@ func newTestPG(t *testing.T) *outbound.PostgresDB {
 func resetPGSchema(t *testing.T, db *outbound.PostgresDB) {
 	t.Helper()
 	for _, tbl := range []string{
-		"tx_test", "mig_tx_test", "bans", "player_attributes", "application_attributes", "users", "applications",
+		"tx_test", "mig_tx_test", "check_test", "bans", "player_attributes", "application_attributes", "users", "applications",
 	} {
 		if err := db.DropTable(tbl); err != nil {
 			t.Fatalf("failed to drop %s: %v", tbl, err)
@@ -297,6 +297,14 @@ func TestPG_QueryBuilder_WhereLessThanFiltersBelowBound(t *testing.T) {
 
 func TestPG_QueryBuilder_WhereNilMatchesNull(t *testing.T) {
 	assertWhereNilMatchesNull(t, newTestPG(t))
+}
+
+func TestPG_CreateTable_RangeCheckBoundsColumn(t *testing.T) {
+	assertRangeCheckBoundsColumn(t, newTestPG(t))
+}
+
+func TestPG_CreateTable_InCheckRestrictsColumn(t *testing.T) {
+	assertInCheckRestrictsColumn(t, newTestPG(t))
 }
 
 func TestPG_DropColumn_RemovesColumn(t *testing.T) {

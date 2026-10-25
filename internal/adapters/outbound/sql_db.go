@@ -423,6 +423,27 @@ func (d *sqlDB) CreateTable(def ports.Table) error {
 			return fmt.Errorf("invalid column %q in require_one_of: %w", col, err)
 		}
 	}
+	for _, rc := range def.RangeChecks {
+		if err := validateIdentifier(rc.Column); err != nil {
+			return fmt.Errorf("invalid column %q in range_check: %w", rc.Column, err)
+		}
+		if rc.Min > rc.Max {
+			return fmt.Errorf("range_check on %q has min %d above max %d", rc.Column, rc.Min, rc.Max)
+		}
+	}
+	for _, ic := range def.InChecks {
+		if err := validateIdentifier(ic.Column); err != nil {
+			return fmt.Errorf("invalid column %q in in_check: %w", ic.Column, err)
+		}
+		if len(ic.Values) == 0 {
+			return fmt.Errorf("in_check on %q has no values", ic.Column)
+		}
+		for _, v := range ic.Values {
+			if err := validateIdentifier(v); err != nil {
+				return fmt.Errorf("invalid value %q in in_check on %q: %w", v, ic.Column, err)
+			}
+		}
+	}
 
 	composite := len(def.PrimaryKeys) > 0
 
@@ -493,6 +514,14 @@ func (d *sqlDB) CreateTable(def ports.Table) error {
 			b.WriteString(" IS NOT NULL")
 		}
 		b.WriteString(")")
+	}
+
+	for _, rc := range def.RangeChecks {
+		fmt.Fprintf(&b, ",\n\tCHECK (%s BETWEEN %d AND %d)", rc.Column, rc.Min, rc.Max)
+	}
+
+	for _, ic := range def.InChecks {
+		fmt.Fprintf(&b, ",\n\tCHECK (%s IN ('%s'))", ic.Column, strings.Join(ic.Values, "', '"))
 	}
 
 	b.WriteString("\n)")

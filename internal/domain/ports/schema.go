@@ -82,13 +82,33 @@ type ForeignKey struct {
 	OnDelete string
 }
 
+// RangeCheck is a CHECK constraint bounding an integer column to an inclusive
+// range: Min <= Column <= Max. It lets a schema cap a value (e.g. a slot
+// number) that the column type alone cannot.
+type RangeCheck struct {
+	Column string
+	Min    int
+	Max    int
+}
+
+// InCheck is a CHECK constraint restricting a text column to a fixed set of
+// values: Column IN (Values...). It lets a schema enforce a closed enumeration
+// the column type alone cannot. Values are emitted as SQL string literals, so
+// each must be a plain identifier-like word (validated before any SQL is built).
+type InCheck struct {
+	Column string
+	Values []string
+}
+
 // Table defines a table to be created.
 type Table struct {
 	Name         string
 	Columns      []Column
 	PrimaryKeys  []string // composite primary key columns
 	ForeignKeys  []ForeignKey
-	RequireOneOf []string // CHECK: at least one of these must be non-null
+	RequireOneOf []string     // CHECK: at least one of these must be non-null
+	RangeChecks  []RangeCheck // CHECK: each column within its inclusive [Min,Max]
+	InChecks     []InCheck    // CHECK: each column one of its listed values
 }
 
 // Index defines an index to be created.
