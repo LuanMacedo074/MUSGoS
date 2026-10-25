@@ -98,7 +98,7 @@ internal/
         ├── sql_dialect_sqlite.go     ← SQLite dialect
         ├── sql_dialect_postgres.go   ← Postgres dialect
         ├── sql_query_builder.go      ← fluent query builder + transactions (dialect-parameterized)
-        ├── sqlite_db.go              ← SQLite constructor (file path handling; pragmas via the dialect)
+        ├── sqlite_db.go              ← SQLite constructor (file path handling; foreign_keys DSN pragma on every connection, other pragmas via the dialect)
         ├── postgres_db.go            ← Postgres constructor (DSN validation, fail-fast ping)
         ├── memory_queue.go           ← in-memory message queue (dev)
         ├── redis_queue.go            ← message queue via Redis pub/sub
