@@ -98,12 +98,3 @@ func (m *initialSchema) Up(db ports.DBAdapter) error {
 
 	return nil
 }
-
-func (m *initialSchema) Down(db ports.DBAdapter) error {
-	for _, t := range []string{"bans", "player_attributes", "application_attributes", "users", "applications"} {
-		if err := db.DropTable(t); err != nil {
-			return err
-		}
-	}
-	return nil
-}
