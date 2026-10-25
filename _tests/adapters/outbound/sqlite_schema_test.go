@@ -262,16 +262,25 @@ func TestCreateTable_InCheckRestrictsColumn(t *testing.T) {
 }
 
 func TestCreateTable_InvalidRangeCheck(t *testing.T) {
-	db := newTestDB(t)
-	err := db.CreateTable(ports.Table{
-		Name: "test_table",
-		Columns: []ports.Column{
-			ports.PrimaryKey("id"),
-		},
-		RangeChecks: []ports.RangeCheck{{Column: "slot; DROP TABLE users", Min: 1, Max: 5}},
-	})
-	if err == nil {
-		t.Error("expected error for invalid column in RangeChecks")
+	cases := map[string]ports.RangeCheck{
+		"invalid column": {Column: "slot; DROP TABLE users", Min: 1, Max: 5},
+		"inverted range": {Column: "slot", Min: 5, Max: 1},
+	}
+	for name, check := range cases {
+		t.Run(name, func(t *testing.T) {
+			db := newTestDB(t)
+			err := db.CreateTable(ports.Table{
+				Name: "test_table",
+				Columns: []ports.Column{
+					ports.PrimaryKey("id"),
+					ports.Col("slot", ports.ColInteger),
+				},
+				RangeChecks: []ports.RangeCheck{check},
+			})
+			if err == nil {
+				t.Error("expected error for an invalid RangeCheck")
+			}
+		})
 	}
 }
 

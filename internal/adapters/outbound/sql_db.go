@@ -427,6 +427,9 @@ func (d *sqlDB) CreateTable(def ports.Table) error {
 		if err := validateIdentifier(rc.Column); err != nil {
 			return fmt.Errorf("invalid column %q in range_check: %w", rc.Column, err)
 		}
+		if rc.Min > rc.Max {
+			return fmt.Errorf("range_check on %q has min %d above max %d", rc.Column, rc.Min, rc.Max)
+		}
 	}
 	for _, ic := range def.InChecks {
 		if err := validateIdentifier(ic.Column); err != nil {
