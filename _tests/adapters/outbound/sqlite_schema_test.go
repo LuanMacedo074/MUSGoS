@@ -253,6 +253,103 @@ func TestCreateTable_InvalidRequireOneOf(t *testing.T) {
 	}
 }
 
+func TestCreateTable_RangeCheckBoundsColumn(t *testing.T) {
+	assertRangeCheckBoundsColumn(t, newTestDB(t))
+}
+
+func TestCreateTable_InCheckRestrictsColumn(t *testing.T) {
+	assertInCheckRestrictsColumn(t, newTestDB(t))
+}
+
+func TestCreateTable_InvalidRangeCheck(t *testing.T) {
+	db := newTestDB(t)
+	err := db.CreateTable(ports.Table{
+		Name: "test_table",
+		Columns: []ports.Column{
+			ports.PrimaryKey("id"),
+		},
+		RangeChecks: []ports.RangeCheck{{Column: "slot; DROP TABLE users", Min: 1, Max: 5}},
+	})
+	if err == nil {
+		t.Error("expected error for invalid column in RangeChecks")
+	}
+}
+
+func TestCreateTable_InvalidInCheck(t *testing.T) {
+	cases := map[string]ports.InCheck{
+		"invalid column": {Column: "kind; DROP TABLE users", Values: []string{"a"}},
+		"no values":      {Column: "kind"},
+		"quoted value":   {Column: "kind", Values: []string{"a') OR ('1'='1"}},
+	}
+	for name, check := range cases {
+		t.Run(name, func(t *testing.T) {
+			db := newTestDB(t)
+			err := db.CreateTable(ports.Table{
+				Name: "test_table",
+				Columns: []ports.Column{
+					ports.PrimaryKey("id"),
+					ports.Col("kind", ports.ColText),
+				},
+				InChecks: []ports.InCheck{check},
+			})
+			if err == nil {
+				t.Error("expected error for an invalid InCheck")
+			}
+		})
+	}
+}
+
+// assertRangeCheckBoundsColumn checks that a RangeCheck emits an inclusive
+// bound: both ends accepted, one past either end rejected. check_test is on
+// the Postgres reset list, so the table never outlives a run.
+func assertRangeCheckBoundsColumn(t *testing.T, db predicateDB) {
+	t.Helper()
+	mustNoErr(t, db.CreateTable(ports.Table{
+		Name: "check_test",
+		Columns: []ports.Column{
+			ports.PrimaryKey("id"),
+			ports.Col("slot", ports.ColInteger).NotNull(),
+		},
+		RangeChecks: []ports.RangeCheck{{Column: "slot", Min: 1, Max: 5}},
+	}))
+
+	query := db.QueryBuilder().Table("check_test")
+	for _, slot := range []int{1, 5} {
+		if err := query.Insert(map[string]interface{}{"slot": slot}); err != nil {
+			t.Errorf("insert slot=%d (in range): %v", slot, err)
+		}
+	}
+	for _, slot := range []int{0, 6} {
+		if err := query.Insert(map[string]interface{}{"slot": slot}); err == nil {
+			t.Errorf("insert slot=%d (out of range) succeeded, want a CHECK rejection", slot)
+		}
+	}
+}
+
+// assertInCheckRestrictsColumn checks that an InCheck admits only its listed
+// values.
+func assertInCheckRestrictsColumn(t *testing.T, db predicateDB) {
+	t.Helper()
+	mustNoErr(t, db.CreateTable(ports.Table{
+		Name: "check_test",
+		Columns: []ports.Column{
+			ports.PrimaryKey("id"),
+			ports.Col("kind", ports.ColText).NotNull(),
+		},
+		InChecks: []ports.InCheck{{Column: "kind", Values: []string{"alpha", "beta"}}},
+	}))
+
+	query := db.QueryBuilder().Table("check_test")
+	for _, kind := range []string{"alpha", "beta"} {
+		if err := query.Insert(map[string]interface{}{"kind": kind}); err != nil {
+			t.Errorf("insert kind=%q (listed): %v", kind, err)
+		}
+	}
+	if err := query.Insert(map[string]interface{}{"kind": "gamma"}); err == nil {
+		t.Error("insert kind=\"gamma\" (unlisted) succeeded, want a CHECK rejection")
+	}
+}
+
 func TestCreateTable_DefaultLiteralWithQuotes(t *testing.T) {
 	db := newTestDB(t)
 	err := db.CreateTable(ports.Table{
