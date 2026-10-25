@@ -57,7 +57,7 @@ internal/
 │   │   ├── handler.go                ← MessageHandler interface
 │   │   ├── logger.go                 ← Logger interface + LogLevel
 │   │   ├── message_sender.go         ← MessageSender interface (message sending)
-│   │   ├── migration.go              ← Migration, MigrationTracker, MigrationTx interfaces
+│   │   ├── migration.go              ← Migration, MigrationTracker, MigrationTx, SQLMigrationExecutor interfaces
 │   │   ├── schema.go                 ← DSL for table/index definitions
 │   │   ├── queue.go                  ← QueuePublisher, QueueConsumer, MessageQueue interfaces
 │   │   ├── script_engine.go          ← ScriptEngine interface
@@ -97,6 +97,7 @@ internal/
         ├── sql_dialect.go            ← dialect seam: placeholders, column types, now-expressions, DDL quirks
         ├── sql_dialect_sqlite.go     ← SQLite dialect
         ├── sql_dialect_postgres.go   ← Postgres dialect
+        ├── sql_migration.go          ← per-dialect raw-SQL migration statements, run in the migration transaction
         ├── sql_query_builder.go      ← fluent query builder + transactions (dialect-parameterized)
         ├── sqlite_db.go              ← SQLite constructor (file path handling; foreign_keys DSN pragma on every connection, other pragmas via the dialect)
         ├── postgres_db.go            ← Postgres constructor (DSN validation, fail-fast ping)
@@ -268,8 +269,17 @@ type MigrationTx interface {
 type MigrationTransactor interface {
     BeginMigration() (MigrationTx, error)
 }
+
+type MigrationSQL struct {
+    SQLite   []string
+    Postgres []string
+}
+
+type SQLMigrationExecutor interface {
+    ExecuteMigrationSQL(MigrationSQL) error
+}
 ```
-Contracts for the migration system. Each migration is identified by its full name (timestamp prefix, so names sort in order) and has an `Up` method. The `MigrationTracker` (implemented by `DBAdapter` itself) records which ones have already been executed. The `MigrationRunner` (service) orchestrates execution in order: when the adapter is a `MigrationTransactor` (both SQL adapters are), each migration's `Up` and its tracker row run in one `MigrationTx`, so a failing `Up` leaves neither partial DDL nor a tracker row. A migration that opens its own transaction through its query builder gets a savepoint inside the runner's transaction.
+Contracts for the migration system. Each migration is identified by its full name (timestamp prefix, so names sort in order) and has an `Up` method. The `MigrationTracker` (implemented by `DBAdapter` itself) records which ones have already been executed. The `MigrationRunner` (service) orchestrates execution in order: when the adapter is a `MigrationTransactor` (both SQL adapters are), each migration's `Up` and its tracker row run in one `MigrationTx`, so a failing `Up` leaves neither partial DDL nor a tracker row. A migration that opens its own transaction through its query builder gets a savepoint inside the runner's transaction. For trusted DDL the schema DSL cannot express (triggers, functions), a migration type-asserts its adapter to `SQLMigrationExecutor` and passes per-backend statements in a `MigrationSQL`; only the runner's `MigrationTx` implements it, so the statements never run outside that transaction. Each call runs in a savepoint: a failing statement undoes that call's statements and the migration may handle the error and continue.
 
 Migrations are **forward-only**: there is no `Down`, and nothing rolls an applied migration back. To undo or correct a migration that has shipped, fix forward — add a new migration (`make migration name=<name>`) that makes the correction. Never edit or delete a migration that may already be applied somewhere.
 
