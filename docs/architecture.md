@@ -237,6 +237,7 @@ type Query interface {
     WhereLessThan(column string, value interface{}) Query // column < value
     Insert(data map[string]interface{}) error
     Update(data map[string]interface{}) (int64, error)
+    Increment(column string, delta int64) (int64, error)
     Delete() (int64, error)
     First() (QueryResult, error)
     Get() ([]QueryResult, error)
