@@ -151,8 +151,11 @@ func (tx *fakeMigrationTx) MarkMigrationApplied(name string) error {
 func (tx *fakeMigrationTx) Commit() error   { tx.committed = true; return nil }
 func (tx *fakeMigrationTx) Rollback() error { tx.rolledBack = true; return nil }
 
+// fakeTransactionalDB is a transactional adapter that is also its own root
+// tracker, as the SQL adapters are.
 type fakeTransactionalDB struct {
 	ports.DBAdapter
+	fakeMigrationTracker
 	txs     []*fakeMigrationTx
 	markErr error
 }
@@ -175,12 +178,11 @@ func (m *recordingMigration) Up(db ports.DBAdapter) error {
 }
 
 func TestMigrationRunner_Transactional_EachMigrationCommitsWithItsTrackerRow(t *testing.T) {
-	tracker := &fakeMigrationTracker{}
 	db := &fakeTransactionalDB{}
 	m1 := &recordingMigration{fakeMigration: fakeMigration{name: "20260101_first"}}
 	m2 := &recordingMigration{fakeMigration: fakeMigration{name: "20260102_second"}}
 
-	runner := services.NewMigrationRunner(tracker, db, []ports.Migration{m2, m1})
+	runner := services.NewMigrationRunner(db, db, []ports.Migration{m2, m1})
 	res, err := runner.RunPending()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -201,8 +203,8 @@ func TestMigrationRunner_Transactional_EachMigrationCommitsWithItsTrackerRow(t *
 	if m1.gotDB != db.txs[0] || m2.gotDB != db.txs[1] {
 		t.Error("each migration's Up must run against its own transaction")
 	}
-	if len(tracker.applied) != 0 {
-		t.Errorf("tracker rows must be written through the transaction, not the root tracker; got %v", tracker.applied)
+	if len(db.applied) != 0 {
+		t.Errorf("tracker rows must be written through the transaction, not the root tracker; got %v", db.applied)
 	}
 	if len(res.Ran) != 2 {
 		t.Errorf("expected 2 ran, got %v", res.Ran)
@@ -214,7 +216,7 @@ func TestMigrationRunner_Transactional_UpErrorRollsBack(t *testing.T) {
 	m1 := &fakeMigration{name: "20260101_first", upErr: fmt.Errorf("schema error")}
 	m2 := &fakeMigration{name: "20260102_second"}
 
-	runner := services.NewMigrationRunner(&fakeMigrationTracker{}, db, []ports.Migration{m1, m2})
+	runner := services.NewMigrationRunner(db, db, []ports.Migration{m1, m2})
 	res, err := runner.RunPending()
 	if err == nil {
 		t.Fatal("expected error when migration fails")
@@ -239,7 +241,7 @@ func TestMigrationRunner_Transactional_MarkErrorRollsBack(t *testing.T) {
 	db := &fakeTransactionalDB{markErr: fmt.Errorf("duplicate")}
 	m1 := &fakeMigration{name: "20260101_first"}
 
-	runner := services.NewMigrationRunner(&fakeMigrationTracker{}, db, []ports.Migration{m1})
+	runner := services.NewMigrationRunner(db, db, []ports.Migration{m1})
 	if _, err := runner.RunPending(); err == nil {
 		t.Fatal("expected error when the tracker insert fails")
 	}
@@ -247,5 +249,48 @@ func TestMigrationRunner_Transactional_MarkErrorRollsBack(t *testing.T) {
 	tx := db.txs[0]
 	if !tx.rolledBack || tx.committed {
 		t.Errorf("a failed tracker insert must roll back the migration's DDL; committed=%v rolledBack=%v", tx.committed, tx.rolledBack)
+	}
+}
+
+func TestMigrationRunner_Transactional_UpPanicRollsBack(t *testing.T) {
+	db := &fakeTransactionalDB{}
+	m1 := &panickingMigration{name: "20260101_first"}
+
+	runner := services.NewMigrationRunner(db, db, []ports.Migration{m1})
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("the panic must propagate to the caller")
+			}
+		}()
+		runner.RunPending()
+	}()
+
+	if len(db.txs) != 1 || !db.txs[0].rolledBack || db.txs[0].committed {
+		t.Error("a panicking Up must roll back its transaction instead of leaving it open")
+	}
+}
+
+type panickingMigration struct{ name string }
+
+func (m *panickingMigration) Name() string                  { return m.name }
+func (m *panickingMigration) Up(db ports.DBAdapter) error   { panic("boom") }
+func (m *panickingMigration) Down(db ports.DBAdapter) error { return nil }
+
+func TestMigrationRunner_SeparateTrackerSkipsTransaction(t *testing.T) {
+	tracker := &fakeMigrationTracker{}
+	db := &fakeTransactionalDB{}
+	m1 := &fakeMigration{name: "20260101_first"}
+
+	runner := services.NewMigrationRunner(tracker, db, []ports.Migration{m1})
+	if _, err := runner.RunPending(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(db.txs) != 0 {
+		t.Error("a transaction on db cannot cover a tracker that lives elsewhere; expected the two-step path")
+	}
+	if len(tracker.applied) != 1 || tracker.applied[0] != "20260101_first" {
+		t.Errorf("the row must land in the tracker the runner reads from, got %v", tracker.applied)
 	}
 }

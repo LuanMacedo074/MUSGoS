@@ -66,9 +66,15 @@ func (r *MigrationRunner) RunPending() (MigrationResult, error) {
 // apply runs one migration and records it in the tracker. When the database
 // supports it both happen in a single transaction, so a failing Up (or a crash
 // before the tracker insert) leaves neither partial DDL nor a tracker row.
-func (r *MigrationRunner) apply(m ports.Migration) error {
+// The transaction writes the row through the database's own tracker, so it is
+// only used when the runner's tracker is that same adapter.
+//
+// Inside the transaction SQLite ignores PRAGMA foreign_keys, so a migration
+// cannot switch foreign keys off for a table rebuild.
+func (r *MigrationRunner) apply(m ports.Migration) (err error) {
 	transactor, ok := r.db.(ports.MigrationTransactor)
-	if !ok {
+	dbTracker, _ := r.db.(ports.MigrationTracker)
+	if !ok || dbTracker != r.tracker {
 		return runMigration(m, r.db, r.tracker)
 	}
 
@@ -76,18 +82,28 @@ func (r *MigrationRunner) apply(m ports.Migration) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction for migration %s: %w", m.Name(), err)
 	}
-	if err := runMigration(m, tx, tx); err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			return fmt.Errorf("%w (rollback failed: %v)", err, rbErr)
+	finalized := false
+	defer func() {
+		if finalized {
+			return
 		}
+		if rbErr := tx.Rollback(); rbErr != nil && err != nil {
+			err = fmt.Errorf("%w (rollback failed: %v)", err, rbErr)
+		}
+	}()
+
+	if err := runMigration(m, tx, tx); err != nil {
 		return err
 	}
+	// A failed Commit already ends the transaction; don't roll it back too.
+	finalized = true
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit migration %s: %w", m.Name(), err)
 	}
 	return nil
 }
 
+// runMigration applies m's Up against db and records it in tracker.
 func runMigration(m ports.Migration, db ports.DBAdapter, tracker ports.MigrationTracker) error {
 	if err := m.Up(db); err != nil {
 		return fmt.Errorf("migration %s failed: %w", m.Name(), err)

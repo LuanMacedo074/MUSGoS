@@ -36,8 +36,9 @@ func validateIdentifier(name string) error {
 // duplicated method bodies in the sqlite/postgres adapters migrate here group
 // by group, written once with ?-placeholders and rebound per dialect.
 //
-// Every statement runs through exec: the root pool on the adapter itself, or a
-// *sql.Tx on the copy BeginMigration hands a migration.
+// Every DBAdapter and MigrationTracker statement runs through exec: the root
+// pool on the adapter itself, or a *sql.Tx on the copy BeginMigration hands a
+// migration. Only init, Close and BeginMigration touch the pool directly.
 type sqlDB struct {
 	db      *sql.DB
 	exec    dbExecutor
