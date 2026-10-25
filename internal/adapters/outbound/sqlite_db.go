@@ -26,7 +26,7 @@ func NewSQLiteDB(dbPath string) (*SQLiteDB, error) {
 		return nil, fmt.Errorf("failed to open sqlite database: %w", err)
 	}
 
-	s := &SQLiteDB{sqlDB{db: db, dialect: sqliteDialect{}}}
+	s := &SQLiteDB{newSQLDB(db, sqliteDialect{})}
 	if err := s.init(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize database: %w", err)

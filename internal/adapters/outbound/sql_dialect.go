@@ -35,7 +35,7 @@ type dialect interface {
 	// SkipAddColumn reports whether AddColumn should silently no-op because the
 	// column already exists — the pre-check backends without ADD COLUMN IF NOT
 	// EXISTS need so re-running a migration stays idempotent.
-	SkipAddColumn(db *sql.DB, table, column string) (bool, error)
+	SkipAddColumn(db dbExecutor, table, column string) (bool, error)
 	// SupportsUniqueInAddColumn reports whether ADD COLUMN may carry a UNIQUE
 	// constraint (SQLite cannot add one via ALTER TABLE).
 	SupportsUniqueInAddColumn() bool
@@ -45,7 +45,7 @@ type dialect interface {
 	// SkipDropColumn reports whether DropColumn should silently no-op because the
 	// column is already gone — the pre-check backends without DROP COLUMN IF
 	// EXISTS need so re-running a migration stays idempotent.
-	SkipDropColumn(db *sql.DB, table, column string) (bool, error)
+	SkipDropColumn(db dbExecutor, table, column string) (bool, error)
 	// Init applies per-connection setup right after the pool is opened
 	// (pragmas on SQLite; nothing on Postgres).
 	Init(db *sql.DB) error

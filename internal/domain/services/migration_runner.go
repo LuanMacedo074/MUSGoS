@@ -53,16 +53,47 @@ func (r *MigrationRunner) RunPending() (MigrationResult, error) {
 			continue
 		}
 
-		if err := m.Up(r.db); err != nil {
-			return result, fmt.Errorf("migration %s failed: %w", m.Name(), err)
-		}
-
-		if err := r.tracker.MarkMigrationApplied(m.Name()); err != nil {
-			return result, fmt.Errorf("failed to mark migration %s as applied: %w", m.Name(), err)
+		if err := r.apply(m); err != nil {
+			return result, err
 		}
 
 		result.Ran = append(result.Ran, m.Name())
 	}
 
 	return result, nil
+}
+
+// apply runs one migration and records it in the tracker. When the database
+// supports it both happen in a single transaction, so a failing Up (or a crash
+// before the tracker insert) leaves neither partial DDL nor a tracker row.
+func (r *MigrationRunner) apply(m ports.Migration) error {
+	transactor, ok := r.db.(ports.MigrationTransactor)
+	if !ok {
+		return runMigration(m, r.db, r.tracker)
+	}
+
+	tx, err := transactor.BeginMigration()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction for migration %s: %w", m.Name(), err)
+	}
+	if err := runMigration(m, tx, tx); err != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return fmt.Errorf("%w (rollback failed: %v)", err, rbErr)
+		}
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit migration %s: %w", m.Name(), err)
+	}
+	return nil
+}
+
+func runMigration(m ports.Migration, db ports.DBAdapter, tracker ports.MigrationTracker) error {
+	if err := m.Up(db); err != nil {
+		return fmt.Errorf("migration %s failed: %w", m.Name(), err)
+	}
+	if err := tracker.MarkMigrationApplied(m.Name()); err != nil {
+		return fmt.Errorf("failed to mark migration %s as applied: %w", m.Name(), err)
+	}
+	return nil
 }

@@ -33,7 +33,7 @@ func NewPostgresDB(dsn string) (*PostgresDB, error) {
 		return nil, fmt.Errorf("failed to connect to postgres: %w", err)
 	}
 
-	p := &PostgresDB{sqlDB{db: db, dialect: postgresDialect{}}}
+	p := &PostgresDB{newSQLDB(db, postgresDialect{})}
 	if err := p.init(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize database: %w", err)

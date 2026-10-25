@@ -71,7 +71,7 @@ func newTestPG(t *testing.T) *outbound.PostgresDB {
 func resetPGSchema(t *testing.T, db *outbound.PostgresDB) {
 	t.Helper()
 	for _, tbl := range []string{
-		"tx_test", "bans", "player_attributes", "application_attributes", "users", "applications",
+		"tx_test", "mig_tx_test", "bans", "player_attributes", "application_attributes", "users", "applications",
 	} {
 		if err := db.DropTable(tbl); err != nil {
 			t.Fatalf("failed to drop %s: %v", tbl, err)
