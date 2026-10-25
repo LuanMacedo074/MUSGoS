@@ -62,52 +62,55 @@ func (c PostgresConfig) DSN() string {
 }
 
 type ServerConfig struct {
-	ApplicationName   string
-	Port              string
-	ServerIP          string
-	MaxMessageSize    int
-	TCPNoDelay        bool
-	DefaultUserLevel  int
-	LogLevel          string
-	LoggerType        string
-	LogPath           string
-	LogBufferSize     int
-	Environment       string
-	CipherType        string
-	EncryptionKey     string
-	Protocol          string
-	DatabaseType      string
-	DatabasePath      string
-	Postgres          PostgresConfig
-	SessionStoreType  string
-	ScriptsPath       string
-	ScriptTimeout     int
-	DisconnectHook    string
-	AuthMode          string
-	Redis             RedisConfig
-	AllEncrypted      bool
-	QueueType         string
-	QueueRedis        RedisConfig
-	RabbitMQ          RabbitMQConfig
-	CommandLevels     map[string]int
-	IdleTimeout       int
-	UDPPort           string
-	CacheType         string
-	CacheRedis        RedisConfig
-	RateLimitRequests int
-	RateLimitWindow   int
-	MetricsPort       string
-	MetricsBindAddr   string
-	HTTPPort          string
-	HTTPBindAddr      string
-	HTTPScriptsPath   string
-	JobsEnabled       bool
-	DefaultMovieID    string
-	SMTPHost          string
-	SMTPPort          string
-	SMTPUser          string
-	SMTPPass          string
-	SMTPFrom          string
+	ApplicationName  string
+	Port             string
+	ServerIP         string
+	MaxMessageSize   int
+	TCPNoDelay       bool
+	DefaultUserLevel int
+	LogLevel         string
+	LoggerType       string
+	LogPath          string
+	LogBufferSize    int
+	Environment      string
+	CipherType       string
+	EncryptionKey    string
+	Protocol         string
+	DatabaseType     string
+	DatabasePath     string
+	Postgres         PostgresConfig
+	SessionStoreType string
+	ScriptsPath      string
+	ScriptTimeout    int
+	// SandboxedScriptsDir is the directory under ScriptsPath that
+	// mus.loadSandboxed reads; empty leaves the loader disabled.
+	SandboxedScriptsDir string
+	DisconnectHook      string
+	AuthMode            string
+	Redis               RedisConfig
+	AllEncrypted        bool
+	QueueType           string
+	QueueRedis          RedisConfig
+	RabbitMQ            RabbitMQConfig
+	CommandLevels       map[string]int
+	IdleTimeout         int
+	UDPPort             string
+	CacheType           string
+	CacheRedis          RedisConfig
+	RateLimitRequests   int
+	RateLimitWindow     int
+	MetricsPort         string
+	MetricsBindAddr     string
+	HTTPPort            string
+	HTTPBindAddr        string
+	HTTPScriptsPath     string
+	JobsEnabled         bool
+	DefaultMovieID      string
+	SMTPHost            string
+	SMTPPort            string
+	SMTPUser            string
+	SMTPPass            string
+	SMTPFrom            string
 }
 
 var defaultCommandLevels = map[string]int{
@@ -193,11 +196,12 @@ func LoadServerConfig() ServerConfig {
 			DBName:   getEnv("DATABASE_NAME", "musgo"),
 			SSLMode:  getEnv("DATABASE_SSLMODE", "disable"),
 		},
-		SessionStoreType: getEnv("SESSION_STORE_TYPE", "memory"),
-		ScriptsPath:      getEnv("SCRIPTS_PATH", "external/scripts"),
-		ScriptTimeout:    getEnvInt("SCRIPT_TIMEOUT", 5),
-		DisconnectHook:   getEnv("DISCONNECT_HOOK", "users/onDisconnect"),
-		AuthMode:         getEnv("AUTH_MODE", "open"),
+		SessionStoreType:    getEnv("SESSION_STORE_TYPE", "memory"),
+		ScriptsPath:         getEnv("SCRIPTS_PATH", "external/scripts"),
+		ScriptTimeout:       getEnvInt("SCRIPT_TIMEOUT", 5),
+		SandboxedScriptsDir: getEnv("SANDBOXED_SCRIPTS_DIR", ""),
+		DisconnectHook:      getEnv("DISCONNECT_HOOK", "users/onDisconnect"),
+		AuthMode:            getEnv("AUTH_MODE", "open"),
 		Redis: RedisConfig{
 			Host:      getEnv("REDIS_HOST", "localhost"),
 			Port:      getEnv("REDIS_PORT", "6379"),

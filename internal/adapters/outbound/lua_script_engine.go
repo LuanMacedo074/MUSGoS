@@ -26,6 +26,7 @@ type LuaScriptEngine struct {
 	sessionStore  ports.SessionStore
 	cache         ports.Cache
 	emailSender   ports.EmailSender
+	sandboxedDir  string
 }
 
 func NewLuaScriptEngine(scriptsDir string, logger ports.Logger, scriptTimeoutSeconds int, publisher ports.QueuePublisher, sender ports.MessageSender, db ports.DBAdapter, queryBuilder ports.QueryBuilder, sessionStore ports.SessionStore, cache ports.Cache, emailSender ports.EmailSender) *LuaScriptEngine {
@@ -41,6 +42,14 @@ func NewLuaScriptEngine(scriptsDir string, logger ports.Logger, scriptTimeoutSec
 		cache:         cache,
 		emailSender:   emailSender,
 	}
+}
+
+// WithSandboxedChunkDir enables mus.loadSandboxed, which loads chunks from
+// dir (relative to the scripts directory) in a restricted environment. An
+// empty dir leaves mus.loadSandboxed undefined.
+func (e *LuaScriptEngine) WithSandboxedChunkDir(dir string) *LuaScriptEngine {
+	e.sandboxedDir = dir
+	return e
 }
 
 // resolveScriptPath maps a network-supplied subject to an on-disk .lua path,
@@ -64,8 +73,8 @@ func (e *LuaScriptEngine) resolveScriptPath(subject string) (string, bool) {
 
 // resolveScript resolves a subject to an existing script file, supporting
 // prefix subjects: when no exact script exists, dash-suffixed variants fall
-// back to the longest on-disk prefix (subject "painting/saveLayer1-42" runs
-// painting/saveLayer1.lua). The script reads the full original subject via
+// back to the longest on-disk prefix (subject "example/chunk-42" runs
+// example/chunk.lua). The script reads the full original subject via
 // mus.getSubject(). Exact matches always win; the same containment policy
 // applies at every step.
 func (e *LuaScriptEngine) resolveScript(subject string) (string, bool) {
@@ -141,7 +150,7 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 		return 1
 	}))
 
-	// The full original subject — prefix-routed scripts (SavePainting<L>-<id>
+	// The full original subject — prefix-routed scripts (chunk-<id>
 	// style) read their dash-suffix payload from here.
 	musMod.RawSetString("getSubject", L.NewFunction(func(L *lua.LState) int {
 		L.Push(lua.LString(msg.Subject))
@@ -238,6 +247,9 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 
 	// Register mus.json module
 	registerJsonModule(L, musMod)
+	if e.sandboxedDir != "" {
+		registerSandboxedLoader(L, musMod, e.scriptsDir, e.sandboxedDir)
+	}
 
 	musMod.RawSetString("uuid", L.NewFunction(func(L *lua.LState) int {
 		L.Push(lua.LString(uuid.New().String()))

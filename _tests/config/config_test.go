@@ -257,3 +257,21 @@ func TestLoadServerConfig_PartialOverride(t *testing.T) {
 		t.Error("Protocol should not be empty")
 	}
 }
+
+func TestLoadServerConfig_SandboxedScriptsDirDefaultsToDisabled(t *testing.T) {
+	cfg := config.LoadServerConfig()
+
+	if cfg.SandboxedScriptsDir != "" {
+		t.Errorf("SandboxedScriptsDir = %q, want empty (disabled)", cfg.SandboxedScriptsDir)
+	}
+}
+
+func TestLoadServerConfig_SandboxedScriptsDirCustom(t *testing.T) {
+	t.Setenv("SANDBOXED_SCRIPTS_DIR", "chunks")
+
+	cfg := config.LoadServerConfig()
+
+	if cfg.SandboxedScriptsDir != "chunks" {
+		t.Errorf("SandboxedScriptsDir = %q, want chunks", cfg.SandboxedScriptsDir)
+	}
+}
