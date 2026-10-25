@@ -185,3 +185,19 @@ mus.response(tostring(ok) .. "|" .. tostring(err))`, library))
 		})
 	}
 }
+
+func TestLoadSandboxed_RejectsTheScriptsRootItself(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "toplevel", `return {}`)
+	for _, chunkDir := range []string{".", "chunks/.."} {
+		t.Run(chunkDir, func(t *testing.T) {
+			engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil).
+				WithSandboxedChunkDir(chunkDir)
+			got := probe(t, engine, dir, `local ok, err = pcall(mus.loadSandboxed, "toplevel")
+mus.response(tostring(ok) .. "|" .. tostring(err))`)
+			if !strings.HasPrefix(got, "false|") || !strings.Contains(got, "outside the scripts directory") {
+				t.Errorf("response = %q, want containment error", got)
+			}
+		})
+	}
+}

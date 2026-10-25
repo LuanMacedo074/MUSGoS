@@ -21,18 +21,19 @@ func registerSandboxedLoader(L *lua.LState, musMod *lua.LTable, scriptsDir, chun
 			L.ArgError(1, "invalid sandboxed chunk id")
 			return 0
 		}
-		path := filepath.Join(scriptsDir, chunkDir, id+".lua")
-		absPath, err := filepath.Abs(path)
+		// The id cannot leave chunkDir, so containing chunkDir strictly inside
+		// scriptsDir (never the root itself) contains every chunk.
+		absChunkDir, err := filepath.Abs(filepath.Join(scriptsDir, chunkDir))
 		if err != nil {
 			L.RaiseError("load sandboxed chunk %q: %s", id, err)
 			return 0
 		}
 		absScriptsDir, _ := filepath.Abs(scriptsDir)
-		if !isSubpath(absScriptsDir, absPath) {
-			L.RaiseError("load sandboxed chunk %q: path is outside the scripts directory", id)
+		if !isSubpath(absScriptsDir, absChunkDir) {
+			L.RaiseError("load sandboxed chunk %q: directory is outside the scripts directory", id)
 			return 0
 		}
-		fn, err := L.LoadFile(path)
+		fn, err := L.LoadFile(filepath.Join(absChunkDir, id+".lua"))
 		if err != nil {
 			L.RaiseError("load sandboxed chunk %q: %s", id, err)
 			return 0
