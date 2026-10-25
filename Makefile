@@ -1,3 +1,5 @@
+export MUS_TEST_TIMEOUT ?= 20m
+
 TEST_PKGS = ./_tests/config/... ./_tests/domain/... ./_tests/factory/... ./_tests/adapters/...
 
 .PHONY: test test-unit test-integration test-race test-v test-cover test-run thirdparties-up thirdparties-down build run migration queue script job
@@ -26,17 +28,17 @@ thirdparties-down:
 # Docker. This is the lane that guards the concurrency-sensitive wire parser and
 # connection paths — run it in CI so data races and parser panics are caught.
 test-race:
-	go test -race $(TEST_PKGS) ./internal/...
+	go test -timeout=$(MUS_TEST_TIMEOUT) -race $(TEST_PKGS) ./internal/...
 
 # The -v / -cover / -run helpers target the unit suite for quick iteration.
 test-v:
-	go test $(TEST_PKGS) -v
+	go test -timeout=$(MUS_TEST_TIMEOUT) $(TEST_PKGS) -v
 
 test-cover:
-	go test $(TEST_PKGS) -cover
+	go test -timeout=$(MUS_TEST_TIMEOUT) $(TEST_PKGS) -cover
 
 test-run:
-	go test $(TEST_PKGS) -v -run $(T)
+	go test -timeout=$(MUS_TEST_TIMEOUT) $(TEST_PKGS) -v -run $(T)
 
 build:
 	go build -o bin/gameserver ./cmd/gameserver

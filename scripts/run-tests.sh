@@ -16,6 +16,8 @@ ENV_FILE="$TP/custom_settings.env"
 
 TEST_PKGS=(./_tests/config/... ./_tests/domain/... ./_tests/factory/... ./_tests/adapters/...)
 INTEGRATION_RUN='Integration'
+# The full migration-backed suite can exceed Go's default 10-minute package limit.
+TEST_ARGS=(-timeout="${MUS_TEST_TIMEOUT:-20m}")
 
 mode="all"
 case "${1:-}" in
@@ -29,7 +31,7 @@ esac
 cd "$ROOT"
 
 if [ "$mode" = "unit" ]; then
-  exec go test "${TEST_PKGS[@]}"
+  exec go test "${TEST_ARGS[@]}" "${TEST_PKGS[@]}"
 fi
 
 # integration / all: make sure the third-party services are running.
@@ -51,8 +53,8 @@ export TEST_RABBITMQ_PASSWORD="${TEST_RABBITMQ_PASSWORD:-${MUS_RABBITMQ_PASSWORD
 export TEST_RABBITMQ_VHOST="${TEST_RABBITMQ_VHOST:-/}"
 
 if [ "$mode" = "integration" ]; then
-  exec go test -tags=integration -run "$INTEGRATION_RUN" "${TEST_PKGS[@]}"
+  exec go test "${TEST_ARGS[@]}" -tags=integration -run "$INTEGRATION_RUN" "${TEST_PKGS[@]}"
 fi
 
 # all
-exec go test -tags=integration "${TEST_PKGS[@]}"
+exec go test "${TEST_ARGS[@]}" -tags=integration "${TEST_PKGS[@]}"
