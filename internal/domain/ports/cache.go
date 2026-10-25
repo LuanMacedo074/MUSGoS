@@ -19,9 +19,14 @@ type Cache interface {
 	AcquireLock(ctx context.Context, key string) (*CacheLock, error)
 	Get(key string) ([]byte, error)
 	Set(key string, value []byte, ttl time.Duration) error
+	// Increment atomically adds one to an integer value, starting a missing key at one.
+	// It preserves an existing expiry and rejects non-integers and overflow.
+	Increment(key string) (int64, error)
 	Delete(key string) error
 	Exists(key string) (bool, error)
 	SetAdd(key, member string) error
+	// SetAddOnce atomically adds a member and reports whether it was new.
+	SetAddOnce(key, member string) (bool, error)
 	SetRemove(key, member string) error
 	SetMembers(key string) ([]string, error)
 	SetIsMember(key, member string) (bool, error)

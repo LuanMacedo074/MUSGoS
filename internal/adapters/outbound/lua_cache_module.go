@@ -97,6 +97,17 @@ func registerCacheModule(L *lua.LState, musMod *lua.LTable, cache ports.Cache) f
 		return 1
 	}))
 
+	// mus.cache.increment(key) -> the new integer; errors abort the script.
+	cacheMod.RawSetString("increment", L.NewFunction(func(L *lua.LState) int {
+		value, err := cache.Increment(L.CheckString(1))
+		if err != nil {
+			L.RaiseError("cache increment: %v", err)
+			return 0
+		}
+		L.Push(lua.LNumber(value))
+		return 1
+	}))
+
 	// mus.cache.delete(key)
 	cacheMod.RawSetString("delete", L.NewFunction(func(L *lua.LState) int {
 		key := L.CheckString(1)
@@ -129,6 +140,17 @@ func registerCacheModule(L *lua.LState, musMod *lua.LTable, cache ports.Cache) f
 			return 1
 		}
 		L.Push(lua.LBool(true))
+		return 1
+	}))
+
+	// mus.cache.setAddOnce(key, member) -> true only for the first atomic insertion.
+	cacheMod.RawSetString("setAddOnce", L.NewFunction(func(L *lua.LState) int {
+		added, err := cache.SetAddOnce(L.CheckString(1), L.CheckString(2))
+		if err != nil {
+			L.RaiseError("cache setAddOnce: %v", err)
+			return 0
+		}
+		L.Push(lua.LBool(added))
 		return 1
 	}))
 

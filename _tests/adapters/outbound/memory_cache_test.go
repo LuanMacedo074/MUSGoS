@@ -218,3 +218,28 @@ func TestMemoryCache_SetMembersEmpty(t *testing.T) {
 		t.Errorf("SetMembers = %v, want empty slice", members)
 	}
 }
+
+func TestMemoryCache_DeleteRemovesSetEntries(t *testing.T) {
+	c := outbound.NewMemoryCache()
+	defer c.Close()
+	if err := c.SetAdd("battle:encounter:actions", "hero:resolved"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Delete("battle:encounter:actions"); err != nil {
+		t.Fatal(err)
+	}
+	present, err := c.SetIsMember("battle:encounter:actions", "hero:resolved")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if present {
+		t.Fatal("deleted battle ledger still rejects its resolved identifier")
+	}
+	members, err := c.SetMembers("battle:encounter:actions")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(members) != 0 {
+		t.Fatalf("deleted set retained members: %v", members)
+	}
+}
