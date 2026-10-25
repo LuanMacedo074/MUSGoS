@@ -54,8 +54,8 @@ func (sqliteDialect) AddColumnClause() string {
 
 // SkipAddColumn checks PRAGMA table_info because SQLite has no ADD COLUMN IF
 // NOT EXISTS; skipping when the column exists keeps migrations re-runnable.
-func (sqliteDialect) SkipAddColumn(db *sql.DB, table, column string) (bool, error) {
-	rows, err := db.Query("PRAGMA table_info(" + table + ")")
+func (sqliteDialect) SkipAddColumn(exec dbExecutor, table, column string) (bool, error) {
+	rows, err := exec.Query("PRAGMA table_info(" + table + ")")
 	if err != nil {
 		return false, err
 	}
@@ -84,8 +84,8 @@ func (sqliteDialect) DropColumnClause() string {
 
 // SkipDropColumn checks PRAGMA table_info because SQLite has no DROP COLUMN IF
 // EXISTS; skipping when the column is already gone keeps migrations re-runnable.
-func (sqliteDialect) SkipDropColumn(db *sql.DB, table, column string) (bool, error) {
-	rows, err := db.Query("PRAGMA table_info(" + table + ")")
+func (sqliteDialect) SkipDropColumn(exec dbExecutor, table, column string) (bool, error) {
+	rows, err := exec.Query("PRAGMA table_info(" + table + ")")
 	if err != nil {
 		return false, err
 	}

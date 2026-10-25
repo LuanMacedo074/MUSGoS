@@ -35,9 +35,18 @@ func validateIdentifier(name string) error {
 // owns the connection pool and defers backend differences to its dialect; the
 // duplicated method bodies in the sqlite/postgres adapters migrate here group
 // by group, written once with ?-placeholders and rebound per dialect.
+//
+// Every DBAdapter and MigrationTracker statement runs through exec: the root
+// pool on the adapter itself, or a *sql.Tx on the copy BeginMigration hands a
+// migration. Only init, Close and BeginMigration touch the pool directly.
 type sqlDB struct {
 	db      *sql.DB
+	exec    dbExecutor
 	dialect dialect
+}
+
+func newSQLDB(db *sql.DB, d dialect) sqlDB {
+	return sqlDB{db: db, exec: db, dialect: d}
 }
 
 // init runs per-connection setup for the backend and bootstraps the
@@ -55,13 +64,47 @@ func (d *sqlDB) Close() error {
 
 // QueryBuilder returns a generic query builder for this database.
 func (d *sqlDB) QueryBuilder() ports.QueryBuilder {
-	return &sqlQueryBuilder{exec: d.db, dialect: d.dialect}
+	return &sqlQueryBuilder{exec: d.exec, dialect: d.dialect}
+}
+
+// BeginMigration opens a transaction and returns an adapter bound to it, so
+// the runner can apply a migration's Up and its tracker row atomically. Both
+// SQLite and Postgres run DDL transactionally.
+func (d *sqlDB) BeginMigration() (ports.MigrationTx, error) {
+	tx, err := d.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	return &sqlMigrationTx{sqlDB: sqlDB{db: d.db, exec: tx, dialect: d.dialect}, tx: tx}, nil
+}
+
+// sqlMigrationTx implements ports.MigrationTx: the storage core bound to one
+// *sql.Tx. Its QueryBuilder's Begin opens a savepoint, so a migration that
+// manages its own transaction keeps working inside the runner's.
+type sqlMigrationTx struct {
+	sqlDB
+	tx *sql.Tx
+}
+
+func (t *sqlMigrationTx) Commit() error   { return t.tx.Commit() }
+func (t *sqlMigrationTx) Rollback() error { return t.tx.Rollback() }
+
+// Close must not shut the shared pool from inside a migration; the runner
+// finalizes the transaction with Commit or Rollback.
+func (t *sqlMigrationTx) Close() error {
+	return fmt.Errorf("cannot close a migration transaction; it is committed or rolled back by the migration runner")
+}
+
+// BeginMigration is refused: a second root transaction would not be atomic
+// with this one (and on SQLite would block on the write lock this one holds).
+func (t *sqlMigrationTx) BeginMigration() (ports.MigrationTx, error) {
+	return nil, fmt.Errorf("cannot begin a migration transaction inside another")
 }
 
 // ensureMigrationsTable bootstraps the table the MigrationTracker records
 // applied migrations in; called from the adapters' constructors.
 func (d *sqlDB) ensureMigrationsTable() error {
-	_, err := d.db.Exec(fmt.Sprintf(`
+	_, err := d.exec.Exec(fmt.Sprintf(`
 		CREATE TABLE IF NOT EXISTS migrations (
 			id %s,
 			name TEXT NOT NULL UNIQUE,
@@ -74,7 +117,7 @@ func (d *sqlDB) ensureMigrationsTable() error {
 // --- MigrationTracker ---
 
 func (d *sqlDB) GetAppliedMigrations() ([]string, error) {
-	rows, err := d.db.Query("SELECT name FROM migrations ORDER BY name")
+	rows, err := d.exec.Query("SELECT name FROM migrations ORDER BY name")
 	if err != nil {
 		return nil, err
 	}
@@ -92,19 +135,19 @@ func (d *sqlDB) GetAppliedMigrations() ([]string, error) {
 }
 
 func (d *sqlDB) MarkMigrationApplied(name string) error {
-	_, err := d.db.Exec(d.dialect.Rebind("INSERT INTO migrations (name, applied_at) VALUES (?, ?)"), name, time.Now())
+	_, err := d.exec.Exec(d.dialect.Rebind("INSERT INTO migrations (name, applied_at) VALUES (?, ?)"), name, time.Now())
 	return err
 }
 
 // --- DBAdmin ---
 
 func (d *sqlDB) CreateApplication(appName string) error {
-	_, err := d.db.Exec(d.dialect.Rebind("INSERT INTO applications (name) VALUES (?)"), appName)
+	_, err := d.exec.Exec(d.dialect.Rebind("INSERT INTO applications (name) VALUES (?)"), appName)
 	return err
 }
 
 func (d *sqlDB) DeleteApplication(appName string) error {
-	result, err := d.db.Exec(d.dialect.Rebind("DELETE FROM applications WHERE name = ?"), appName)
+	result, err := d.exec.Exec(d.dialect.Rebind("DELETE FROM applications WHERE name = ?"), appName)
 	if err != nil {
 		return err
 	}
@@ -120,7 +163,7 @@ func (d *sqlDB) DeleteApplication(appName string) error {
 
 func (d *sqlDB) getAppID(appName string) (int64, error) {
 	var id int64
-	err := d.db.QueryRow(d.dialect.Rebind("SELECT id FROM applications WHERE name = ?"), appName).Scan(&id)
+	err := d.exec.QueryRow(d.dialect.Rebind("SELECT id FROM applications WHERE name = ?"), appName).Scan(&id)
 	if err != nil {
 		return 0, fmt.Errorf("application %q not found: %w", appName, err)
 	}
@@ -140,7 +183,7 @@ func (d *sqlDB) SetApplicationAttribute(appName, attrName string, value lingo.LV
 		return err
 	}
 
-	_, err = d.db.Exec(d.dialect.Rebind(`
+	_, err = d.exec.Exec(d.dialect.Rebind(`
 		INSERT INTO application_attributes (app_id, attr_name, value_json)
 		VALUES (?, ?, ?)
 		ON CONFLICT(app_id, attr_name) DO UPDATE SET value_json=excluded.value_json`),
@@ -172,7 +215,7 @@ func (d *sqlDB) DeleteApplicationAttribute(appName, attrName string) error {
 	if err != nil {
 		return err
 	}
-	_, err = d.db.Exec(d.dialect.Rebind("DELETE FROM application_attributes WHERE app_id = ? AND attr_name = ?"), appID, attrName)
+	_, err = d.exec.Exec(d.dialect.Rebind("DELETE FROM application_attributes WHERE app_id = ? AND attr_name = ?"), appID, attrName)
 	return err
 }
 
@@ -189,7 +232,7 @@ func (d *sqlDB) SetPlayerAttribute(appName, userID, attrName string, value lingo
 		return err
 	}
 
-	_, err = d.db.Exec(d.dialect.Rebind(`
+	_, err = d.exec.Exec(d.dialect.Rebind(`
 		INSERT INTO player_attributes (app_id, user_id, attr_name, value_json)
 		VALUES (?, ?, ?, ?)
 		ON CONFLICT(app_id, user_id, attr_name) DO UPDATE SET value_json=excluded.value_json`),
@@ -221,14 +264,14 @@ func (d *sqlDB) DeletePlayerAttribute(appName, userID, attrName string) error {
 	if err != nil {
 		return err
 	}
-	_, err = d.db.Exec(d.dialect.Rebind("DELETE FROM player_attributes WHERE app_id = ? AND user_id = ? AND attr_name = ?"), appID, userID, attrName)
+	_, err = d.exec.Exec(d.dialect.Rebind("DELETE FROM player_attributes WHERE app_id = ? AND user_id = ? AND attr_name = ?"), appID, userID, attrName)
 	return err
 }
 
 // --- DBUser ---
 
 func (d *sqlDB) CreateUser(username, passwordHash string, userLevel int) error {
-	_, err := d.db.Exec(
+	_, err := d.exec.Exec(
 		d.dialect.Rebind("INSERT INTO users (uuid, username, password_hash, user_level) VALUES (?, ?, ?, ?)"),
 		uuid.New().String(), username, passwordHash, userLevel)
 	return err
@@ -236,7 +279,7 @@ func (d *sqlDB) CreateUser(username, passwordHash string, userLevel int) error {
 
 func (d *sqlDB) GetUser(username string) (*ports.User, error) {
 	var u ports.User
-	err := d.db.QueryRow(
+	err := d.exec.QueryRow(
 		d.dialect.Rebind("SELECT id, uuid, username, password_hash, user_level, created_at FROM users WHERE username = ?"),
 		username).Scan(&u.ID, &u.UUID, &u.Username, &u.PasswordHash, &u.UserLevel, &u.CreatedAt)
 	if err != nil {
@@ -249,7 +292,7 @@ func (d *sqlDB) GetUser(username string) (*ports.User, error) {
 }
 
 func (d *sqlDB) DeleteUser(username string) error {
-	result, err := d.db.Exec(d.dialect.Rebind("DELETE FROM users WHERE username = ?"), username)
+	result, err := d.exec.Exec(d.dialect.Rebind("DELETE FROM users WHERE username = ?"), username)
 	if err != nil {
 		return err
 	}
@@ -264,7 +307,7 @@ func (d *sqlDB) DeleteUser(username string) error {
 }
 
 func (d *sqlDB) UpdateUserLevel(username string, level int) error {
-	result, err := d.db.Exec(d.dialect.Rebind("UPDATE users SET user_level = ? WHERE username = ?"), level, username)
+	result, err := d.exec.Exec(d.dialect.Rebind("UPDATE users SET user_level = ? WHERE username = ?"), level, username)
 	if err != nil {
 		return err
 	}
@@ -279,7 +322,7 @@ func (d *sqlDB) UpdateUserLevel(username string, level int) error {
 }
 
 func (d *sqlDB) UpdateUserPassword(username, passwordHash string) error {
-	result, err := d.db.Exec(
+	result, err := d.exec.Exec(
 		d.dialect.Rebind("UPDATE users SET password_hash = ? WHERE username = ?"),
 		passwordHash, username)
 	if err != nil {
@@ -298,7 +341,7 @@ func (d *sqlDB) UpdateUserPassword(username, passwordHash string) error {
 // --- DBBan ---
 
 func (d *sqlDB) CreateBan(userID *int64, ipAddress *string, reason string, expiresAt *time.Time) error {
-	_, err := d.db.Exec(
+	_, err := d.exec.Exec(
 		d.dialect.Rebind("INSERT INTO bans (uuid, user_id, ip_address, reason, expires_at) VALUES (?, ?, ?, ?, ?)"),
 		uuid.New().String(), userID, ipAddress, reason, expiresAt)
 	return err
@@ -321,7 +364,7 @@ func (d *sqlDB) getActiveBan(column string, value interface{}) (*ports.Ban, erro
 		FROM bans
 		WHERE %s = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > %s)
 		ORDER BY created_at DESC LIMIT 1`, column, d.dialect.NowExpr())
-	err := d.db.QueryRow(d.dialect.Rebind(query),
+	err := d.exec.QueryRow(d.dialect.Rebind(query),
 		value).Scan(&b.ID, &b.UUID, &b.UserID, &b.IPAddress, &b.Reason, &b.ExpiresAt, &b.RevokedAt, &b.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -333,7 +376,7 @@ func (d *sqlDB) getActiveBan(column string, value interface{}) (*ports.Ban, erro
 }
 
 func (d *sqlDB) RevokeBan(banID int64) error {
-	result, err := d.db.Exec(
+	result, err := d.exec.Exec(
 		d.dialect.Rebind(fmt.Sprintf("UPDATE bans SET revoked_at = %s WHERE id = ? AND revoked_at IS NULL", d.dialect.NowExpr())),
 		banID)
 	if err != nil {
@@ -454,7 +497,7 @@ func (d *sqlDB) CreateTable(def ports.Table) error {
 
 	b.WriteString("\n)")
 
-	_, err := d.db.Exec(b.String())
+	_, err := d.exec.Exec(b.String())
 	return err
 }
 
@@ -462,7 +505,7 @@ func (d *sqlDB) DropTable(name string) error {
 	if err := validateIdentifier(name); err != nil {
 		return fmt.Errorf("invalid table name %q: %w", name, err)
 	}
-	_, err := d.db.Exec("DROP TABLE IF EXISTS " + name + d.dialect.DropTableSuffix())
+	_, err := d.exec.Exec("DROP TABLE IF EXISTS " + name + d.dialect.DropTableSuffix())
 	return err
 }
 
@@ -473,7 +516,7 @@ func (d *sqlDB) AddColumn(table string, col ports.Column) error {
 	if err := validateIdentifier(col.Name); err != nil {
 		return fmt.Errorf("invalid column name %q: %w", col.Name, err)
 	}
-	if skip, err := d.dialect.SkipAddColumn(d.db, table, col.Name); err != nil || skip {
+	if skip, err := d.dialect.SkipAddColumn(d.exec, table, col.Name); err != nil || skip {
 		return err
 	}
 
@@ -495,7 +538,7 @@ func (d *sqlDB) AddColumn(table string, col ports.Column) error {
 		b.WriteString(" DEFAULT ")
 		b.WriteString(d.defaultSQL(col))
 	}
-	_, err := d.db.Exec(b.String())
+	_, err := d.exec.Exec(b.String())
 	return err
 }
 
@@ -506,7 +549,7 @@ func (d *sqlDB) DropColumn(table, column string) error {
 	if err := validateIdentifier(column); err != nil {
 		return fmt.Errorf("invalid column name %q: %w", column, err)
 	}
-	if skip, err := d.dialect.SkipDropColumn(d.db, table, column); err != nil || skip {
+	if skip, err := d.dialect.SkipDropColumn(d.exec, table, column); err != nil || skip {
 		return err
 	}
 
@@ -516,7 +559,7 @@ func (d *sqlDB) DropColumn(table, column string) error {
 	b.WriteString(" ")
 	b.WriteString(d.dialect.DropColumnClause())
 	b.WriteString(column)
-	_, err := d.db.Exec(b.String())
+	_, err := d.exec.Exec(b.String())
 	return err
 }
 
@@ -534,7 +577,7 @@ func (d *sqlDB) CreateIndex(def ports.Index) error {
 	}
 	stmt := fmt.Sprintf("CREATE INDEX IF NOT EXISTS %s ON %s(%s)",
 		def.Name, def.Table, strings.Join(def.Columns, ", "))
-	_, err := d.db.Exec(stmt)
+	_, err := d.exec.Exec(stmt)
 	return err
 }
 
@@ -558,7 +601,7 @@ func (d *sqlDB) defaultSQL(col ports.Column) string {
 // --- helpers ---
 
 func (d *sqlDB) queryNames(query string, args ...interface{}) ([]string, error) {
-	rows, err := d.db.Query(query, args...)
+	rows, err := d.exec.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -578,7 +621,7 @@ func (d *sqlDB) queryNames(query string, args ...interface{}) ([]string, error) 
 func (d *sqlDB) scanAttribute(query string, args ...interface{}) (lingo.LValue, error) {
 	var valueJSON string
 
-	err := d.db.QueryRow(query, args...).Scan(&valueJSON)
+	err := d.exec.QueryRow(query, args...).Scan(&valueJSON)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return lingo.NewLVoid(), nil

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"fsos-server/internal/domain/ports"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -15,6 +17,10 @@ import (
 type SQLiteDB struct {
 	sqlDB
 }
+
+// The migration runner only applies migrations atomically on adapters that
+// implement ports.MigrationTransactor; fail the build if this one stops.
+var _ ports.MigrationTransactor = (*SQLiteDB)(nil)
 
 func NewSQLiteDB(dbPath string) (*SQLiteDB, error) {
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
@@ -26,7 +32,7 @@ func NewSQLiteDB(dbPath string) (*SQLiteDB, error) {
 		return nil, fmt.Errorf("failed to open sqlite database: %w", err)
 	}
 
-	s := &SQLiteDB{sqlDB{db: db, dialect: sqliteDialect{}}}
+	s := &SQLiteDB{newSQLDB(db, sqliteDialect{})}
 	if err := s.init(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize database: %w", err)

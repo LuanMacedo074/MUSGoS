@@ -50,7 +50,7 @@ func (postgresDialect) AddColumnClause() string {
 	return "ADD COLUMN IF NOT EXISTS "
 }
 
-func (postgresDialect) SkipAddColumn(db *sql.DB, table, column string) (bool, error) {
+func (postgresDialect) SkipAddColumn(exec dbExecutor, table, column string) (bool, error) {
 	return false, nil // the IF NOT EXISTS clause handles idempotency
 }
 
@@ -62,7 +62,7 @@ func (postgresDialect) DropColumnClause() string {
 	return "DROP COLUMN IF EXISTS "
 }
 
-func (postgresDialect) SkipDropColumn(db *sql.DB, table, column string) (bool, error) {
+func (postgresDialect) SkipDropColumn(exec dbExecutor, table, column string) (bool, error) {
 	return false, nil // the IF EXISTS clause handles idempotency
 }
 

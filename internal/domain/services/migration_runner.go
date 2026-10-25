@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 
 	"fsos-server/internal/domain/ports"
@@ -53,16 +54,73 @@ func (r *MigrationRunner) RunPending() (MigrationResult, error) {
 			continue
 		}
 
-		if err := m.Up(r.db); err != nil {
-			return result, fmt.Errorf("migration %s failed: %w", m.Name(), err)
-		}
-
-		if err := r.tracker.MarkMigrationApplied(m.Name()); err != nil {
-			return result, fmt.Errorf("failed to mark migration %s as applied: %w", m.Name(), err)
+		if err := r.apply(m); err != nil {
+			return result, err
 		}
 
 		result.Ran = append(result.Ran, m.Name())
 	}
 
 	return result, nil
+}
+
+// apply runs one migration and records it in the tracker. When the database
+// supports it both happen in a single transaction, so a failing Up (or a crash
+// before the tracker insert) leaves neither partial DDL nor a tracker row.
+// The transaction writes the row through the database's own tracker, so it is
+// only used when the runner's tracker is that same adapter.
+//
+// Inside the transaction SQLite ignores PRAGMA foreign_keys, so a migration
+// cannot switch foreign keys off for a table rebuild.
+func (r *MigrationRunner) apply(m ports.Migration) (err error) {
+	transactor, ok := r.db.(ports.MigrationTransactor)
+	if !ok || !sameAdapter(r.db, r.tracker) {
+		return runMigration(m, r.db, r.tracker)
+	}
+
+	tx, err := transactor.BeginMigration()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction for migration %s: %w", m.Name(), err)
+	}
+	finalized := false
+	defer func() {
+		if finalized {
+			return
+		}
+		if rbErr := tx.Rollback(); rbErr != nil && err != nil {
+			err = fmt.Errorf("%w (rollback failed: %v)", err, rbErr)
+		}
+	}()
+
+	if err := runMigration(m, tx, tx); err != nil {
+		return err
+	}
+	// A failed Commit already ends the transaction; don't roll it back too.
+	finalized = true
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit migration %s: %w", m.Name(), err)
+	}
+	return nil
+}
+
+// sameAdapter reports whether a and b hold the same comparable value. An
+// uncomparable dynamic type counts as different (== on it would panic), which
+// sends the runner down the two-step path.
+func sameAdapter(a, b any) bool {
+	ta, tb := reflect.TypeOf(a), reflect.TypeOf(b)
+	if ta == nil || ta != tb || !ta.Comparable() {
+		return false
+	}
+	return a == b
+}
+
+// runMigration applies m's Up against db and records it in tracker.
+func runMigration(m ports.Migration, db ports.DBAdapter, tracker ports.MigrationTracker) error {
+	if err := m.Up(db); err != nil {
+		return fmt.Errorf("migration %s failed: %w", m.Name(), err)
+	}
+	if err := tracker.MarkMigrationApplied(m.Name()); err != nil {
+		return fmt.Errorf("failed to mark migration %s as applied: %w", m.Name(), err)
+	}
+	return nil
 }

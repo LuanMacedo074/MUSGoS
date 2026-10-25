@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"fsos-server/internal/domain/ports"
+
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -14,6 +16,10 @@ import (
 type PostgresDB struct {
 	sqlDB
 }
+
+// The migration runner only applies migrations atomically on adapters that
+// implement ports.MigrationTransactor; fail the build if this one stops.
+var _ ports.MigrationTransactor = (*PostgresDB)(nil)
 
 // NewPostgresDB opens a connection pool for the given DSN. The DSN may be a
 // URL ("postgres://user:pass@host:5432/db?sslmode=disable") or a keyword string
@@ -33,7 +39,7 @@ func NewPostgresDB(dsn string) (*PostgresDB, error) {
 		return nil, fmt.Errorf("failed to connect to postgres: %w", err)
 	}
 
-	p := &PostgresDB{sqlDB{db: db, dialect: postgresDialect{}}}
+	p := &PostgresDB{newSQLDB(db, postgresDialect{})}
 	if err := p.init(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize database: %w", err)

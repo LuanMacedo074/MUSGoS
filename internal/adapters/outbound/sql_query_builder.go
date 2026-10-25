@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"fsos-server/internal/domain/ports"
 )
@@ -17,8 +18,8 @@ type dbExecutor interface {
 	QueryRow(query string, args ...interface{}) *sql.Row
 }
 
-// sqlQueryBuilder implements ports.QueryBuilder (and, over a *sql.DB,
-// ports.TransactionalQueryBuilder) for any backend: queries are built with
+// sqlQueryBuilder implements ports.QueryBuilder and
+// ports.TransactionalQueryBuilder for any backend: queries are built with
 // ?-placeholders and rebound per dialect at execution time.
 type sqlQueryBuilder struct {
 	exec    dbExecutor
@@ -30,17 +31,66 @@ func (qb *sqlQueryBuilder) Table(name string) ports.Query {
 }
 
 // Begin opens a transaction and returns a ports.Tx whose queries run inside it.
-// Only valid on a builder backed by the root *sql.DB (not an already-tx one).
+// On a builder already bound to a transaction (a migration's), it opens a
+// savepoint instead: Commit releases it and Rollback undoes only its writes,
+// while the outer transaction still decides whether anything persists.
 func (qb *sqlQueryBuilder) Begin() (ports.Tx, error) {
-	db, ok := qb.exec.(*sql.DB)
-	if !ok {
-		return nil, fmt.Errorf("cannot begin transaction: query builder is not backed by a root connection")
+	switch exec := qb.exec.(type) {
+	case *sql.DB:
+		tx, err := exec.Begin()
+		if err != nil {
+			return nil, err
+		}
+		return &sqlTx{tx: tx, dialect: qb.dialect}, nil
+	case *sql.Tx:
+		name := fmt.Sprintf("sp_%d", savepointSeq.Add(1))
+		if _, err := exec.Exec("SAVEPOINT " + name); err != nil {
+			return nil, err
+		}
+		return &sqlSavepoint{tx: exec, name: name, dialect: qb.dialect}, nil
+	default:
+		return nil, fmt.Errorf("cannot begin transaction: query builder is not backed by a connection or transaction")
 	}
-	tx, err := db.Begin()
-	if err != nil {
-		return nil, err
+}
+
+// savepointSeq keeps savepoint names unique, so nested Begins don't shadow
+// one another.
+var savepointSeq atomic.Uint64
+
+// sqlSavepoint implements ports.Tx as a savepoint inside an enclosing *sql.Tx.
+// Once finalized, further Commit/Rollback calls return sql.ErrTxDone without
+// touching the database — on Postgres a failing statement (e.g. releasing a
+// gone savepoint from a deferred Rollback) would abort the enclosing tx.
+type sqlSavepoint struct {
+	tx      *sql.Tx
+	name    string
+	dialect dialect
+	done    bool
+}
+
+func (s *sqlSavepoint) Table(name string) ports.Query {
+	return &sqlQuery{tableName: name, exec: s.tx, dialect: s.dialect}
+}
+
+func (s *sqlSavepoint) Commit() error {
+	if s.done {
+		return sql.ErrTxDone
 	}
-	return &sqlTx{tx: tx, dialect: qb.dialect}, nil
+	s.done = true
+	_, err := s.tx.Exec("RELEASE SAVEPOINT " + s.name)
+	return err
+}
+
+func (s *sqlSavepoint) Rollback() error {
+	if s.done {
+		return sql.ErrTxDone
+	}
+	s.done = true
+	if _, err := s.tx.Exec("ROLLBACK TO SAVEPOINT " + s.name); err != nil {
+		return err
+	}
+	_, err := s.tx.Exec("RELEASE SAVEPOINT " + s.name)
+	return err
 }
 
 // sqlTx implements ports.Tx: a query builder bound to a *sql.Tx.

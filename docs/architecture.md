@@ -57,7 +57,7 @@ internal/
 │   │   ├── handler.go                ← MessageHandler interface
 │   │   ├── logger.go                 ← Logger interface + LogLevel
 │   │   ├── message_sender.go         ← MessageSender interface (message sending)
-│   │   ├── migration.go              ← Migration + MigrationTracker interfaces
+│   │   ├── migration.go              ← Migration, MigrationTracker, MigrationTx interfaces
 │   │   ├── schema.go                 ← DSL for table/index definitions
 │   │   ├── queue.go                  ← QueuePublisher, QueueConsumer, MessageQueue interfaces
 │   │   ├── script_engine.go          ← ScriptEngine interface
@@ -247,16 +247,28 @@ Fluent interface for generic operations on tables. Exposed to Lua scripts via `m
 #### `Migration` + `MigrationTracker` (outbound ports)
 ```go
 type Migration interface {
-    ID() string
-    Up(adapter DBAdapter) error
+    Name() string
+    Up(db DBAdapter) error
+    Down(db DBAdapter) error
 }
 
 type MigrationTracker interface {
-    HasRun(migrationID string) (bool, error)
-    MarkAsRun(migrationID string) error
+    GetAppliedMigrations() ([]string, error)
+    MarkMigrationApplied(name string) error
+}
+
+type MigrationTx interface {
+    DBAdapter
+    MigrationTracker
+    Commit() error
+    Rollback() error
+}
+
+type MigrationTransactor interface {
+    BeginMigration() (MigrationTx, error)
 }
 ```
-Contracts for the migration system. Each migration has an orderable ID (timestamp) and an `Up` method. The `MigrationTracker` (implemented by `DBAdapter` itself) records which ones have already been executed. The `MigrationRunner` (service) orchestrates execution in order.
+Contracts for the migration system. Each migration is identified by its full name (timestamp prefix, so names sort in order) and has an `Up` method. The `MigrationTracker` (implemented by `DBAdapter` itself) records which ones have already been executed. The `MigrationRunner` (service) orchestrates execution in order: when the adapter is a `MigrationTransactor` (both SQL adapters are), each migration's `Up` and its tracker row run in one `MigrationTx`, so a failing `Up` leaves neither partial DDL nor a tracker row. A migration that opens its own transaction through its query builder gets a savepoint inside the runner's transaction.
 
 #### `MessageQueue` (outbound port)
 ```go
@@ -318,7 +330,7 @@ These are the adapters that the domain **uses** to do things it doesn't know (or
 
 - **`file_logger.go`** — the concrete file logger implementation. Implements the `ports.Logger` interface. Writes formatted logs to a file and to stdout. It's outbound because logging is an **infrastructure resource** the system consumes.
 
-- **`sql_db.go` + `sql_dialect*.go`** — one storage core implements `ports.DBAdapter` and `ports.MigrationTracker` for every SQL backend (RFC-007). All persistence logic — users (with bcrypt), bans (by user/IP, with expiration), application and player attributes (LValues serialized as JSON), and schema operations for the migration system — is written once with `?`-placeholders; an internal `dialect` seam supplies the per-backend differences (placeholder rebinding, column types, now-expressions, DDL quirks). `sqlite_db.go` and `postgres_db.go` are thin constructors that pair a connection pool with their dialect. Adding a backend means writing a new dialect, not a new adapter.
+- **`sql_db.go` + `sql_dialect*.go`** — one storage core implements `ports.DBAdapter`, `ports.MigrationTracker` and `ports.MigrationTransactor` for every SQL backend (RFC-007). All persistence logic — users (with bcrypt), bans (by user/IP, with expiration), application and player attributes (LValues serialized as JSON), and schema operations for the migration system — is written once with `?`-placeholders; an internal `dialect` seam supplies the per-backend differences (placeholder rebinding, column types, now-expressions, DDL quirks). `sqlite_db.go` and `postgres_db.go` are thin constructors that pair a connection pool with their dialect. Adding a backend means writing a new dialect, not a new adapter.
 
 - **`memory_session_store.go`** — in-memory session store with `sync.RWMutex`. Implements `ports.SessionStore`. Ideal for local development — no external dependencies, but no persistence across restarts.
 
