@@ -88,4 +88,3 @@ func (m *testMigration) Up(db ports.DBAdapter) error {
 	}
 	return nil
 }
-func (m *testMigration) Down(db ports.DBAdapter) error { return nil }

@@ -1,9 +1,10 @@
 package ports
 
+// Migration is forward-only: there is no Down. A bad migration is fixed by
+// adding a new migration that corrects it, never by rolling one back.
 type Migration interface {
 	Name() string
 	Up(db DBAdapter) error
-	Down(db DBAdapter) error
 }
 
 type MigrationTracker interface {

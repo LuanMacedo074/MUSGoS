@@ -31,9 +31,8 @@ type fakeMigration struct {
 	upErr   error
 }
 
-func (m *fakeMigration) Name() string                  { return m.name }
-func (m *fakeMigration) Up(db ports.DBAdapter) error   { m.upCalls++; return m.upErr }
-func (m *fakeMigration) Down(db ports.DBAdapter) error { return nil }
+func (m *fakeMigration) Name() string                { return m.name }
+func (m *fakeMigration) Up(db ports.DBAdapter) error { m.upCalls++; return m.upErr }
 
 func TestMigrationRunner_RunPending_AllNew(t *testing.T) {
 	tracker := &fakeMigrationTracker{}
@@ -273,9 +272,8 @@ func TestMigrationRunner_Transactional_UpPanicRollsBack(t *testing.T) {
 
 type panickingMigration struct{ name string }
 
-func (m *panickingMigration) Name() string                  { return m.name }
-func (m *panickingMigration) Up(db ports.DBAdapter) error   { panic("boom") }
-func (m *panickingMigration) Down(db ports.DBAdapter) error { return nil }
+func (m *panickingMigration) Name() string                { return m.name }
+func (m *panickingMigration) Up(db ports.DBAdapter) error { panic("boom") }
 
 func TestMigrationRunner_SeparateTrackerSkipsTransaction(t *testing.T) {
 	tracker := &fakeMigrationTracker{}

@@ -26,9 +26,8 @@ type funcMigration struct {
 	up   func(db ports.DBAdapter) error
 }
 
-func (m *funcMigration) Name() string                  { return m.name }
-func (m *funcMigration) Up(db ports.DBAdapter) error   { return m.up(db) }
-func (m *funcMigration) Down(db ports.DBAdapter) error { return nil }
+func (m *funcMigration) Name() string                { return m.name }
+func (m *funcMigration) Up(db ports.DBAdapter) error { return m.up(db) }
 
 func createMigTxTable(db ports.DBAdapter) error {
 	return db.CreateTable(ports.Table{

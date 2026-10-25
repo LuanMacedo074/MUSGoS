@@ -249,7 +249,6 @@ Fluent interface for generic operations on tables. Exposed to Lua scripts via `m
 type Migration interface {
     Name() string
     Up(db DBAdapter) error
-    Down(db DBAdapter) error
 }
 
 type MigrationTracker interface {
@@ -269,6 +268,8 @@ type MigrationTransactor interface {
 }
 ```
 Contracts for the migration system. Each migration is identified by its full name (timestamp prefix, so names sort in order) and has an `Up` method. The `MigrationTracker` (implemented by `DBAdapter` itself) records which ones have already been executed. The `MigrationRunner` (service) orchestrates execution in order: when the adapter is a `MigrationTransactor` (both SQL adapters are), each migration's `Up` and its tracker row run in one `MigrationTx`, so a failing `Up` leaves neither partial DDL nor a tracker row. A migration that opens its own transaction through its query builder gets a savepoint inside the runner's transaction.
+
+Migrations are **forward-only**: there is no `Down`, and nothing rolls an applied migration back. To undo or correct a migration that has shipped, fix forward — add a new migration (`make migration name=<name>`) that makes the correction. Never edit or delete a migration that may already be applied somewhere.
 
 #### `MessageQueue` (outbound port)
 ```go
