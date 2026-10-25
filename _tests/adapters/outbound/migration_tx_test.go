@@ -344,3 +344,42 @@ func TestPG_Migration_SQLStatementsRollBackWithFailedUp(t *testing.T) {
 func TestPG_Migration_FailedSQLCallIsScoped(t *testing.T) {
 	checkFailedSQLCallIsScoped(t, newTestPG(t))
 }
+
+func TestPG_Migration_QueriesSurviveTableShapeChange(t *testing.T) {
+	db := newTestPG(t)
+	read := func(mdb ports.DBAdapter) error {
+		qb := mdb.(interface{ QueryBuilder() ports.QueryBuilder }).QueryBuilder()
+		_, err := qb.Table(migTxTable).First()
+		return err
+	}
+	mustNoErr(t, runMigrations(db,
+		&funcMigration{name: "29990201000000_create_and_read", up: func(mdb ports.DBAdapter) error {
+			if err := createMigTxTable(mdb); err != nil {
+				return err
+			}
+			qb := mdb.(interface{ QueryBuilder() ports.QueryBuilder }).QueryBuilder()
+			if err := qb.Table(migTxTable).Insert(map[string]interface{}{"k": "kept"}); err != nil {
+				return err
+			}
+			return read(mdb)
+		}},
+		&funcMigration{name: "29990201000001_add_column_and_read", up: func(mdb ports.DBAdapter) error {
+			executor, err := sqlExecutor(mdb)
+			if err != nil {
+				return err
+			}
+			if err := executor.ExecuteMigrationSQL(ports.MigrationSQL{Postgres: []string{"ALTER TABLE mig_tx_test ADD COLUMN extra TEXT"}}); err != nil {
+				return err
+			}
+			return read(mdb)
+		}},
+	))
+	row, err := db.QueryBuilder().Table(migTxTable).First()
+	mustNoErr(t, err)
+	if row["k"] != "kept" {
+		t.Fatalf("migration lost row: %v", row)
+	}
+	if _, ok := row["extra"]; !ok {
+		t.Fatalf("new column missing: %v", row)
+	}
+}
