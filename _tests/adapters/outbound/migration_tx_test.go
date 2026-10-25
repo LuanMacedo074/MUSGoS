@@ -136,6 +136,7 @@ func checkOwnTransactionRollbackIsScoped(t *testing.T, db migrationDB) {
 		}
 		tx := beginOwnTx(t, mdb)
 		if err := tx.Table(migTxTable).Insert(map[string]interface{}{"k": "discarded"}); err != nil {
+			tx.Rollback()
 			return err
 		}
 		return tx.Rollback()
@@ -160,6 +161,7 @@ func checkOwnTransactionUndoneWhenUpFails(t *testing.T, db migrationDB) {
 		}
 		tx := beginOwnTx(t, mdb)
 		if err := tx.Table(migTxTable).Insert(map[string]interface{}{"k": "x"}); err != nil {
+			tx.Rollback()
 			return err
 		}
 		if err := tx.Commit(); err != nil {
