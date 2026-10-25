@@ -27,7 +27,12 @@ func NewSQLiteDB(dbPath string) (*SQLiteDB, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite", dbPath)
+	// foreign_keys is a PER-CONNECTION pragma: a single `PRAGMA foreign_keys = ON`
+	// (see sqliteDialect.Init) binds only whichever pooled connection ran it, so a
+	// DELETE served by any other connection would skip ON DELETE CASCADE and orphan
+	// child rows. The DSN `_pragma` applies it to EVERY connection modernc opens, so
+	// FK enforcement holds across the whole pool.
+	db, err := sql.Open("sqlite", dbPath+"?_pragma=foreign_keys(1)")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open sqlite database: %w", err)
 	}

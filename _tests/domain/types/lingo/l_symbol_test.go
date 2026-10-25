@@ -23,10 +23,10 @@ func TestLSymbol_ExtractFromBytes(t *testing.T) {
 		val      string
 		wantSize int
 	}{
-		{"even", "ab", 6},    // 4 + 2
-		{"odd", "abc", 8},    // 4 + 3 + 1 padding
-		{"single", "x", 6},   // 4 + 1 + 1 padding
-		{"four", "test", 8},  // 4 + 4
+		{"even", "ab", 6},   // 4 + 2
+		{"odd", "abc", 8},   // 4 + 3 + 1 padding
+		{"single", "x", 6},  // 4 + 1 + 1 padding
+		{"four", "test", 8}, // 4 + 4
 	}
 
 	for _, tt := range tests {

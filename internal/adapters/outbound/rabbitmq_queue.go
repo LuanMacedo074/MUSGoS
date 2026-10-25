@@ -19,9 +19,9 @@ type RabbitMQQueue struct {
 	pubChan  *amqp.Channel
 	exchange string
 
-	mu      sync.Mutex
-	subs    map[string]*rabbitSubscription
-	closed  bool
+	mu     sync.Mutex
+	subs   map[string]*rabbitSubscription
+	closed bool
 }
 
 func NewRabbitMQQueue(host, port, user, password, vhost, exchange string) (*RabbitMQQueue, error) {

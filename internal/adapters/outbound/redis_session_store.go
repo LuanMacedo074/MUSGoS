@@ -284,4 +284,3 @@ func (r *RedisSessionStore) LeaveAllRooms(clientID string) error {
 func (r *RedisSessionStore) Close() error {
 	return r.closer()
 }
-
