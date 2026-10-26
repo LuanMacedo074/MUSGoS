@@ -1,13 +1,14 @@
 package outbound
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
 
 	"fsos-server/internal/domain/ports"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 // PostgresDB implements ports.DBAdapter and ports.MigrationTracker against a
@@ -46,4 +47,47 @@ func NewPostgresDB(dsn string) (*PostgresDB, error) {
 	}
 
 	return p, nil
+}
+
+// BeginMigration clears pgx's statement and description caches on the exact
+// connection that will run the next migration. Earlier migrations may have
+// changed the result shape of cached SELECTs. Clearing only server-side plans
+// would leave pgx's client-side caches stale.
+func (p *PostgresDB) BeginMigration() (ports.MigrationTx, error) {
+	ctx := context.Background()
+	conn, err := p.db.Conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := conn.Raw(func(driverConn interface{}) error {
+		return driverConn.(*stdlib.Conn).Conn().DeallocateAll(ctx)
+	}); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("clear migration statement cache: %w", err)
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return &postgresMigrationTx{
+		sqlMigrationTx: &sqlMigrationTx{sqlDB: sqlDB{db: p.db, exec: tx, dialect: p.dialect}, tx: tx},
+		conn:           conn,
+	}, nil
+}
+
+// Keep the reserved connection until the migration transaction is finalized.
+type postgresMigrationTx struct {
+	*sqlMigrationTx
+	conn *sql.Conn
+}
+
+func (t *postgresMigrationTx) Commit() error {
+	defer t.conn.Close()
+	return t.sqlMigrationTx.Commit()
+}
+
+func (t *postgresMigrationTx) Rollback() error {
+	defer t.conn.Close()
+	return t.sqlMigrationTx.Rollback()
 }
