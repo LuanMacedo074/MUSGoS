@@ -20,14 +20,24 @@ Failures raise a generic Lua error.
 
 ## Schema the application supplies
 
-The engine ships no migration for these tables, because they reference the
-application's `accounts` table. The store reads `accounts.id`,
-`accounts.password_hash` and `accounts.banned`, and writes:
+MUSGoS ships no migration for this store. Its tables hang off an `accounts`
+table, which is application schema: the engine's own identity table is `users`.
+An application that uses `mus.refresh` must provide:
 
-- `refresh_families` (`id`, `account_id`, `device_label`, `password_hash`,
-  `created_at`, `last_used_at`, `expires_at` in Unix seconds, `revoked`,
-  `revision`)
-- `refresh_tokens` (`token_hash`, `family_id`, `used`)
+- `accounts`, with at least `id`, `password_hash` and `banned` (read by the store)
+- `refresh_families` (`id`, `account_id` referencing `accounts(id)`,
+  `device_label`, `password_hash`, `created_at`, `last_used_at`, `expires_at`
+  in Unix seconds, `revoked`, `revision`)
+- `refresh_tokens` (`token_hash`, `family_id` referencing
+  `refresh_families(id)`, `used`)
+
+FsosServer's `20261117000028_remembered_login` migration is the reference
+schema, for both SQLite and Postgres.
+
+`mus.refresh` is registered even when these tables are missing. On such a
+database every call raises the same generic Lua error (`refresh issue failed`,
+`refresh rotation failed` or `refresh revocation failed`). The underlying SQL
+error is not passed to the script.
 
 Only SHA-256 digests of tokens are stored, never the tokens themselves. To
 revoke every device when a password changes, an application can add a trigger
