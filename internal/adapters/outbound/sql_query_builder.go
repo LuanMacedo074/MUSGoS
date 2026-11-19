@@ -130,6 +130,10 @@ func (q *sqlQuery) Where(column string, value interface{}) ports.Query {
 	return q.where(column, "=", value)
 }
 
+func (q *sqlQuery) WhereEqualFold(column, value string) ports.Query {
+	return q.where(column, "equalFold", value)
+}
+
 func (q *sqlQuery) WhereLessThan(column string, value interface{}) ports.Query {
 	return q.where(column, "<", value)
 }
@@ -298,7 +302,10 @@ func (q *sqlQuery) buildWhere() (string, []interface{}, error) {
 		if err := validateIdentifier(w.column); err != nil {
 			return "", nil, fmt.Errorf("invalid column name %q: %w", w.column, err)
 		}
-		if w.value == nil && w.operator == "=" {
+		if w.operator == "equalFold" {
+			parts[i] = "lower(" + w.column + ") = lower(?)"
+			vals = append(vals, w.value)
+		} else if w.value == nil && w.operator == "=" {
 			parts[i] = w.column + " IS NULL"
 		} else {
 			parts[i] = w.column + " " + w.operator + " ?"

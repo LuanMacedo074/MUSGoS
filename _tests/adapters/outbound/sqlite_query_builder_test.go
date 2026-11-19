@@ -259,3 +259,27 @@ func assertWhereNilMatchesNull(t *testing.T, db predicateDB) {
 		t.Fatalf("remaining bans = %d, want the revoked one", remaining)
 	}
 }
+
+func TestQueryBuilder_EqualFoldUsesBoundTextAndPreservesSpelling(t *testing.T) {
+	db := newTestDB(t)
+	mustNoErr(t, db.CreateUser("Luan2", "hash", 20))
+	query := db.QueryBuilder().Table("users")
+	row, err := query.WhereEqualFold("username", "LUAN2").Where("user_level", 20).First()
+	mustNoErr(t, err)
+	if row == nil || row["username"] != "Luan2" {
+		t.Fatalf("folded lookup changed spelling: %v", row)
+	}
+	injected, err := query.WhereEqualFold("username", "' OR 1=1 --").Count()
+	mustNoErr(t, err)
+	if injected != 0 {
+		t.Fatal("text was interpreted as SQL")
+	}
+	if _, err := query.WhereEqualFold("username) OR 1=1 --", "LUAN2").Get(); err == nil {
+		t.Fatal("invalid column accepted")
+	}
+	row, err = query.Where("username", "LUAN2").First()
+	mustNoErr(t, err)
+	if row != nil {
+		t.Fatal("exact lookup became case-insensitive")
+	}
+}

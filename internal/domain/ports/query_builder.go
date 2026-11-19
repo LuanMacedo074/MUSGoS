@@ -12,6 +12,8 @@ type QueryBuilder interface {
 type Query interface {
 	// Where adds a bound column = value predicate; a nil value adds column IS NULL.
 	Where(column string, value interface{}) Query
+	// WhereEqualFold compares text with lower(column) = lower(value), preserving stored spelling.
+	WhereEqualFold(column, value string) Query
 	// WhereLessThan adds a bound column < value predicate.
 	WhereLessThan(column string, value interface{}) Query
 	Insert(data map[string]interface{}) error
