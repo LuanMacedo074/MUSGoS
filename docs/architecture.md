@@ -240,6 +240,7 @@ type QueryBuilder interface {
 type Query interface {
     Where(column string, value interface{}) Query         // nil value -> column IS NULL
     WhereLessThan(column string, value interface{}) Query // column < value
+    WhereEqualFold(column, value string) Query            // lower(column) = lower(value)
     Insert(data map[string]interface{}) error
     Update(data map[string]interface{}) (int64, error)
     Increment(column string, delta int64) (int64, error)
@@ -359,7 +360,7 @@ These are the adapters that the domain **uses** to do things it doesn't know (or
 
 - **`lua_script_engine.go`** — implementation of `ports.ScriptEngine` via gopher-lua. Creates a fresh Lua VM per execution, with unsafe libs removed (`os`, `io`, `debug`). Registers the `mus` module with `getSender()`, `getContent()`, `response()`, `publish()`, and `sendMessage()`. Scripts live in `external/scripts/` with a 1:1 mapping by subject. Execution timeout configurable via `SCRIPT_TIMEOUT`.
 
-- **`lua_db_module.go`** — `mus.db` module for Lua scripts. Exposes DBPlayer, DBApplication, and DBAdmin operations (with bcrypt in `createUser`), plus the fluent query builder (`mus.db.table("name"):where(...):get()`, plus `:whereLessThan(col, value)`; `:where(col, nil)` matches NULL).
+- **`lua_db_module.go`** — `mus.db` module for Lua scripts. Exposes DBPlayer, DBApplication, and DBAdmin operations (with bcrypt in `createUser`), plus the fluent query builder (`mus.db.table("name"):where(...):get()`, plus `:whereLessThan(col, value)` and `:whereEqualFold(col, text)` for case-insensitive text matches; `:where(col, nil)` matches NULL).
 
 - **`lua_server_module.go`** — `mus.server` module for Lua scripts with server information.
 

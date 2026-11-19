@@ -539,6 +539,32 @@ func TestExecute_DBQueryBuilderPredicates(t *testing.T) {
 	}
 }
 
+func TestExecute_DBQueryBuilderWhereEqualFold(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "qbfold", `
+		local users = mus.db.table("users")
+		local folded = users:whereEqualFold("username", "LUAN2"):first()
+		local exact = users:where("username", "LUAN2"):first()
+		mus.response(folded.username .. ":" .. tostring(exact))
+	`)
+
+	db := newTestDB(t)
+	mustNoErr(t, db.CreateUser("Luan2", "hash", 20))
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, db.QueryBuilder(), nil, nil, nil)
+
+	result, err := engine.Execute(&ports.ScriptMessage{Subject: "qbfold", SenderID: "user1", Content: lingo.NewLVoid()})
+	if err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	strResult, ok := result.Content.(*lingo.LString)
+	if !ok {
+		t.Fatalf("expected *LString, got %T", result.Content)
+	}
+	if strResult.Value != "Luan2:nil" {
+		t.Errorf("response = %q, want %q", strResult.Value, "Luan2:nil")
+	}
+}
+
 func TestExecute_DBQueryBuilder(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "qbtest", `
