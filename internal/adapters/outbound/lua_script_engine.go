@@ -230,6 +230,10 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 		}()
 	}
 
+	if e.queryBuilder != nil {
+		registerRefreshModule(L, musMod, NewRefreshTokenStore(e.queryBuilder, nil))
+	}
+
 	// Register mus.bcrypt module (password-verify primitive; no deps)
 	registerBcryptModule(L, musMod)
 

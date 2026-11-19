@@ -69,3 +69,7 @@ func (postgresDialect) SkipDropColumn(exec dbExecutor, table, column string) (bo
 func (postgresDialect) Init(db *sql.DB) error {
 	return nil
 }
+
+// Postgres row writes wait for conflicting writers. Preserve native errors rather
+// than applying SQLite's lock-retry policy to other database failures.
+func (postgresDialect) RetryableConflict(error) bool { return false }
