@@ -3,6 +3,7 @@ package outbound_test
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -48,7 +49,7 @@ func seedRefreshAccount(t *testing.T, db *outbound.SQLiteDB, email string) int64
 	return row["id"].(int64)
 }
 
-func TestRefreshTokenStorePersistsOnlySHA256Digest(t *testing.T) {
+func TestRefreshTokenStore_PersistsOnlySHA256Digest(t *testing.T) {
 	db := newRefreshTestDB(t)
 	id := seedRefreshAccount(t, db, "digest@example.com")
 	token, err := outbound.NewRefreshTokenStore(db.QueryBuilder(), nil).Issue(id, "desktop")
@@ -65,7 +66,7 @@ func TestRefreshTokenStorePersistsOnlySHA256Digest(t *testing.T) {
 	}
 }
 
-func TestRefreshTokenStoreRotatesAndReplayRevokesOnlyThatDevice(t *testing.T) {
+func TestRefreshTokenStore_RotatesAndReplayRevokesOnlyThatDevice(t *testing.T) {
 	db := newRefreshTestDB(t)
 	id := seedRefreshAccount(t, db, "rotate@example.com")
 	store := outbound.NewRefreshTokenStore(db.QueryBuilder(), nil)
@@ -77,18 +78,18 @@ func TestRefreshTokenStoreRotatesAndReplayRevokesOnlyThatDevice(t *testing.T) {
 	if err != nil || account != id || rotated == "" || rotated == first {
 		t.Fatalf("refresh must rotate: account=%d err=%v", account, err)
 	}
-	if account, _, _ = store.Rotate(first); account != 0 {
+	if account, _, err = store.Rotate(first); err != nil || account != 0 {
 		t.Fatal("replay accepted")
 	}
-	if account, _, _ = store.Rotate(rotated); account != 0 {
+	if account, _, err = store.Rotate(rotated); err != nil || account != 0 {
 		t.Fatal("replay did not revoke family")
 	}
-	if account, _, _ = store.Rotate(otherDevice); account != id {
+	if account, _, err = store.Rotate(otherDevice); err != nil || account != id {
 		t.Fatal("replay revoked another device")
 	}
 }
 
-func TestRefreshTokenStoreRejectsBannedAccountAndChangedPassword(t *testing.T) {
+func TestRefreshTokenStore_RejectsBannedAccountAndChangedPassword(t *testing.T) {
 	db := newRefreshTestDB(t)
 	id := seedRefreshAccount(t, db, "policy@example.com")
 	store := outbound.NewRefreshTokenStore(db.QueryBuilder(), nil)
@@ -113,15 +114,13 @@ func TestRefreshTokenStoreRejectsBannedAccountAndChangedPassword(t *testing.T) {
 	}
 }
 
-func TestRefreshTokenStoreExpirySlidesThirtyDaysFromLastUse(t *testing.T) {
+func TestRefreshTokenStore_ExpirySlidesThirtyDaysFromLastUse(t *testing.T) {
 	db := newRefreshTestDB(t)
 	id := seedRefreshAccount(t, db, "expiry@example.com")
 	now := time.Date(2026, 11, 18, 0, 0, 0, 0, time.UTC)
 	store := outbound.NewRefreshTokenStore(db.QueryBuilder(), func() time.Time { return now })
 	token, err := store.Issue(id, "desktop")
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustNoErr(t, err)
 	now = now.Add(29 * 24 * time.Hour)
 	account, rotated, err := store.Rotate(token)
 	if err != nil || account != id || rotated == "" {
@@ -139,14 +138,12 @@ func TestRefreshTokenStoreExpirySlidesThirtyDaysFromLastUse(t *testing.T) {
 	}
 }
 
-func TestRefreshTokenStoreConcurrentReplayRevokesFamily(t *testing.T) {
+func TestRefreshTokenStore_ConcurrentReplayRevokesFamily(t *testing.T) {
 	db := newRefreshTestDB(t)
 	id := seedRefreshAccount(t, db, "race@example.com")
 	store := outbound.NewRefreshTokenStore(db.QueryBuilder(), nil)
 	token, err := store.Issue(id, "desktop")
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustNoErr(t, err)
 	type result struct {
 		account int64
 		token   string
@@ -183,18 +180,14 @@ func TestRefreshTokenStoreConcurrentReplayRevokesFamily(t *testing.T) {
 	}
 }
 
-func TestRefreshTokenStoreDeviceLabelPreservesUTF8AtByteLimit(t *testing.T) {
+func TestRefreshTokenStore_DeviceLabelPreservesUTF8AtByteLimit(t *testing.T) {
 	db := newRefreshTestDB(t)
 	id := seedRefreshAccount(t, db, "label@example.com")
 	store := outbound.NewRefreshTokenStore(db.QueryBuilder(), nil)
 	_, err := store.Issue(id, strings.Repeat("a", 127)+"é-desktop")
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustNoErr(t, err)
 	family, err := db.QueryBuilder().Table("refresh_families").Where("account_id", id).First()
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustNoErr(t, err)
 	if family["device_label"] != strings.Repeat("a", 127) {
 		t.Fatal("device label must end on a complete UTF-8 rune within 128 bytes")
 	}
@@ -205,9 +198,7 @@ func TestRefreshTokenStoreDeviceLabelPreservesUTF8AtByteLimit(t *testing.T) {
 func holdRefreshWriter(t *testing.T, db *outbound.SQLiteDB, accountID int64) {
 	t.Helper()
 	tx, err := db.QueryBuilder().(ports.TransactionalQueryBuilder).Begin()
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustNoErr(t, err)
 	if _, err := tx.Table("accounts").Where("id", accountID).Increment("user_level", 0); err != nil {
 		tx.Rollback()
 		t.Fatal(err)
@@ -221,7 +212,7 @@ func holdRefreshWriter(t *testing.T, db *outbound.SQLiteDB, accountID int64) {
 	})
 }
 
-func TestRefreshTokenStoreIssueSurvivesTemporaryDatabaseContention(t *testing.T) {
+func TestRefreshTokenStore_IssueSurvivesTemporaryDatabaseContention(t *testing.T) {
 	db := newRefreshTestDB(t)
 	id := seedRefreshAccount(t, db, "issue-contention@example.com")
 	store := outbound.NewRefreshTokenStore(db.QueryBuilder(), nil)
@@ -236,14 +227,12 @@ func TestRefreshTokenStoreIssueSurvivesTemporaryDatabaseContention(t *testing.T)
 	}
 }
 
-func TestRefreshTokenStoreRevokeSurvivesTemporaryDatabaseContention(t *testing.T) {
+func TestRefreshTokenStore_RevokeSurvivesTemporaryDatabaseContention(t *testing.T) {
 	db := newRefreshTestDB(t)
 	id := seedRefreshAccount(t, db, "revoke-contention@example.com")
 	store := outbound.NewRefreshTokenStore(db.QueryBuilder(), nil)
 	token, err := store.Issue(id, "desktop")
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustNoErr(t, err)
 	holdRefreshWriter(t, db, id)
 	if err := store.Revoke(token); err != nil {
 		t.Fatalf("revoke failed during temporary contention: %v", err)
@@ -270,16 +259,14 @@ func (b failingCommitBuilder) Begin() (ports.Tx, error) {
 
 type failingCommitTx struct{ ports.Tx }
 
-func (tx failingCommitTx) Commit() error { return fmt.Errorf("storage unavailable during commit") }
+func (tx failingCommitTx) Commit() error { return errors.New("storage unavailable during commit") }
 
-func TestRefreshTokenStoreFailedRevocationCommitLeavesDeviceUsable(t *testing.T) {
+func TestRefreshTokenStore_FailedRevocationCommitLeavesDeviceUsable(t *testing.T) {
 	db := newRefreshTestDB(t)
 	id := seedRefreshAccount(t, db, "revoke-rollback@example.com")
 	store := outbound.NewRefreshTokenStore(db.QueryBuilder(), nil)
 	token, err := store.Issue(id, "desktop")
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustNoErr(t, err)
 	failing := outbound.NewRefreshTokenStore(failingCommitBuilder{
 		TransactionalQueryBuilder: db.QueryBuilder().(ports.TransactionalQueryBuilder),
 	}, nil)
@@ -299,7 +286,7 @@ func TestRefreshTokenStoreFailedRevocationCommitLeavesDeviceUsable(t *testing.T)
 	}
 }
 
-func TestLuaRefreshModuleIssuesRotatesAndRevokes(t *testing.T) {
+func TestLuaRefreshModule_IssuesRotatesAndRevokes(t *testing.T) {
 	db := newRefreshTestDB(t)
 	id := seedRefreshAccount(t, db, "lua@example.com")
 	dir := t.TempDir()
