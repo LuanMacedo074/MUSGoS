@@ -13,6 +13,9 @@ import (
 // package: nothing outside internal/adapters/outbound may depend on it, and
 // there is exactly one production implementation per backend — no mocks.
 type dialect interface {
+	// RetryableConflict identifies backend errors for which a fully rolled-back
+	// operation can be attempted again without changing its meaning.
+	RetryableConflict(error) bool
 	// Rebind converts a query written with ?-style placeholders into the
 	// backend's placeholder style. All shared SQL is written with ?.
 	Rebind(query string) string

@@ -41,3 +41,10 @@ type TransactionalQueryBuilder interface {
 	QueryBuilder
 	Begin() (Tx, error)
 }
+
+// QueryRetryer is an optional capability for bounded retries of transient database
+// conflicts. The callback must be retry-safe and finalize its own transactions on
+// every attempt, including rollback on error. Other errors are returned unchanged.
+type QueryRetryer interface {
+	Retry(operation func() error) error
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"fsos-server/internal/domain/ports"
 )
@@ -330,3 +331,17 @@ func scanRows(rows *sql.Rows) ([]ports.QueryResult, error) {
 	}
 	return results, rows.Err()
 }
+
+// Retry delegates conflict classification to the backend and retries the complete
+// operation after it has rolled back, never an isolated statement in a failed tx.
+func (qb *sqlQueryBuilder) Retry(operation func() error) error {
+	for attempt := 0; ; attempt++ {
+		err := operation()
+		if err == nil || attempt == 10 || !qb.dialect.RetryableConflict(err) {
+			return err
+		}
+		time.Sleep(time.Duration(1<<attempt) * time.Millisecond)
+	}
+}
+
+var _ ports.QueryRetryer = (*sqlQueryBuilder)(nil)

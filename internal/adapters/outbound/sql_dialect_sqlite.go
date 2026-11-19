@@ -2,9 +2,11 @@ package outbound
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"fsos-server/internal/domain/ports"
+	"modernc.org/sqlite"
 )
 
 // sqliteDialect adapts the storage core's shared SQL to SQLite.
@@ -118,4 +120,10 @@ func (sqliteDialect) Init(db *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+func (sqliteDialect) RetryableConflict(err error) bool {
+	var sqliteErr *sqlite.Error
+	// Include extended BUSY codes, such as BUSY_SNAPSHOT.
+	return errors.As(err, &sqliteErr) && sqliteErr.Code()&0xff == 5
 }
