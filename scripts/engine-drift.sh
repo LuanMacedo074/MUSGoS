@@ -46,7 +46,8 @@ if [ "$HERE_MOD" != "$OTHER_MOD" ]; then
     xargs -0 sed -i.bak "s#\"$OTHER_MOD/#\"$HERE_MOD/#g"
   find "$SCRATCH/other" -name '*.bak' -delete
 fi
-gofmt -w "$SCRATCH/here" "$SCRATCH/other"
+# Format each Go file explicitly so the step does not rely on directory walking.
+find "$SCRATCH/here" "$SCRATCH/other" -name '*.go' -print0 | xargs -0 gofmt -w
 
 cd "$SCRATCH"
 if [ "$FULL" = "--full" ]; then
