@@ -115,6 +115,49 @@ _tests/
 └── adapters/            ← adapter tests
 ```
 
+## Syncing the engine with FsosServer
+
+[FsosServer](https://github.com/LuanMacedo074/FSOSServer) is a game built on a
+fork of this engine. The two repos share history and the same engine tree:
+
+- **Engine** (kept identical in both repos): `internal/`, `cmd/gameserver/`, and
+  the engine tests in `_tests/{adapters,config,domain,factory,testutil}`.
+- **Application** (never synced): `external/` and, in FsosServer, the game
+  tests in `_tests/game/`.
+
+Only the Go module path differs: `musgos` here, `fsos-server` in FsosServer.
+That makes a plain `git cherry-pick` fail on every import line, so engine
+commits cross between the repos as patches with the import path rewritten.
+
+Engine changes should land in MUSGoS first, but they may land in either repo.
+To carry commits from FsosServer into MUSGoS (run from this repo, with
+FsosServer checked out next to it):
+
+```bash
+git -C ../FsosServer format-patch --stdout <base>..<tip> -- \
+    internal cmd/gameserver _tests/adapters _tests/config _tests/domain _tests/factory _tests/testutil \
+  | sed 's#"fsos-server/#"musgos/#g' \
+  | git am -3
+gofmt -w internal cmd _tests   # the rewrite can reorder an import group
+```
+
+To carry commits the other way, run it from FsosServer with the repos swapped
+and `sed 's#"musgos/#"fsos-server/#g'`. The pathspec drops the application
+half of a mixed commit. If `git am` stops on a conflict, resolve it, then
+`git am --continue`.
+
+After a sync, check that the engine trees still match:
+
+```bash
+scripts/engine-drift.sh ../FsosServer          # file list; exit 1 on drift
+scripts/engine-drift.sh ../FsosServer --full   # unified diff
+```
+
+The script rewrites the module path and runs gofmt on both trees before it
+diffs them, so it reports only real drift. `internal/` and `cmd/gameserver/`
+should always match. Today the engine tests still drift: some tests were
+renamed or improved in one repo and not yet carried to the other.
+
 ## Credits
 
 The Blowfish implementation is based on [OpenSMUS](https://github.com/piacentini/OpenSMUS)
