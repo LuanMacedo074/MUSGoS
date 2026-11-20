@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"fsos-server/_tests/testutil"
 	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/services"
 )
 
 // Both SQL adapters must apply a migration and its tracker row atomically. The
@@ -14,11 +14,7 @@ import (
 const migTxTable = "mig_tx_test"
 
 // migrationDB is what these scenarios need from an adapter under test.
-type migrationDB interface {
-	ports.DBAdapter
-	ports.MigrationTracker
-	QueryBuilder() ports.QueryBuilder
-}
+type migrationDB = testutil.MigrationDB
 
 // funcMigration is a migration whose Up is a closure.
 type funcMigration struct {
@@ -58,27 +54,11 @@ func beginOwnTx(t *testing.T, db ports.DBAdapter) ports.Tx {
 	return tx
 }
 
-func isApplied(t *testing.T, db migrationDB, name string) bool {
-	t.Helper()
-	applied, err := db.GetAppliedMigrations()
-	mustNoErr(t, err)
-	for _, a := range applied {
-		if a == name {
-			return true
-		}
-	}
-	return false
-}
+var isApplied = testutil.IsApplied
 
-func tableExists(db migrationDB, table string) bool {
-	_, err := db.QueryBuilder().Table(table).Count()
-	return err == nil
-}
+var tableExists = testutil.TableExists
 
-func runMigrations(db migrationDB, ms ...ports.Migration) error {
-	_, err := services.NewMigrationRunner(db, db, ms).RunPending()
-	return err
-}
+var runMigrations = testutil.RunMigrations
 
 func checkFailingUpLeavesNothing(t *testing.T, db migrationDB) {
 	const name = "29990101000000_failing"
@@ -178,13 +158,7 @@ func checkOwnTransactionUndoneWhenUpFails(t *testing.T, db migrationDB) {
 
 // sqlExecutor returns the raw-SQL capability of the adapter a migration was
 // handed; the runner's migration transaction must provide it.
-func sqlExecutor(db ports.DBAdapter) (ports.SQLMigrationExecutor, error) {
-	executor, ok := db.(ports.SQLMigrationExecutor)
-	if !ok {
-		return nil, errors.New("migration adapter cannot execute SQL migrations")
-	}
-	return executor, nil
-}
+var sqlExecutor = testutil.SQLExecutor
 
 // migTxSQL creates migTxTable on either backend.
 var migTxSQL = ports.MigrationSQL{
@@ -274,12 +248,7 @@ func checkFailedSQLCallIsScoped(t *testing.T, db migrationDB) {
 	}
 }
 
-func countRows(t *testing.T, db migrationDB, table string) int64 {
-	t.Helper()
-	n, err := db.QueryBuilder().Table(table).Count()
-	mustNoErr(t, err)
-	return n
-}
+var countRows = testutil.CountRows
 
 func TestSQLite_Migration_FailingUpLeavesNoDDLNorTrackerRow(t *testing.T) {
 	checkFailingUpLeavesNothing(t, newTestDB(t))

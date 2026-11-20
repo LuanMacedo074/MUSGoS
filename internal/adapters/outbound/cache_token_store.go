@@ -1,6 +1,7 @@
 package outbound
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -24,8 +25,9 @@ const tokenBytes = 32
 // token is an opaque random id; the payload lives server-side under the id, so
 // there is nothing in the token to tamper with — an unknown id simply misses.
 type CacheTokenStore struct {
-	cache ports.Cache
-	ttl   time.Duration
+	cache             ports.Cache
+	ttl               time.Duration
+	legacyUserIDClaim string
 }
 
 func NewCacheTokenStore(cache ports.Cache, ttl time.Duration) *CacheTokenStore {
@@ -35,14 +37,16 @@ func NewCacheTokenStore(cache ports.Cache, ttl time.Duration) *CacheTokenStore {
 	return &CacheTokenStore{cache: cache, ttl: ttl}
 }
 
-// tokenRecord is the JSON shape stored under a token key. It mirrors
-// ports.TokenPayload deliberately: the on-disk serialization format is an
-// adapter concern, so the json tags live here rather than leaking into the
-// domain port.
+// WithLegacyUserIDClaim enables reading flat payloads written before claims were nested.
+// The application selects which old claim supplied the transport identity.
+func (s *CacheTokenStore) WithLegacyUserIDClaim(key string) *CacheTokenStore {
+	s.legacyUserIDClaim = key
+	return s
+}
+
 type tokenRecord struct {
-	CharacterName string `json:"character_name"`
-	UserLevel     int    `json:"user_level"`
-	AccountID     int    `json:"account_id"`
+	UserID string            `json:"user_id"`
+	Claims map[string]string `json:"claims"`
 }
 
 func (s *CacheTokenStore) Issue(payload ports.TokenPayload) (string, error) {
@@ -52,11 +56,7 @@ func (s *CacheTokenStore) Issue(payload ports.TokenPayload) (string, error) {
 	}
 	token := hex.EncodeToString(buf)
 
-	rec, err := json.Marshal(tokenRecord{
-		CharacterName: payload.CharacterName,
-		UserLevel:     payload.UserLevel,
-		AccountID:     payload.AccountID,
-	})
+	rec, err := json.Marshal(tokenRecord{UserID: payload.UserID, Claims: payload.Claims})
 	if err != nil {
 		return "", err
 	}
@@ -81,13 +81,54 @@ func (s *CacheTokenStore) Validate(token string) (ports.TokenPayload, error) {
 	// here (even if the payload is corrupt) closes the replay window.
 	_ = s.cache.Delete(key)
 
-	var rec tokenRecord
-	if err := json.Unmarshal(data, &rec); err != nil {
+	return decodeTokenPayload(data, s.legacyUserIDClaim)
+}
+
+func decodeTokenPayload(data []byte, legacyUserIDClaim string) (ports.TokenPayload, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
 		return ports.TokenPayload{}, ports.ErrTokenInvalid
 	}
-	return ports.TokenPayload{
-		CharacterName: rec.CharacterName,
-		UserLevel:     rec.UserLevel,
-		AccountID:     rec.AccountID,
-	}, nil
+	_, modern := fields["claims"]
+	if _, legacy := fields[legacyUserIDClaim]; !modern && legacy && legacyUserIDClaim != "" {
+		claims, err := legacyClaims(fields)
+		if err != nil {
+			return ports.TokenPayload{}, err
+		}
+		return ports.TokenPayload{UserID: claims[legacyUserIDClaim], Claims: claims}, nil
+	}
+	payload := ports.TokenPayload{}
+	if raw, ok := fields["user_id"]; ok {
+		if err := json.Unmarshal(raw, &payload.UserID); err != nil {
+			return ports.TokenPayload{}, ports.ErrTokenInvalid
+		}
+	}
+	if raw, ok := fields["claims"]; ok {
+		if err := json.Unmarshal(raw, &payload.Claims); err != nil {
+			return ports.TokenPayload{}, ports.ErrTokenInvalid
+		}
+	}
+	return payload, nil
+}
+
+// legacyClaims preserves string and numeric values from flat token records.
+func legacyClaims(fields map[string]json.RawMessage) (map[string]string, error) {
+	claims := make(map[string]string, len(fields))
+	for key, raw := range fields {
+		var value interface{}
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.UseNumber()
+		if err := decoder.Decode(&value); err != nil {
+			return nil, ports.ErrTokenInvalid
+		}
+		switch value := value.(type) {
+		case string:
+			claims[key] = value
+		case json.Number:
+			claims[key] = value.String()
+		default:
+			return nil, ports.ErrTokenInvalid
+		}
+	}
+	return claims, nil
 }

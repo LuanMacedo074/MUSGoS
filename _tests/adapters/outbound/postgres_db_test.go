@@ -2,11 +2,10 @@ package outbound_test
 
 import (
 	"errors"
-	"os"
 	"testing"
 	"time"
 
-	"fsos-server/external/migrations"
+	"fsos-server/_tests/testutil"
 	"fsos-server/internal/adapters/outbound"
 	"fsos-server/internal/domain/ports"
 	"fsos-server/internal/domain/services"
@@ -45,20 +44,11 @@ func TestNewPostgresDB_ConnectionFailure(t *testing.T) {
 
 func newTestPG(t *testing.T) *outbound.PostgresDB {
 	t.Helper()
-	dsn := os.Getenv("TEST_POSTGRES_DSN")
-	if dsn == "" {
-		t.Skip("TEST_POSTGRES_DSN not set; skipping postgres integration tests")
-	}
+	db := testutil.NewPostgresFixture(t)
 
-	db, err := outbound.NewPostgresDB(dsn)
-	if err != nil {
-		t.Fatalf("failed to connect to postgres: %v", err)
-	}
-	t.Cleanup(func() { db.Close() })
-
-	resetPGSchema(t, db)
-
-	runner := services.NewMigrationRunner(db, db, migrations.All)
+	// Adapter fixtures install only the engine-owned core schema.
+	core := []ports.Migration{&initialSchema{}}
+	runner := services.NewMigrationRunner(db, db, core)
 	if _, err := runner.RunPending(); err != nil {
 		t.Fatalf("failed to run migrations: %v", err)
 	}
@@ -66,19 +56,10 @@ func newTestPG(t *testing.T) *outbound.PostgresDB {
 	return db
 }
 
-// resetPGSchema drops every table this suite may have created and clears the
-// migration ledger so the migrations re-run against a clean slate.
-func resetPGSchema(t *testing.T, db *outbound.PostgresDB) {
-	t.Helper()
-	for _, tbl := range []string{
-		"tx_test", "mig_tx_test", "mig_tx_partial", "check_test", "bans", "player_attributes", "application_attributes", "users", "applications",
-	} {
-		if err := db.DropTable(tbl); err != nil {
-			t.Fatalf("failed to drop %s: %v", tbl, err)
-		}
-	}
-	if _, err := db.QueryBuilder().Table("migrations").Delete(); err != nil {
-		t.Fatalf("failed to clear migrations ledger: %v", err)
+func TestPG_FreshFixturesCanRerunCoreMigrations(t *testing.T) {
+	for i := 0; i < 2; i++ {
+		db := newTestPG(t)
+		mustNoErr(t, db.CreateApplication("freshFixture"))
 	}
 }
 
@@ -249,14 +230,16 @@ func TestPG_Ban_ByIP_Expired(t *testing.T) {
 func TestPG_Schema_And_QueryBuilder(t *testing.T) {
 	db := newTestPG(t)
 	qb := db.QueryBuilder()
+	seeded, err := qb.Table("applications").Count()
+	mustNoErr(t, err)
 
 	mustNoErr(t, db.CreateApplication("a1"))
 	mustNoErr(t, db.CreateApplication("a2"))
 
 	count, err := qb.Table("applications").Count()
 	mustNoErr(t, err)
-	if count != 2 {
-		t.Fatalf("count = %d, want 2", count)
+	if count != seeded+2 {
+		t.Fatalf("count = %d, want %d (seeded applications plus two created here)", count, seeded+2)
 	}
 
 	row, err := qb.Table("applications").Where("name", "a1").First()
@@ -310,7 +293,7 @@ func TestPG_CreateTable_InCheckRestrictsColumn(t *testing.T) {
 func TestPG_DropColumn_RemovesColumn(t *testing.T) {
 	db := newTestPG(t)
 
-	// tx_test is on resetPGSchema's drop list, so it is cleaned up next run.
+	// The shared fixture reset drops tx_test too, so it is cleaned up next run.
 	mustNoErr(t, db.CreateTable(ports.Table{
 		Name: "tx_test",
 		Columns: []ports.Column{

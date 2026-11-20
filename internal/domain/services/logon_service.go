@@ -1,6 +1,8 @@
 package services
 
 import (
+	"strconv"
+
 	"fsos-server/internal/domain/ports"
 	"fsos-server/internal/domain/types/lingo"
 
@@ -142,8 +144,7 @@ func (s *LogonService) Logon(req LogonRequest) LogonResult {
 
 	case "token":
 		// The credential is a token minted by the HTTP login step. Validate and
-		// consume it; the payload is authoritative for both the character the
-		// session binds to and its level — the engine never reads any account.
+		// consume it; the payload supplies the session identity and level.
 		if s.tokens == nil {
 			s.logger.Error("Logon failed: token mode without a token store", map[string]interface{}{
 				"client": req.ConnectionID,
@@ -157,8 +158,12 @@ func (s *LogonService) Logon(req LogonRequest) LogonResult {
 			})
 			return LogonResult{Code: LogonInvalidPassword, UserID: userID}
 		}
-		userID = payload.CharacterName
-		userLevel = payload.UserLevel
+		level, err := strconv.ParseInt(payload.Claims[ports.TokenUserLevelClaim], 10, 32)
+		if err != nil {
+			return LogonResult{Code: LogonInvalidPassword, UserID: userID}
+		}
+		userLevel = int(level)
+		userID = payload.UserID
 
 	case "strict":
 		user, err := s.db.GetUser(userID)

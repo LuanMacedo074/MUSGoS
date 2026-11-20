@@ -65,7 +65,8 @@ set** (Redis, RabbitMQ, cache, rate limiting, metrics, UDP, and more).
 | `SCRIPT_TIMEOUT` | `5` | Lua script timeout (seconds) |
 | `SANDBOXED_SCRIPTS_DIR` | _(empty)_ | Directory under `SCRIPTS_PATH` that `mus.loadSandboxed(id)` reads; empty disables it |
 | `JOBS_ENABLED` | `1` | Enable scheduled jobs |
-| `DISCONNECT_HOOK` | `users/onDisconnect` | Script subject invoked when a client disconnects |
+| `DISCONNECT_HOOK` | _(empty)_ | Script subject invoked when a client disconnects; empty disables it |
+| `DEFAULT_MOVIE_ID` | _(empty)_ | Movie that `@group` sends from movie-less senders (system scripts, jobs) resolve against; empty disables the fallback |
 | `AUTH_MODE` | `open` | Auth mode (`none`, `open`, `strict`) |
 | `SESSION_STORE_TYPE` | `memory` | Session store (`memory`, `redis`) |
 | `QUEUE_TYPE` | `memory` | Message queue (`memory`, `redis`, `rabbitmq`) |

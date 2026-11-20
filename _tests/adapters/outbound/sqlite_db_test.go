@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/external/migrations"
 	"fsos-server/internal/adapters/outbound"
 	"fsos-server/internal/domain/ports"
 	"fsos-server/internal/domain/services"
@@ -16,6 +15,11 @@ import (
 
 func newTestDB(t *testing.T) *outbound.SQLiteDB {
 	t.Helper()
+	return newTestDBWithMigrations(t, []ports.Migration{&initialSchema{}})
+}
+
+func newTestDBWithMigrations(t *testing.T, selected []ports.Migration) *outbound.SQLiteDB {
+	t.Helper()
 	dir := t.TempDir()
 	db, err := outbound.NewSQLiteDB(filepath.Join(dir, "test.db"))
 	if err != nil {
@@ -23,7 +27,7 @@ func newTestDB(t *testing.T) *outbound.SQLiteDB {
 	}
 	t.Cleanup(func() { db.Close() })
 
-	runner := services.NewMigrationRunner(db, db, migrations.All)
+	runner := services.NewMigrationRunner(db, db, selected)
 	if _, err := runner.RunPending(); err != nil {
 		t.Fatalf("failed to run migrations: %v", err)
 	}

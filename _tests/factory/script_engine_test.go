@@ -17,7 +17,7 @@ func loaderType(t *testing.T, sandboxedDir string) string {
 	if err := os.WriteFile(filepath.Join(dir, "probe.lua"), []byte(`mus.response(type(mus.loadSandboxed))`), 0644); err != nil {
 		t.Fatal(err)
 	}
-	engine := factory.NewScriptEngine(dir, sandboxedDir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
+	engine := factory.NewScriptEngine(dir, sandboxedDir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil, factory.AuthStores{})
 	result, err := engine.Execute(&ports.ScriptMessage{Subject: "probe", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err != nil {
 		t.Fatalf("probe failed: %v", err)

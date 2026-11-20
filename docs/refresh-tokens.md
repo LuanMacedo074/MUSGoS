@@ -2,14 +2,16 @@
 
 The engine provides a remembered-device credential store, `RefreshTokenStore`
 (`internal/adapters/outbound/refresh_token_store.go`), exposed to scripts as
-`mus.refresh` whenever the script engine has a query builder:
+`mus.refresh` when the composition root injects it. `cmd/gameserver` builds it
+with `factory.NewAuthStores` from the `AuthConfig` that `external/auth` returns;
+an engine without an injected store has no `mus.refresh`.
 
-- `mus.refresh.issue(account_id, device_label)` returns a new opaque token:
+- `mus.refresh.issue(user_id, device_label)` returns a new opaque token:
   32 random bytes as 64 hex digits. Labels longer than 128 bytes are cut on a
   UTF-8 boundary. Each call starts a new device family.
-- `mus.refresh.rotate(token)` returns `account_id, rotated_token`, or `nil`
-  when the token is unknown, spent, revoked, expired, or the account is gone,
-  banned, or its password hash has changed since issue. Replaying a spent
+- `mus.refresh.rotate(token)` returns `user_id, rotated_token`, or `nil`
+  when the token is unknown, spent, revoked, expired, or the identity is gone,
+  banned, or its credential has changed since issue. Replaying a spent
   token revokes its whole family, including newer tokens, and leaves other
   families alone. A successful rotation extends the family's expiry to 30 days
   after that use.
@@ -20,19 +22,30 @@ Failures raise a generic Lua error.
 
 ## Schema the application supplies
 
-MUSGoS ships no migration for this store. Its tables hang off an `accounts`
-table, which is application schema: the engine's own identity table is `users`.
-An application that uses `mus.refresh` must provide:
+MUSGoS ships no migration for this store: its tables are application schema.
+Every table and column name comes from `outbound.RefreshTokenConfig`, so the
+store fits whatever identity table the application already has. The store
+needs three tables:
 
-- `accounts`, with at least `id`, `password_hash` and `banned` (read by the store)
+- an identity table with an integer id, a credential column (for example a
+  password hash) and a ban flag;
+- a family table with a text id, the owning identity id, the device label,
+  the credential captured at issue, `created_at`, `last_used_at` and
+  `expires_at` in Unix seconds, a revoked flag and an integer revision;
+- a token table with the token digest, the family id and a used flag.
+
+The `external/auth/config.go` that MUSGoS ships maps them to:
+
+- `accounts`, with at least `id`, `password_hash` and `banned`
 - `refresh_families` (`id`, `account_id` referencing `accounts(id)`,
-  `device_label`, `password_hash`, `created_at`, `last_used_at`, `expires_at`
-  in Unix seconds, `revoked`, `revision`)
+  `device_label`, `password_hash`, `created_at`, `last_used_at`, `expires_at`,
+  `revoked`, `revision`)
 - `refresh_tokens` (`token_hash`, `family_id` referencing
   `refresh_families(id)`, `used`)
 
-FsosServer's `20261117000028_remembered_login` migration is the reference
-schema, for both SQLite and Postgres.
+Change the names in `external/auth/config.go` to match your schema.
+FsosServer's `20261117000028_remembered_login` migration is a reference schema
+for those default names, for both SQLite and Postgres.
 
 `mus.refresh` is registered even when these tables are missing. On such a
 database every call raises the same generic Lua error (`refresh issue failed`,
@@ -41,7 +54,7 @@ error is not passed to the script.
 
 Only SHA-256 digests of tokens are stored, never the tokens themselves. To
 revoke every device when a password changes, an application can add a trigger
-on `accounts.password_hash` that sets `refresh_families.revoked`.
+on the credential column that sets the family's revoked flag.
 
 Spent hashes are what make replay detection work. A retention job must keep
 them for any family that can still accept a newer token.
@@ -55,3 +68,25 @@ query builder's optional `ports.QueryRetryer` capability. The SQL builder's
 exponential backoff, while the dialect's `RetryableConflict` classifies the
 error. SQLite retries `SQLITE_BUSY` lock contention. Postgres retries nothing
 and keeps its native row-lock waiting.
+
+# Login tokens (`mus.token`)
+
+`CacheTokenStore` (`internal/adapters/outbound/cache_token_store.go`) issues
+short-lived, single-use tokens that carry an identity from one transport to
+another, for example from an HTTP login script to the MUS `Logon` in
+`AUTH_MODE=token`. `factory.NewAuthStores` builds it over the server cache and
+scripts reach it as `mus.token`:
+
+- `mus.token.issue({ user_id = "...", claims = { key = "value", ... } })`
+  returns the token. Claim keys and values must be strings.
+- `mus.token.validate(token)` consumes the token and returns
+  `{ user_id = ..., claims = { ... } }`, or `nil` when it is unknown, expired
+  or already used.
+- `mus.token.user_level_claim` names the claim (`user_level`) that the Logon
+  token path reads as the session's user level. A token without a valid
+  integer in that claim is rejected at Logon.
+
+The payload is stored server-side under the token. Applications that still
+hold tokens in an older flat JSON shape can set `AuthConfig.LegacyUserIDClaim`
+to the field that held the user id; every scalar field of such a record then
+becomes a claim.

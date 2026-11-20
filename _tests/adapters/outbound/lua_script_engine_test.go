@@ -767,3 +767,54 @@ func TestExecute_LogWithoutFields(t *testing.T) {
 		t.Errorf("expected nil fields, got %v", logger.Messages[0].Fields)
 	}
 }
+
+func TestExecute_Random_UsesInjectedSource(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "roll", `mus.response(tostring(mus.random()))`)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil).
+		WithRandom(func() float64 { return 0.25 })
+	result, err := engine.Execute(&ports.ScriptMessage{Subject: "roll", SenderID: "u1", Content: lingo.NewLVoid()})
+	mustNoErr(t, err)
+	if got := lingo.StringValue(result.Content); got != "0.25" {
+		t.Fatalf("mus.random() = %q, want 0.25", got)
+	}
+}
+
+func TestExecute_Random_DefaultsToUnitInterval(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "roll", `
+		for _ = 1, 200 do
+			local r = mus.random()
+			if type(r) ~= "number" or r < 0 or r >= 1 then
+				mus.response("out of range: " .. tostring(r))
+				return
+			end
+		end
+		mus.response("ok")
+	`)
+	// A nil source keeps the default rather than leaving mus.random unusable.
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil).WithRandom(nil)
+	result, err := engine.Execute(&ports.ScriptMessage{Subject: "roll", SenderID: "u1", Content: lingo.NewLVoid()})
+	mustNoErr(t, err)
+	if got := lingo.StringValue(result.Content); got != "ok" {
+		t.Fatalf("default mus.random: %s", got)
+	}
+}
+
+func TestExecute_SendMessage_RejectsInvalidAudience(t *testing.T) {
+	for _, audience := range []string{`{"hero", ""}`, `{"hero", 7}`} {
+		t.Run(audience, func(t *testing.T) {
+			dir := setupScriptsDir(t)
+			writeScript(t, dir, "audience", `mus.sendMessage(`+audience+`, "Notice", "x")`)
+			sender := &testutil.MockMessageSender{}
+			engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, sender, nil, nil, nil, nil, nil)
+			_, err := engine.Execute(&ports.ScriptMessage{Subject: "audience", SenderID: "hero", Content: lingo.NewLVoid()})
+			if err == nil {
+				t.Fatal("invalid audience accepted")
+			}
+			if len(sender.Calls) != 0 {
+				t.Fatalf("invalid audience sent %+v", sender.Calls)
+			}
+		})
+	}
+}

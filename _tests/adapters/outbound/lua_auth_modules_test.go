@@ -2,6 +2,7 @@ package outbound_test
 
 import (
 	"testing"
+	"time"
 
 	"fsos-server/_tests/testutil"
 	"fsos-server/internal/adapters/outbound"
@@ -50,12 +51,13 @@ func TestExecute_BcryptVerify_WrongPassword(t *testing.T) {
 func TestExecute_TokenIssueAndValidate_Roundtrip(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "tok", `
-		local token = mus.token.issue({ character_name = "Frodo", user_level = 55, account_id = 9 })
+		local token = mus.token.issue({ user_id = "Frodo", claims = { user_level = "55", account_id = "9" } })
 		local p = mus.token.validate(token)
-		mus.response(p.character_name .. ":" .. tostring(p.user_level) .. ":" .. tostring(p.account_id))
+		mus.response(p.user_id .. ":" .. p.claims.user_level .. ":" .. p.claims.account_id)
 	`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, outbound.NewMemoryCache(), nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil).
+		WithAuthStores(outbound.NewCacheTokenStore(outbound.NewMemoryCache(), time.Minute), nil)
 	result, err := engine.Execute(&ports.ScriptMessage{Subject: "tok", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -73,7 +75,8 @@ func TestExecute_TokenValidate_UnknownReturnsNil(t *testing.T) {
 		mus.response(p == nil)
 	`)
 
-	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, outbound.NewMemoryCache(), nil)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil).
+		WithAuthStores(outbound.NewCacheTokenStore(outbound.NewMemoryCache(), time.Minute), nil)
 	result, err := engine.Execute(&ports.ScriptMessage{Subject: "tok", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -83,11 +86,11 @@ func TestExecute_TokenValidate_UnknownReturnsNil(t *testing.T) {
 	}
 }
 
-func TestExecute_TokenModuleAbsentWithoutCache(t *testing.T) {
+func TestExecute_TokenModuleAbsentWithoutTokenStore(t *testing.T) {
 	dir := setupScriptsDir(t)
 	writeScript(t, dir, "tok", `mus.response(mus.token == nil)`)
 
-	// No cache -> no mus.token module (issue/validate need a store).
+	// No injected token store -> no mus.token module (issue/validate need a store).
 	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil)
 	result, err := engine.Execute(&ports.ScriptMessage{Subject: "tok", SenderID: "u1", Content: lingo.NewLVoid()})
 	if err != nil {

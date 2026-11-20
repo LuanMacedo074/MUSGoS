@@ -6,53 +6,49 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
-// registerTokenModule exposes mus.token — issue/validate single-use auth tokens
-// carrying a {character_name, user_level, account_id} payload. The HTTP login
-// script mints a token here; the MUS Logon token path validates (consumes) it
-// against the same store, so the identity crosses the HTTP→MUS socket gap.
-// account_id is carried for the pre-Logon create-character flow (a character-less
-// account attaches its new character to the account the token authenticated); the
-// Logon path itself reads only character_name + user_level.
+// registerTokenModule exposes single-use tokens with a user_id and string claims.
 func registerTokenModule(L *lua.LState, musMod *lua.LTable, store ports.TokenStore) {
 	mod := L.NewTable()
-
-	// mus.token.issue({ character_name = ..., user_level = ..., account_id = ... }) -> token string
+	mod.RawSetString("user_level_claim", lua.LString(ports.TokenUserLevelClaim))
 	mod.RawSetString("issue", L.NewFunction(func(L *lua.LState) int {
 		tbl := L.CheckTable(1)
-		payload := ports.TokenPayload{}
-		if s, ok := tbl.RawGetString("character_name").(lua.LString); ok {
-			payload.CharacterName = string(s)
+		payload := ports.TokenPayload{Claims: map[string]string{}}
+		if id, ok := tbl.RawGetString("user_id").(lua.LString); ok {
+			payload.UserID = string(id)
 		}
-		if n, ok := tbl.RawGetString("user_level").(lua.LNumber); ok {
-			payload.UserLevel = int(n)
-		}
-		if n, ok := tbl.RawGetString("account_id").(lua.LNumber); ok {
-			payload.AccountID = int(n)
+		if claims, ok := tbl.RawGetString("claims").(*lua.LTable); ok {
+			claims.ForEach(func(k, v lua.LValue) {
+				key, keyOK := k.(lua.LString)
+				value, valueOK := v.(lua.LString)
+				if !keyOK || !valueOK {
+					L.RaiseError("token claims must be strings")
+					return
+				}
+				payload.Claims[string(key)] = string(value)
+			})
 		}
 		token, err := store.Issue(payload)
 		if err != nil {
-			L.RaiseError("token.issue failed: %s", err.Error())
+			L.RaiseError("token.issue failed: %s", err)
 			return 0
 		}
 		L.Push(lua.LString(token))
 		return 1
 	}))
-
-	// mus.token.validate(token) -> { character_name = ..., user_level = ..., account_id = ... } | nil
 	mod.RawSetString("validate", L.NewFunction(func(L *lua.LState) int {
-		token := L.CheckString(1)
-		payload, err := store.Validate(token)
+		payload, err := store.Validate(L.CheckString(1))
 		if err != nil {
 			L.Push(lua.LNil)
 			return 1
 		}
-		res := L.NewTable()
-		res.RawSetString("character_name", lua.LString(payload.CharacterName))
-		res.RawSetString("user_level", lua.LNumber(payload.UserLevel))
-		res.RawSetString("account_id", lua.LNumber(payload.AccountID))
+		res, claims := L.NewTable(), L.NewTable()
+		res.RawSetString("user_id", lua.LString(payload.UserID))
+		for k, v := range payload.Claims {
+			claims.RawSetString(k, lua.LString(v))
+		}
+		res.RawSetString("claims", claims)
 		L.Push(res)
 		return 1
 	}))
-
 	musMod.RawSetString("token", mod)
 }

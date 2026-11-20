@@ -92,28 +92,6 @@ func (c *nativeCacheWriteBarrier) Set(key string, value []byte, ttl time.Duratio
 	return c.Cache.Set(key, value, ttl)
 }
 
-// releaseBarrierOnCleanup unblocks a paused cache barrier when a test fails
-// before it got there, so the execution under test can never outlive the test.
-func releaseBarrierOnCleanup(t *testing.T, release chan struct{}) {
-	t.Helper()
-	t.Cleanup(func() {
-		select {
-		case <-release:
-		default:
-			close(release)
-		}
-	})
-}
-
-func awaitCacheBarrier(t *testing.T, signal <-chan struct{}) {
-	t.Helper()
-	select {
-	case <-signal:
-	case <-time.After(10 * time.Second):
-		t.Fatal("operation did not reach its cache boundary")
-	}
-}
-
 func TestIntegrationRedisCache_LuaLockSurvivesABlockedNativeCallback(t *testing.T) {
 	cache := newRedisCache(t)
 	dir := t.TempDir()
@@ -125,7 +103,7 @@ func TestIntegrationRedisCache_LuaLockSurvivesABlockedNativeCallback(t *testing.
 	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 1, nil, nil, nil, nil, nil, barrier, nil)
 	done := make(chan error, 1)
 	go func() { _, err := engine.Execute(&ports.ScriptMessage{Subject: "operation"}); done <- err }()
-	awaitCacheBarrier(t, barrier.waiting)
+	awaitCacheSignal(t, barrier.waiting)
 	// The first lease expired at the one-second Lua deadline plus 30 seconds.
 	// The synchronous Go callback remains active beyond that entire interval.
 	time.Sleep(32 * time.Second)
@@ -184,7 +162,7 @@ func TestIntegrationRedisCache_RenewalFailureDoesNotOverlapANativeMutation(t *te
 	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 50, nil, nil, nil, nil, nil, barrier, nil)
 	done := make(chan error, 1)
 	go func() { _, err := engine.Execute(&ports.ScriptMessage{Subject: "operation"}); done <- err }()
-	awaitCacheBarrier(t, barrier.waiting)
+	awaitCacheSignal(t, barrier.waiting)
 	// Redis refuses renewal while the native mutation remains blocked; the
 	// thirty-second backend lease expires before that callback can return.
 	time.Sleep(32 * time.Second)

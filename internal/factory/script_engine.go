@@ -17,10 +17,12 @@ func NewScriptEngine(
 	sessionStore ports.SessionStore,
 	cache ports.Cache,
 	emailSender ports.EmailSender,
+	auth AuthStores,
 ) ports.ScriptEngine {
 	if scriptsPath == "" {
 		return nil
 	}
 	return outbound.NewLuaScriptEngine(scriptsPath, logger, scriptTimeoutSeconds, publisher, sender, db, queryBuilder, sessionStore, cache, emailSender).
-		WithSandboxedChunkDir(sandboxedDir)
+		WithSandboxedChunkDir(sandboxedDir).
+		WithAuthStores(auth.Tokens, auth.Refresh)
 }
