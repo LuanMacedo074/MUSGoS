@@ -4,12 +4,12 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/inbound"
-	"fsos-server/internal/adapters/inbound/mus"
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/services"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/inbound"
+	"musgos/internal/adapters/inbound/mus"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/services"
+	"musgos/internal/domain/types/lingo"
 )
 
 func buildValidSMUSMessage(subject, sender string, recipients []string) []byte {

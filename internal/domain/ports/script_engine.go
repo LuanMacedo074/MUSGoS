@@ -1,6 +1,6 @@
 package ports
 
-import "fsos-server/internal/domain/types/lingo"
+import "musgos/internal/domain/types/lingo"
 
 // ScriptMessage holds the fields a script needs from a parsed message.
 // Protocol-agnostic — the handler extracts these from whatever protocol it handles.

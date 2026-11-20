@@ -3,7 +3,7 @@ package lingo_test
 import (
 	"testing"
 
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/domain/types/lingo"
 )
 
 func TestLRect_NewAndFields(t *testing.T) {

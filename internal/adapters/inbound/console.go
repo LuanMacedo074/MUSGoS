@@ -6,8 +6,8 @@ import (
 	"io"
 	"strings"
 
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/services"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/services"
 
 	"golang.org/x/crypto/bcrypt"
 )

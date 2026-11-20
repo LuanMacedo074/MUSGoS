@@ -3,7 +3,7 @@ package outbound_test
 import (
 	"testing"
 
-	"fsos-server/internal/adapters/outbound"
+	"musgos/internal/adapters/outbound"
 )
 
 const testKeyPrefix = "musgo_test"

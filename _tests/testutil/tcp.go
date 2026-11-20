@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/internal/adapters/inbound"
+	"musgos/internal/adapters/inbound"
 )
 
 // TCPClient starts the real TCP server on an ephemeral loopback port and waits

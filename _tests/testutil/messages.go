@@ -1,6 +1,6 @@
 package testutil
 
-import "fsos-server/internal/domain/types/lingo"
+import "musgos/internal/domain/types/lingo"
 
 // HasCall reports whether a recorded message matches the recipient and subject.
 // An empty content argument matches any content.

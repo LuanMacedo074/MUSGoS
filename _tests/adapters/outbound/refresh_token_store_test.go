@@ -9,11 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/external/auth"
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/_tests/testutil"
+	"musgos/external/auth"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/lingo"
 )
 
 // The engine ships the refresh store but not the accounts table it authenticates

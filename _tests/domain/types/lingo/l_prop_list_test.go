@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/domain/types/lingo"
 )
 
 // buildPropListBytes builds raw bytes for a proplist with symbol keys and integer values.

@@ -5,7 +5,7 @@ import (
 	"net/smtp"
 	"strings"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 // SMTPEmailSender is a minimal ports.EmailSender over net/smtp with plain

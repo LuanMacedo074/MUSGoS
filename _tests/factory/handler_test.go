@@ -3,9 +3,9 @@ package factory_test
 import (
 	"testing"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/inbound/mus"
-	"fsos-server/internal/factory"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/inbound/mus"
+	"musgos/internal/factory"
 )
 
 func TestNewHandler_SMUS(t *testing.T) {

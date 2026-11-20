@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/domain/ports"
+	"musgos/_tests/testutil"
+	"musgos/internal/domain/ports"
 )
 
 // Both SQL adapters must apply a migration and its tracker row atomically. The

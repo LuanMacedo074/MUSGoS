@@ -3,8 +3,8 @@ package mus
 import (
 	"time"
 
-	"fsos-server/internal/domain/types/lingo"
-	"fsos-server/internal/domain/types/smus"
+	"musgos/internal/domain/types/lingo"
+	"musgos/internal/domain/types/smus"
 )
 
 func NewResponse(subject string, senderID string, recipients []string, errCode int32, content lingo.LValue) *smus.MUSMessage {

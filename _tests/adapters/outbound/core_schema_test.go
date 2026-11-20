@@ -1,6 +1,6 @@
 package outbound_test
 
-import "fsos-server/internal/domain/ports"
+import "musgos/internal/domain/ports"
 
 // initialSchema is an independent fixture for the adapter's engine-table contract.
 // Game migrations and their non-table objects are covered in the game suite.

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/services"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/services"
 )
 
 func TestRunBootHooks_RunsEveryHookInOrderWithTheEnv(t *testing.T) {

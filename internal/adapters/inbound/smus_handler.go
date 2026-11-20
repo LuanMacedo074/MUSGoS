@@ -2,9 +2,9 @@ package inbound
 
 import (
 	"fmt"
-	"fsos-server/internal/adapters/inbound/mus"
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/smus"
+	"musgos/internal/adapters/inbound/mus"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/smus"
 )
 
 type SMUSHandler struct {

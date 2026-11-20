@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/services"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/services"
+	"musgos/internal/domain/types/lingo"
 )
 
 // Postgres tests are integration tests: they need a live server reachable via

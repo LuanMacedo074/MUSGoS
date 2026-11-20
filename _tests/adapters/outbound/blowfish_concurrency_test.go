@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"fsos-server/internal/adapters/outbound"
+	"musgos/internal/adapters/outbound"
 )
 
 // The server shares a single Blowfish instance across every connection

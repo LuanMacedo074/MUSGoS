@@ -4,9 +4,9 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"fsos-server/internal/domain/types/smus"
+	"musgos/internal/domain/types/smus"
 
-	"fsos-server/_tests/testutil"
+	"musgos/_tests/testutil"
 )
 
 // buildValidMUSMessage constructs a minimal valid MUS message.

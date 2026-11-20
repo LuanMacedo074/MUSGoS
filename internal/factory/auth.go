@@ -1,8 +1,8 @@
 package factory
 
 import (
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/ports"
 )
 
 // AuthConfig supplies application schema and compatibility choices independently of transport settings.

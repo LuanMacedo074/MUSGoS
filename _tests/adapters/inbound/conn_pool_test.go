@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"fsos-server/internal/adapters/inbound"
+	"musgos/internal/adapters/inbound"
 )
 
 func TestConnPool_WriteToClient_Success(t *testing.T) {

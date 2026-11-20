@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 
 	"github.com/google/uuid"
 )

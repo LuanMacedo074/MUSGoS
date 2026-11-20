@@ -3,10 +3,10 @@ package inbound_test
 import (
 	"testing"
 
-	"fsos-server/internal/adapters/inbound"
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/adapters/inbound"
+	"musgos/internal/domain/ports"
 
-	"fsos-server/_tests/testutil"
+	"musgos/_tests/testutil"
 )
 
 func TestBanChecker_NilDB(t *testing.T) {

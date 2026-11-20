@@ -3,7 +3,7 @@ package factory_test
 import (
 	"testing"
 
-	"fsos-server/internal/factory"
+	"musgos/internal/factory"
 )
 
 func TestNewCipher_Blowfish(t *testing.T) {

@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/factory"
+	"musgos/internal/domain/ports"
+	"musgos/internal/factory"
 )
 
 func TestNewDatabase_SQLite(t *testing.T) {

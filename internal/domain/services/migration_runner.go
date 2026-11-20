@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"sort"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 type MigrationResult struct {

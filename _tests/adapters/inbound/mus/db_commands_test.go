@@ -4,12 +4,12 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/inbound/mus"
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/services"
-	"fsos-server/internal/domain/types/lingo"
-	"fsos-server/internal/domain/types/smus"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/inbound/mus"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/services"
+	"musgos/internal/domain/types/lingo"
+	"musgos/internal/domain/types/smus"
 )
 
 // dbCommandLevels mirrors the production required-levels (internal/config): DBPlayer

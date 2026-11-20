@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/services"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/services"
 )
 
 // MigrationDB is the exported storage boundary used by migration scenarios.

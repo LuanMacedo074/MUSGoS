@@ -1,8 +1,8 @@
 package mus
 
 import (
-	"fsos-server/internal/domain/types/lingo"
-	"fsos-server/internal/domain/types/smus"
+	"musgos/internal/domain/types/lingo"
+	"musgos/internal/domain/types/smus"
 )
 
 func (s *SystemService) handleMovieGetUserCount(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error) {

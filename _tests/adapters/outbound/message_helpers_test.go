@@ -1,5 +1,5 @@
 package outbound_test
 
-import "fsos-server/_tests/testutil"
+import "musgos/_tests/testutil"
 
 var hasCall = testutil.HasCall

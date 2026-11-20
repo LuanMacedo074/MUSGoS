@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 func TestIntegrationRedisQueue_PublishSubscribe(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 // DefaultTokenTTL is the lifetime of an issued auth token. Short by design — a

@@ -1,8 +1,8 @@
 package inbound
 
 import (
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/lingo"
 )
 
 // NewDisconnectFlushHook returns an OnDisconnect callback that runs the Lua

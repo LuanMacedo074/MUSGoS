@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 type IdleChecker struct {

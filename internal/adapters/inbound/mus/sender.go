@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
-	"fsos-server/internal/domain/types/smus"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/lingo"
+	"musgos/internal/domain/types/smus"
 )
 
 type Sender struct {

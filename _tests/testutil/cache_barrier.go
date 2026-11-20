@@ -1,6 +1,6 @@
 package testutil
 
-import "fsos-server/internal/domain/ports"
+import "musgos/internal/domain/ports"
 
 // ScopedLockBarrier pauses the "after-scope" sentinel read so a test can observe
 // whether a completed Lua lock scope released its lease before the script exits.

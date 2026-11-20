@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/lingo"
 )
 
 // standard MUS header, present in every message

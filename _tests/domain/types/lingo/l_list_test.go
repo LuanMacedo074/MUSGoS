@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/domain/types/lingo"
 )
 
 func TestLList_ExtractFromBytes_Empty(t *testing.T) {

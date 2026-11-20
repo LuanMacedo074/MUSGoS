@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 type logEntry struct {

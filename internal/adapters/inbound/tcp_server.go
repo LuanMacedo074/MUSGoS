@@ -8,8 +8,8 @@ import (
 	"net"
 	"sync"
 
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/smus"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/smus"
 )
 
 // musFrameHeaderLen is the fixed MUS envelope prefix: 2 magic bytes + 4-byte

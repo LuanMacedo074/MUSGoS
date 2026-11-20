@@ -1,8 +1,8 @@
 package auth
 
 import (
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/factory"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/factory"
 )
 
 // Config maps mus.refresh onto the application schema described in

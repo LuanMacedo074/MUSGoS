@@ -3,7 +3,7 @@ package lingo_test
 import (
 	"testing"
 
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/domain/types/lingo"
 )
 
 func TestLVoid_New(t *testing.T) {

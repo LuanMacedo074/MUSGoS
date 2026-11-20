@@ -3,9 +3,9 @@ package services_test
 import (
 	"testing"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/domain/services"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/_tests/testutil"
+	"musgos/internal/domain/services"
+	"musgos/internal/domain/types/lingo"
 )
 
 func sessionWithLevel(t *testing.T, userID string, level int32) *testutil.MockSessionStore {

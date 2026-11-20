@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 type UDPServerConfig struct {

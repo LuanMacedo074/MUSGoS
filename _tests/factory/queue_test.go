@@ -3,8 +3,8 @@ package factory_test
 import (
 	"testing"
 
-	"fsos-server/internal/config"
-	"fsos-server/internal/factory"
+	"musgos/internal/config"
+	"musgos/internal/factory"
 )
 
 func TestNewMessageQueue_Memory(t *testing.T) {

@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/ports"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/ports"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"

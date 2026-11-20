@@ -5,7 +5,7 @@ package outbound_test
 import (
 	"testing"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 // The Redis session store runs the same behavioral helpers as the in-memory

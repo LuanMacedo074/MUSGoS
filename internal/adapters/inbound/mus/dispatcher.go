@@ -3,8 +3,8 @@ package mus
 import (
 	"fmt"
 
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/smus"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/smus"
 )
 
 type Dispatcher struct {

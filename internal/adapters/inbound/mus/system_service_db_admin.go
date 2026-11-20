@@ -1,8 +1,8 @@
 package mus
 
 import (
-	"fsos-server/internal/domain/types/lingo"
-	"fsos-server/internal/domain/types/smus"
+	"musgos/internal/domain/types/lingo"
+	"musgos/internal/domain/types/smus"
 
 	"golang.org/x/crypto/bcrypt"
 )

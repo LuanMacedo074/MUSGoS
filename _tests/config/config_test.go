@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"fsos-server/internal/config"
+	"musgos/internal/config"
 )
 
 func TestLoadServerConfig_Defaults(t *testing.T) {

@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/inbound"
-	"fsos-server/internal/adapters/inbound/mus"
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/types/lingo"
-	"fsos-server/internal/domain/types/smus"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/inbound"
+	"musgos/internal/adapters/inbound/mus"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/types/lingo"
+	"musgos/internal/domain/types/smus"
 )
 
 func TestIdleDisconnect_PreservesSessionUntilHookAndRunsOnce(t *testing.T) {

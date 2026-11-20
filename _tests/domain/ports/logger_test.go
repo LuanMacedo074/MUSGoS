@@ -3,7 +3,7 @@ package ports_test
 import (
 	"testing"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 func TestLogLevel_String(t *testing.T) {

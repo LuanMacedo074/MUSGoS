@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"fsos-server/internal/adapters/outbound"
+	"musgos/internal/adapters/outbound"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"

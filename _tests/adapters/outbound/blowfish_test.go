@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"fsos-server/internal/adapters/outbound"
+	"musgos/internal/adapters/outbound"
 )
 
 func newBlowfish(key string) *outbound.Blowfish {

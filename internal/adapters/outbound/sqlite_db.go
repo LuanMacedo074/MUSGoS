@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 
 	_ "modernc.org/sqlite"
 )

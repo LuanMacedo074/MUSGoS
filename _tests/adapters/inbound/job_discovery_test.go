@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/inbound"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/inbound"
 )
 
 // DiscoverJobs scans <scriptsDir>/jobs/*.lua and reads each file's "-- @job"

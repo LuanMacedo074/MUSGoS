@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/internal/adapters/outbound"
+	"musgos/internal/adapters/outbound"
 )
 
 func TestMemoryCache_SetGet(t *testing.T) {

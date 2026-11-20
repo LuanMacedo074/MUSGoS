@@ -1,7 +1,7 @@
 package services
 
 import (
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 // defaultAdminLevel is the cross-user privilege threshold when no

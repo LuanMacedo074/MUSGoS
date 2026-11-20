@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/lingo"
 )
 
 // maxHTTPBodyBytes caps the request body the HTTP server will read. A cheap

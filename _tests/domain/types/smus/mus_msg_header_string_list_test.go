@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"fsos-server/internal/domain/types/smus"
+	"musgos/internal/domain/types/smus"
 )
 
 func buildHeaderStringListBytes(strs []string) []byte {

@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/ports"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/ports"
 )
 
 func TestLuaScriptEngine_ScopedLockRejectsNewLocksInsideCallback(t *testing.T) {

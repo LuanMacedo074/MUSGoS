@@ -5,7 +5,7 @@ import (
 	"math"
 	"testing"
 
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/domain/types/lingo"
 )
 
 func TestLFloat_NewAndValue(t *testing.T) {

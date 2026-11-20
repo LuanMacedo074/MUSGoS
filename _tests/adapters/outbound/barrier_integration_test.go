@@ -2,7 +2,7 @@
 
 package outbound_test
 
-import "fsos-server/_tests/testutil"
+import "musgos/_tests/testutil"
 
 var (
 	releaseBarrierOnCleanup = testutil.ReleaseBarrierOnCleanup

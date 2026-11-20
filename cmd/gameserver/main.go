@@ -9,17 +9,17 @@ import (
 	"syscall"
 	"time"
 
-	"fsos-server/external/auth"
-	"fsos-server/external/hooks"
-	"fsos-server/external/migrations"
-	"fsos-server/external/queues"
-	"fsos-server/internal/adapters/inbound"
-	"fsos-server/internal/adapters/inbound/mus"
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/config"
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/services"
-	"fsos-server/internal/factory"
+	"musgos/external/auth"
+	"musgos/external/hooks"
+	"musgos/external/migrations"
+	"musgos/external/queues"
+	"musgos/internal/adapters/inbound"
+	"musgos/internal/adapters/inbound/mus"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/config"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/services"
+	"musgos/internal/factory"
 )
 
 func main() {

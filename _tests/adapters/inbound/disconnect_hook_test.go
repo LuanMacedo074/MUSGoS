@@ -3,9 +3,9 @@ package inbound_test
 import (
 	"testing"
 
-	"fsos-server/internal/adapters/inbound"
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/adapters/inbound"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/lingo"
 )
 
 // recordingEngine captures the last Execute call for assertions.

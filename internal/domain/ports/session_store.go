@@ -3,7 +3,7 @@ package ports
 import (
 	"time"
 
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/domain/types/lingo"
 )
 
 type ConnectionInfo struct {

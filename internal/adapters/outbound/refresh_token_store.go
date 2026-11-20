@@ -8,7 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 var _ ports.RefreshTokenStore = (*RefreshTokenStore)(nil)

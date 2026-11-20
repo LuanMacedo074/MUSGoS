@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 
 	"github.com/redis/go-redis/v9"
 )

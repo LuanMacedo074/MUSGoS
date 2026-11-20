@@ -4,11 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/inbound/mus"
-	"fsos-server/internal/domain/services"
-	"fsos-server/internal/domain/types/lingo"
-	"fsos-server/internal/domain/types/smus"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/inbound/mus"
+	"musgos/internal/domain/services"
+	"musgos/internal/domain/types/lingo"
+	"musgos/internal/domain/types/smus"
 )
 
 // setupSystemCommandsService creates a SystemService with a logged-in user in a movie.

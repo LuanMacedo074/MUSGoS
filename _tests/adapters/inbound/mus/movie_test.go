@@ -4,8 +4,8 @@ import (
 	"sort"
 	"testing"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/inbound/mus"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/inbound/mus"
 )
 
 func setupMovieManager() (*mus.MovieManager, *testutil.MockSessionStore) {

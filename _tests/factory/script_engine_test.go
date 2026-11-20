@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
-	"fsos-server/internal/factory"
+	"musgos/_tests/testutil"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/lingo"
+	"musgos/internal/factory"
 )
 
 func loaderType(t *testing.T, sandboxedDir string) string {
