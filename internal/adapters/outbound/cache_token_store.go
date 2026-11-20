@@ -97,16 +97,18 @@ func decodeTokenPayload(data []byte, legacyUserIDClaim string) (ports.TokenPaylo
 		}
 		return ports.TokenPayload{UserID: claims[legacyUserIDClaim], Claims: claims}, nil
 	}
-	payload := ports.TokenPayload{}
-	if raw, ok := fields["user_id"]; ok {
-		if err := json.Unmarshal(raw, &payload.UserID); err != nil {
-			return ports.TokenPayload{}, ports.ErrTokenInvalid
-		}
+	// Issue writes both fields (claims may be null); anything else is not ours.
+	rawUserID, hasUserID := fields["user_id"]
+	rawClaims, hasClaims := fields["claims"]
+	if !hasUserID || !hasClaims {
+		return ports.TokenPayload{}, ports.ErrTokenInvalid
 	}
-	if raw, ok := fields["claims"]; ok {
-		if err := json.Unmarshal(raw, &payload.Claims); err != nil {
-			return ports.TokenPayload{}, ports.ErrTokenInvalid
-		}
+	payload := ports.TokenPayload{}
+	if err := json.Unmarshal(rawUserID, &payload.UserID); err != nil {
+		return ports.TokenPayload{}, ports.ErrTokenInvalid
+	}
+	if err := json.Unmarshal(rawClaims, &payload.Claims); err != nil {
+		return ports.TokenPayload{}, ports.ErrTokenInvalid
 	}
 	return payload, nil
 }

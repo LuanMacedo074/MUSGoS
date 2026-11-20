@@ -81,3 +81,32 @@ func TestCacheTokenStore_TokensAreUnique(t *testing.T) {
 		t.Errorf("two issues produced the same token %q", a)
 	}
 }
+
+// Issue always writes both user_id and claims; a record missing either was not
+// written by this store and must not validate as an empty identity.
+func TestCacheTokenStore_RejectsRecordsMissingFields(t *testing.T) {
+	for _, record := range []string{`{}`, `{"user_id":"reader"}`, `{"claims":{"user_level":"20"}}`, `{"unrelated":1}`} {
+		t.Run(record, func(t *testing.T) {
+			cache := outbound.NewMemoryCache()
+			if err := cache.Set("authtoken:partial", []byte(record), time.Minute); err != nil {
+				t.Fatal(err)
+			}
+			store := outbound.NewCacheTokenStore(cache, time.Minute)
+			if _, err := store.Validate("partial"); err != ports.ErrTokenInvalid {
+				t.Fatalf("partial record accepted: %v", err)
+			}
+		})
+	}
+}
+
+func TestCacheTokenStore_NilClaimsRoundTrip(t *testing.T) {
+	store := newTokenStore(time.Minute)
+	token, err := store.Issue(ports.TokenPayload{UserID: "reader"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := store.Validate(token)
+	if err != nil || payload.UserID != "reader" || len(payload.Claims) != 0 {
+		t.Fatalf("payload = %+v, %v", payload, err)
+	}
+}

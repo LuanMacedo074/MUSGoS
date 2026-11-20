@@ -67,7 +67,7 @@ set** (Redis, RabbitMQ, cache, rate limiting, metrics, UDP, and more).
 | `JOBS_ENABLED` | `1` | Enable scheduled jobs |
 | `DISCONNECT_HOOK` | _(empty)_ | Script subject invoked when a client disconnects; empty disables it |
 | `DEFAULT_MOVIE_ID` | _(empty)_ | Movie that `@group` sends from movie-less senders (system scripts, jobs) resolve against; empty disables the fallback |
-| `AUTH_MODE` | `open` | Auth mode (`none`, `open`, `strict`) |
+| `AUTH_MODE` | `open` | Auth mode (`none`, `open`, `strict`, `token`); `token` logs on with a single-use `mus.token` token (see [`docs/refresh-tokens.md`](docs/refresh-tokens.md)) |
 | `SESSION_STORE_TYPE` | `memory` | Session store (`memory`, `redis`) |
 | `QUEUE_TYPE` | `memory` | Message queue (`memory`, `redis`, `rabbitmq`) |
 | `CACHE_TYPE` | `memory` | Cache (`memory`, `redis`) |
