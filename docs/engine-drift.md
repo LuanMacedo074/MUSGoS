@@ -7,7 +7,17 @@ every sync and update this file when its output changes.
 ## Engine code
 
 `internal/` and `cmd/gameserver/` are identical in both repos once the module
-path is rewritten. There is no drift.
+path is rewritten, except for one MUSGoS-first fix that FsosServer has not
+taken yet:
+
+| File | Difference |
+|---|---|
+| `internal/domain/services/logon_service.go` | Token-mode Logon rejects a token with an empty `user_id`, and logs a warning when it rejects a token for a missing `user_id` or an invalid `user_level`. Carry it to FsosServer with the README recipe, together with `TestLogonService_TokenMode_RejectsEmptyUserID` in `_tests/domain/services/logon_service_test.go`. |
+
+FsosServer's HTTP scripts already issue tokens with an empty `user_id` for
+accounts without a character. Those tokens are consumed by the HTTP
+create-character flow, which is unaffected. A Logon with one of them used to
+bind a session to an empty identity; once carried over, it is refused.
 
 ## Engine tests
 

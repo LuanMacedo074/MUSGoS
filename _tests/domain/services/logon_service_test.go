@@ -524,3 +524,20 @@ func TestLogonService_TokenMode_RejectsMissingOrMalformedLevel(t *testing.T) {
 		})
 	}
 }
+
+// A token without a user identity (for example one minted before an account has
+// a character) is valid for HTTP flows but must never bind a MUS session.
+func TestLogonService_TokenMode_RejectsEmptyUserID(t *testing.T) {
+	svc, store, sessions := tokenLogonSvc(t)
+	token, err := store.Issue(ports.TokenPayload{Claims: map[string]string{"user_level": "20"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := svc.Logon(services.LogonRequest{ConnectionID: "client-1", SenderID: "client-1", Credentials: creds("", "client-1", token)})
+	if res.Code != services.LogonInvalidPassword {
+		t.Fatalf("identity-less token logged in: %+v", res)
+	}
+	if conn, _ := sessions.GetConnection(""); conn != nil {
+		t.Fatal("identity-less token created a session")
+	}
+}

@@ -84,7 +84,9 @@ scripts reach it as `mus.token`:
   or already used.
 - `mus.token.user_level_claim` names the claim (`user_level`) that the Logon
   token path reads as the session's user level. A token without a valid
-  integer in that claim is rejected at Logon.
+  integer in that claim is rejected at Logon, and so is a token with an empty
+  `user_id`. HTTP flows may still issue and validate identity-less tokens,
+  for example before an account has a character.
 
 The payload is stored server-side under the token. Applications that still
 hold tokens in an older flat JSON shape can set `AuthConfig.LegacyUserIDClaim`

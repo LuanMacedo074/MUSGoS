@@ -158,8 +158,14 @@ func (s *LogonService) Logon(req LogonRequest) LogonResult {
 			})
 			return LogonResult{Code: LogonInvalidPassword, UserID: userID}
 		}
+		// A token without an identity serves pre-session HTTP flows only.
 		level, err := strconv.ParseInt(payload.Claims[ports.TokenUserLevelClaim], 10, 32)
-		if err != nil {
+		if err != nil || payload.UserID == "" {
+			s.logger.Warn("Logon failed: token lacks a user id or a valid user level", map[string]interface{}{
+				"client":     req.ConnectionID,
+				"hasUserID":  payload.UserID != "",
+				"validLevel": err == nil,
+			})
 			return LogonResult{Code: LogonInvalidPassword, UserID: userID}
 		}
 		userLevel = int(level)
