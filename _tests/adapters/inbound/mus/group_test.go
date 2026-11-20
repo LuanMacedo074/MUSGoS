@@ -4,9 +4,9 @@ import (
 	"sort"
 	"testing"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/inbound/mus"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/inbound/mus"
+	"musgos/internal/domain/types/lingo"
 )
 
 func setupGroupManager() (*mus.GroupManager, *mus.MovieManager, *testutil.MockSessionStore) {

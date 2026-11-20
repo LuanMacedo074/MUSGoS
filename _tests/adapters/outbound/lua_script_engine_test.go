@@ -8,10 +8,10 @@ import (
 	"strings"
 	"testing"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/lingo"
 )
 
 func setupScriptsDir(t *testing.T) string {
@@ -765,5 +765,68 @@ func TestExecute_LogWithoutFields(t *testing.T) {
 	}
 	if logger.Messages[0].Fields != nil {
 		t.Errorf("expected nil fields, got %v", logger.Messages[0].Fields)
+	}
+}
+
+func TestExecute_Random_UsesInjectedSource(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "roll", `mus.response(tostring(mus.random()))`)
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil).
+		WithRandom(func() float64 { return 0.25 })
+	result, err := engine.Execute(&ports.ScriptMessage{Subject: "roll", SenderID: "u1", Content: lingo.NewLVoid()})
+	mustNoErr(t, err)
+	if got := lingo.StringValue(result.Content); got != "0.25" {
+		t.Fatalf("mus.random() = %q, want 0.25", got)
+	}
+}
+
+func TestExecute_Random_DefaultsToUnitInterval(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "roll", `
+		for _ = 1, 200 do
+			local r = mus.random()
+			if type(r) ~= "number" or r < 0 or r >= 1 then
+				mus.response("out of range: " .. tostring(r))
+				return
+			end
+		end
+		mus.response("ok")
+	`)
+	// A nil source keeps the default rather than leaving mus.random unusable.
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, nil, nil).WithRandom(nil)
+	result, err := engine.Execute(&ports.ScriptMessage{Subject: "roll", SenderID: "u1", Content: lingo.NewLVoid()})
+	mustNoErr(t, err)
+	if got := lingo.StringValue(result.Content); got != "ok" {
+		t.Fatalf("default mus.random: %s", got)
+	}
+}
+
+func TestExecute_SendMessage_DirectedAudience(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "audience", `mus.sendMessage({"hero", "watcher"}, "Notice", "turn:2")`)
+	sender := &testutil.MockMessageSender{}
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, sender, nil, nil, nil, nil, nil)
+	_, err := engine.Execute(&ports.ScriptMessage{Subject: "audience", SenderID: "hero", Content: lingo.NewLVoid()})
+	mustNoErr(t, err)
+	if len(sender.Calls) != 2 || !hasCall(sender, "hero", "Notice", "turn:2") || !hasCall(sender, "watcher", "Notice", "turn:2") {
+		t.Fatalf("directed audience = %+v", sender.Calls)
+	}
+}
+
+func TestExecute_SendMessage_RejectsInvalidAudience(t *testing.T) {
+	for _, audience := range []string{`{"hero", ""}`, `{"hero", 7}`} {
+		t.Run(audience, func(t *testing.T) {
+			dir := setupScriptsDir(t)
+			writeScript(t, dir, "audience", `mus.sendMessage(`+audience+`, "Notice", "x")`)
+			sender := &testutil.MockMessageSender{}
+			engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, sender, nil, nil, nil, nil, nil)
+			_, err := engine.Execute(&ports.ScriptMessage{Subject: "audience", SenderID: "hero", Content: lingo.NewLVoid()})
+			if err == nil {
+				t.Fatal("invalid audience accepted")
+			}
+			if len(sender.Calls) != 0 {
+				t.Fatalf("invalid audience sent %+v", sender.Calls)
+			}
+		})
 	}
 }

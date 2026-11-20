@@ -8,8 +8,8 @@ import (
 	"net"
 	"sync"
 
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/smus"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/smus"
 )
 
 // musFrameHeaderLen is the fixed MUS envelope prefix: 2 magic bytes + 4-byte
@@ -100,7 +100,7 @@ func (s *TCPServer) Start(ready chan struct{}) error {
 	}
 
 	s.logger.Info("TCP Server listening", map[string]interface{}{
-		"address": addr,
+		"address": s.listener.Addr().String(),
 	})
 
 	if ready != nil {
@@ -240,6 +240,7 @@ readLoop:
 				acc = rest
 
 				currentID := s.pool.CurrentID(conn)
+				s.sessionStore.UpdateLastActivity(currentID)
 
 				if s.rateLimiter != nil && !s.rateLimiter.Allow(host) {
 					s.logger.Warn("Rate limit exceeded", map[string]interface{}{
@@ -266,7 +267,6 @@ readLoop:
 						s.metrics.IncrementErrors()
 					}
 				} else {
-					s.sessionStore.UpdateLastActivity(currentID)
 					if s.metrics != nil {
 						s.metrics.IncrementMessages()
 					}

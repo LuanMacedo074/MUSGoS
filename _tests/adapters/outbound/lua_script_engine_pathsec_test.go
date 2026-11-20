@@ -1,26 +1,16 @@
 package outbound_test
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/lingo"
 )
 
 // writeScriptNested writes dir/sub/name.lua, creating the subdirectory.
-func writeScriptNested(t *testing.T, dir, sub, name, content string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
-		t.Fatalf("mkdir %s: %v", sub, err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, sub, name+".lua"), []byte(content), 0o644); err != nil {
-		t.Fatalf("write nested script: %v", err)
-	}
-}
+var writeScriptNested = testutil.WriteScriptNested
 
 // Subjects come from the network; the engine must never resolve one that
 // escapes the scripts directory.

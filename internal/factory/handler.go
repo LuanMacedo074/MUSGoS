@@ -3,10 +3,10 @@ package factory
 import (
 	"fmt"
 
-	"fsos-server/internal/adapters/inbound"
-	"fsos-server/internal/adapters/inbound/mus"
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/services"
+	"musgos/internal/adapters/inbound"
+	"musgos/internal/adapters/inbound/mus"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/services"
 )
 
 func NewHandler(

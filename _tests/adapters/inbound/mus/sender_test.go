@@ -3,9 +3,9 @@ package mus_test
 import (
 	"testing"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/inbound/mus"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/inbound/mus"
+	"musgos/internal/domain/types/lingo"
 )
 
 func TestSender_SendMessage_DirectUser(t *testing.T) {

@@ -3,7 +3,7 @@ package inbound
 import (
 	"time"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 type BanChecker struct {

@@ -4,11 +4,12 @@ import (
 	"os"
 	"testing"
 
-	"fsos-server/internal/config"
+	"musgos/internal/config"
 )
 
 func TestLoadServerConfig_Defaults(t *testing.T) {
 	envVars := []string{
+		"DEFAULT_MOVIE_ID", "DISCONNECT_HOOK",
 		"APPLICATION_NAME", "PORT", "LOG_LEVEL", "LOGGER_TYPE",
 		"LOG_PATH", "ENVIRONMENT", "CIPHER_TYPE", "ENCRYPTION_KEY", "PROTOCOL",
 		"SESSION_STORE_TYPE", "REDIS_HOST", "REDIS_PORT", "REDIS_PASSWORD",
@@ -32,6 +33,8 @@ func TestLoadServerConfig_Defaults(t *testing.T) {
 	cfg := config.LoadServerConfig()
 
 	defaults := map[string]struct{ got, want string }{
+		"DefaultMovieID":      {cfg.DefaultMovieID, ""},
+		"DisconnectHook":      {cfg.DisconnectHook, ""},
 		"ApplicationName":     {cfg.ApplicationName, "SMUS-SERVER"},
 		"Port":                {cfg.Port, "1199"},
 		"LogLevel":            {cfg.LogLevel, "INFO"},
@@ -69,6 +72,8 @@ func TestLoadServerConfig_Defaults(t *testing.T) {
 }
 
 func TestLoadServerConfig_CustomValues(t *testing.T) {
+	t.Setenv("DEFAULT_MOVIE_ID", "example-movie")
+	t.Setenv("DISCONNECT_HOOK", "sessions/cleanup")
 	t.Setenv("APPLICATION_NAME", "TestApp")
 	t.Setenv("PORT", "9999")
 	t.Setenv("LOG_LEVEL", "DEBUG")
@@ -101,6 +106,8 @@ func TestLoadServerConfig_CustomValues(t *testing.T) {
 	cfg := config.LoadServerConfig()
 
 	checks := map[string]struct{ got, want string }{
+		"DefaultMovieID":      {cfg.DefaultMovieID, "example-movie"},
+		"DisconnectHook":      {cfg.DisconnectHook, "sessions/cleanup"},
 		"ApplicationName":     {cfg.ApplicationName, "TestApp"},
 		"Port":                {cfg.Port, "9999"},
 		"LogLevel":            {cfg.LogLevel, "DEBUG"},
@@ -273,5 +280,33 @@ func TestLoadServerConfig_SandboxedScriptsDirCustom(t *testing.T) {
 
 	if cfg.SandboxedScriptsDir != "chunks" {
 		t.Errorf("SandboxedScriptsDir = %q, want chunks", cfg.SandboxedScriptsDir)
+	}
+}
+
+func TestLoadServerConfig_DefaultMovieDisabled(t *testing.T) {
+	for _, configured := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unset", true: "empty"}[configured], func(t *testing.T) {
+			t.Setenv("DEFAULT_MOVIE_ID", "")
+			if !configured {
+				os.Unsetenv("DEFAULT_MOVIE_ID")
+			}
+			if got := config.LoadServerConfig().DefaultMovieID; got != "" {
+				t.Errorf("DefaultMovieID = %q, want empty (no fallback movie)", got)
+			}
+		})
+	}
+}
+
+func TestLoadServerConfig_DisconnectHookDisabled(t *testing.T) {
+	for _, configured := range []bool{false, true} {
+		t.Run(map[bool]string{false: "unset", true: "empty"}[configured], func(t *testing.T) {
+			t.Setenv("DISCONNECT_HOOK", "")
+			if !configured {
+				os.Unsetenv("DISCONNECT_HOOK")
+			}
+			if got := config.LoadServerConfig().DisconnectHook; got != "" {
+				t.Errorf("DisconnectHook = %q, want empty (disabled)", got)
+			}
+		})
 	}
 }

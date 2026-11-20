@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 type IdleChecker struct {
@@ -44,14 +44,16 @@ func (ic *IdleChecker) Start() {
 			select {
 			case <-ic.done:
 				return
-			case <-ic.ticker.C:
-				ic.check()
+			case now := <-ic.ticker.C:
+				ic.Check(now)
 			}
 		}
 	}()
 }
 
-func (ic *IdleChecker) check() {
+// Check closes connections idle at now. Socket teardown owns session cleanup
+// and disconnect hooks. Passing the sweep time allows deterministic checks.
+func (ic *IdleChecker) Check(now time.Time) {
 	conns, err := ic.sessionStore.GetAllConnections()
 	if err != nil {
 		ic.logger.Error("Idle check: failed to get connections", map[string]interface{}{
@@ -60,7 +62,6 @@ func (ic *IdleChecker) check() {
 		return
 	}
 
-	now := time.Now()
 	for _, conn := range conns {
 		lastActivity := conn.LastActivityAt
 		if lastActivity.IsZero() {
@@ -72,8 +73,6 @@ func (ic *IdleChecker) check() {
 				"lastActivityAt": lastActivity.String(),
 				"idle":           now.Sub(lastActivity).String(),
 			})
-			ic.sessionStore.LeaveAllRooms(conn.ClientID)
-			ic.sessionStore.UnregisterConnection(conn.ClientID)
 			if ic.connWriter != nil {
 				ic.connWriter.DisconnectClient(conn.ClientID)
 			}

@@ -3,7 +3,7 @@ package outbound
 import (
 	"fmt"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 // ExecuteMigrationSQL runs the current backend's trusted DDL inside the

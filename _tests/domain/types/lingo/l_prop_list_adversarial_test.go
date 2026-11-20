@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/domain/types/lingo"
 )
 
 // symbolBytes builds a Lingo symbol value: type(2) + len(4) + string (even len,

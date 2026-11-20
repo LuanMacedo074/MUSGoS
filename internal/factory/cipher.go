@@ -3,8 +3,8 @@ package factory
 import (
 	"fmt"
 
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/ports"
 )
 
 const smusDefaultKey = "IPAddress resolution"

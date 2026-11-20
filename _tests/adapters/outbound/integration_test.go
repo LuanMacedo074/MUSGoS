@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/internal/adapters/outbound"
+	"musgos/internal/adapters/outbound"
 )
 
 // runNonce namespaces every Redis key to this test run, so re-running the suite

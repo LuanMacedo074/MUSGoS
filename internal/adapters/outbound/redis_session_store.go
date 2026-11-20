@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/lingo"
 
 	"github.com/redis/go-redis/v9"
 )

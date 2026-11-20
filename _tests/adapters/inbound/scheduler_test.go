@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/inbound"
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/inbound"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/lingo"
 )
 
 // countingEngine records every Execute call (subject + sender) and counts them.

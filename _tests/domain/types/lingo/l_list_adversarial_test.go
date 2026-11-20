@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/domain/types/lingo"
 )
 
 // A wire count larger than the buffer could hold must not pre-allocate a giant

@@ -4,8 +4,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/ports"
 )
 
 // On SQLite `foreign_keys` is a PER-CONNECTION pragma, so `sqliteDialect.Init`'s single

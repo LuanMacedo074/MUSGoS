@@ -4,8 +4,8 @@ import (
 	"sync"
 	"time"
 
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/lingo"
 )
 
 // jobSenderID is the synthetic sender used for scheduler-invoked scripts. Jobs

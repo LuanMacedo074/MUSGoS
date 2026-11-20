@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"fsos-server/internal/factory"
+	"musgos/internal/factory"
 )
 
 // Runs against the Postgres brought up by docker/thirdparties. The DSN defaults

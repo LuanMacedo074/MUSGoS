@@ -3,8 +3,8 @@ package outbound_test
 import (
 	"testing"
 
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/lingo"
 )
 
 func testRegisterConnection(t *testing.T, store ports.SessionStore) {

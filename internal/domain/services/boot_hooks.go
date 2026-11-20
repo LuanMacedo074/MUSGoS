@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 // RunBootHooks runs every hook in order with the same env. A failing hook does

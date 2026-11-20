@@ -3,8 +3,8 @@ package factory_test
 import (
 	"testing"
 
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/factory"
+	"musgos/internal/domain/ports"
+	"musgos/internal/factory"
 )
 
 func TestParseLogLevel(t *testing.T) {

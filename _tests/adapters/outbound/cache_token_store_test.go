@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/ports"
 )
 
 func newTokenStore(ttl time.Duration) *outbound.CacheTokenStore {
@@ -15,7 +15,7 @@ func newTokenStore(ttl time.Duration) *outbound.CacheTokenStore {
 func TestCacheTokenStore_IssueThenValidate(t *testing.T) {
 	store := newTokenStore(time.Minute)
 
-	token, err := store.Issue(ports.TokenPayload{CharacterName: "Aragorn", UserLevel: 40, AccountID: 7})
+	token, err := store.Issue(ports.TokenPayload{UserID: "Aragorn", Claims: map[string]string{"user_level": "40", "account_id": "7"}})
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -27,21 +27,18 @@ func TestCacheTokenStore_IssueThenValidate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Validate: %v", err)
 	}
-	if payload.CharacterName != "Aragorn" {
-		t.Errorf("CharacterName = %q, want Aragorn", payload.CharacterName)
+	if payload.UserID != "Aragorn" {
+		t.Errorf("UserID = %q, want Aragorn", payload.UserID)
 	}
-	if payload.UserLevel != 40 {
-		t.Errorf("UserLevel = %d, want 40", payload.UserLevel)
-	}
-	if payload.AccountID != 7 {
-		t.Errorf("AccountID = %d, want 7", payload.AccountID)
+	if payload.Claims["user_level"] != "40" || payload.Claims["account_id"] != "7" {
+		t.Errorf("Claims = %v, want user_level 40 and account_id 7", payload.Claims)
 	}
 }
 
 func TestCacheTokenStore_ValidateConsumes(t *testing.T) {
 	store := newTokenStore(time.Minute)
 
-	token, _ := store.Issue(ports.TokenPayload{CharacterName: "Legolas", UserLevel: 20})
+	token, _ := store.Issue(ports.TokenPayload{UserID: "Legolas", Claims: map[string]string{"user_level": "20"}})
 
 	if _, err := store.Validate(token); err != nil {
 		t.Fatalf("first Validate: %v", err)
@@ -66,7 +63,7 @@ func TestCacheTokenStore_UnknownTokenFails(t *testing.T) {
 func TestCacheTokenStore_TTLExpiry(t *testing.T) {
 	store := newTokenStore(20 * time.Millisecond)
 
-	token, _ := store.Issue(ports.TokenPayload{CharacterName: "Gimli", UserLevel: 20})
+	token, _ := store.Issue(ports.TokenPayload{UserID: "Gimli", Claims: map[string]string{"user_level": "20"}})
 
 	time.Sleep(40 * time.Millisecond)
 
@@ -78,9 +75,38 @@ func TestCacheTokenStore_TTLExpiry(t *testing.T) {
 func TestCacheTokenStore_TokensAreUnique(t *testing.T) {
 	store := newTokenStore(time.Minute)
 
-	a, _ := store.Issue(ports.TokenPayload{CharacterName: "X", UserLevel: 1})
-	b, _ := store.Issue(ports.TokenPayload{CharacterName: "X", UserLevel: 1})
+	a, _ := store.Issue(ports.TokenPayload{UserID: "X", Claims: map[string]string{"user_level": "1"}})
+	b, _ := store.Issue(ports.TokenPayload{UserID: "X", Claims: map[string]string{"user_level": "1"}})
 	if a == b {
 		t.Errorf("two issues produced the same token %q", a)
+	}
+}
+
+// Issue always writes both user_id and claims; a record missing either was not
+// written by this store and must not validate as an empty identity.
+func TestCacheTokenStore_RejectsRecordsMissingFields(t *testing.T) {
+	for _, record := range []string{`{}`, `{"user_id":"reader"}`, `{"claims":{"user_level":"20"}}`, `{"unrelated":1}`} {
+		t.Run(record, func(t *testing.T) {
+			cache := outbound.NewMemoryCache()
+			if err := cache.Set("authtoken:partial", []byte(record), time.Minute); err != nil {
+				t.Fatal(err)
+			}
+			store := outbound.NewCacheTokenStore(cache, time.Minute)
+			if _, err := store.Validate("partial"); err != ports.ErrTokenInvalid {
+				t.Fatalf("partial record accepted: %v", err)
+			}
+		})
+	}
+}
+
+func TestCacheTokenStore_NilClaimsRoundTrip(t *testing.T) {
+	store := newTokenStore(time.Minute)
+	token, err := store.Issue(ports.TokenPayload{UserID: "reader"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := store.Validate(token)
+	if err != nil || payload.UserID != "reader" || len(payload.Claims) != 0 {
+		t.Fatalf("payload = %+v, %v", payload, err)
 	}
 }

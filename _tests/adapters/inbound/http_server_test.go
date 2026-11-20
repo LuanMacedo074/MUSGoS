@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/inbound"
-	"fsos-server/internal/adapters/outbound"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/inbound"
+	"musgos/internal/adapters/outbound"
 )
 
 // httpScriptEngine builds a script engine over a temp dir with no sender and no

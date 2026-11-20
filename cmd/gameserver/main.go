@@ -9,16 +9,17 @@ import (
 	"syscall"
 	"time"
 
-	"fsos-server/external/hooks"
-	"fsos-server/external/migrations"
-	"fsos-server/external/queues"
-	"fsos-server/internal/adapters/inbound"
-	"fsos-server/internal/adapters/inbound/mus"
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/config"
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/services"
-	"fsos-server/internal/factory"
+	"musgos/external/auth"
+	"musgos/external/hooks"
+	"musgos/external/migrations"
+	"musgos/external/queues"
+	"musgos/internal/adapters/inbound"
+	"musgos/internal/adapters/inbound/mus"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/config"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/services"
+	"musgos/internal/factory"
 )
 
 func main() {
@@ -140,9 +141,10 @@ func main() {
 		"type": cfg.CacheType,
 	})
 
-	// Token store for the Logon token path (RFC-021): the same cache-backed,
+	// Token store for the Logon token path: the same cache-backed,
 	// single-use token scheme the external/https login script issues against.
-	tokenStore := outbound.NewCacheTokenStore(cache, outbound.DefaultTokenTTL)
+	authStores := factory.NewAuthStores(cache, dbResult.QueryBuilder, auth.Config())
+	tokenStore := authStores.Tokens
 
 	// 1. BanChecker — uses DB + Cache
 	banChecker := inbound.NewBanChecker(dbResult.Adapter, cache)
@@ -160,7 +162,7 @@ func main() {
 	}
 
 	// 4. ScriptEngine — can send messages via Sender + access DB + server info + cache
-	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, cfg.SandboxedScriptsDir, gameLogger, cfg.ScriptTimeout, queue, sender, dbResult.Adapter, dbResult.QueryBuilder, sessionStore, cache, emailSender)
+	scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, cfg.SandboxedScriptsDir, gameLogger, cfg.ScriptTimeout, queue, sender, dbResult.Adapter, dbResult.QueryBuilder, sessionStore, cache, emailSender, authStores)
 	if cfg.ScriptsPath != "" {
 		scripts, _ := filepath.Glob(filepath.Join(cfg.ScriptsPath, "*.lua"))
 		gameLogger.Info("Script engine initialized", map[string]interface{}{
@@ -259,7 +261,7 @@ func main() {
 		if cfg.HTTPScriptsPath == "" {
 			gameLogger.Error("HTTP server disabled: HTTP_PORT set but HTTP_SCRIPTS_PATH is empty")
 		} else {
-			httpEngine := factory.NewScriptEngine(cfg.HTTPScriptsPath, "", gameLogger, cfg.ScriptTimeout, queue, nil, dbResult.Adapter, dbResult.QueryBuilder, nil, cache, emailSender)
+			httpEngine := factory.NewScriptEngine(cfg.HTTPScriptsPath, "", gameLogger, cfg.ScriptTimeout, queue, nil, dbResult.Adapter, dbResult.QueryBuilder, nil, cache, emailSender, authStores)
 			httpServer := inbound.NewHTTPServer(cfg.HTTPPort, cfg.HTTPBindAddr, httpEngine, gameLogger)
 			go func() {
 				if err := httpServer.Start(); err != nil {

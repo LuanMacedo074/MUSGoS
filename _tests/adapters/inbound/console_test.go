@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/inbound"
-	"fsos-server/internal/domain/ports"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/inbound"
+	"musgos/internal/domain/ports"
 )
 
 // runConsole feeds input to a console and returns what it printed. The console

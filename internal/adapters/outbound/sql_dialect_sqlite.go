@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"fsos-server/internal/domain/ports"
 	"modernc.org/sqlite"
+	"musgos/internal/domain/ports"
 )
 
 // sqliteDialect adapts the storage core's shared SQL to SQLite.

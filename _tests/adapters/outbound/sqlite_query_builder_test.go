@@ -3,7 +3,7 @@ package outbound_test
 import (
 	"testing"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 func TestQueryBuilder_InsertAndFirst(t *testing.T) {

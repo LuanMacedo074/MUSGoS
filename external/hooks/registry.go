@@ -1,6 +1,6 @@
 package hooks
 
-import "fsos-server/internal/domain/ports"
+import "musgos/internal/domain/ports"
 
 // All is the game's boot hooks. Mirrors the migrations and queues registries:
 // the engine runs them at boot and on the console "reload" command, game code

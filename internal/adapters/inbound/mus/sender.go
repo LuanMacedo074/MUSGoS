@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
-	"fsos-server/internal/domain/types/smus"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/lingo"
+	"musgos/internal/domain/types/smus"
 )
 
 type Sender struct {
@@ -16,8 +16,7 @@ type Sender struct {
 	cipher       ports.Cipher
 	allEncrypted bool
 	// defaultMovieID resolves @group sends from senders that are in no movie
-	// (system.script, scheduler jobs). The FSOS client always logs into one
-	// movie ("faria"), so system-authored group messages target its groups.
+	// (system.script, scheduler jobs). Empty disables this fallback.
 	defaultMovieID string
 }
 

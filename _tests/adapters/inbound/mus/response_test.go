@@ -3,9 +3,9 @@ package mus_test
 import (
 	"testing"
 
-	"fsos-server/internal/adapters/inbound/mus"
-	"fsos-server/internal/domain/types/lingo"
-	"fsos-server/internal/domain/types/smus"
+	"musgos/internal/adapters/inbound/mus"
+	"musgos/internal/domain/types/lingo"
+	"musgos/internal/domain/types/smus"
 )
 
 func TestNewResponse_BuildsCorrectMessage(t *testing.T) {

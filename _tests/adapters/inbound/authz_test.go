@@ -4,9 +4,9 @@ import (
 	"net"
 	"testing"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/inbound"
-	"fsos-server/internal/domain/ports"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/inbound"
+	"musgos/internal/domain/ports"
 )
 
 // B4: a non-Logon message whose wire SenderID claims a different user must be

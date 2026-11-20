@@ -5,9 +5,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/lingo"
 )
 
 // LogEntry represents a single log call captured by MockLogger.

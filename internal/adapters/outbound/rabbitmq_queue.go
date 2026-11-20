@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/internal/adapters/inbound"
+	"musgos/internal/adapters/inbound"
 )
 
 func TestRateLimiter_AllowsWithinLimit(t *testing.T) {

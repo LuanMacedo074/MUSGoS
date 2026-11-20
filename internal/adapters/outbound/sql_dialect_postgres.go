@@ -3,7 +3,7 @@ package outbound
 import (
 	"database/sql"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 // postgresDialect adapts the storage core's shared SQL to PostgreSQL.

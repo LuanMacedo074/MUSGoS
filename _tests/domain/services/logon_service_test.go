@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/services"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/services"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -330,8 +330,8 @@ func TestLogonService_SameIDAsConnection_SkipsTakeoverGuard(t *testing.T) {
 	}
 }
 
-// tokenLogonSvc builds a "token"-mode LogonService backed by a real
-// cache-backed token store, and returns both so a test can mint tokens.
+// --- token mode (RFC-021 t02) ------------------------------------------------
+
 func tokenLogonSvc(t *testing.T) (*services.LogonService, ports.TokenStore, *testutil.MockSessionStore) {
 	t.Helper()
 	sessions := testutil.NewMockSessionStore()
@@ -347,7 +347,7 @@ func tokenLogonSvc(t *testing.T) (*services.LogonService, ports.TokenStore, *tes
 func TestLogonService_TokenMode_ValidToken_BindsCarriedCharacter(t *testing.T) {
 	svc, store, sessions := tokenLogonSvc(t)
 
-	token, err := store.Issue(ports.TokenPayload{CharacterName: "Frodo", UserLevel: 55})
+	token, err := store.Issue(ports.TokenPayload{UserID: "Frodo", Claims: map[string]string{"user_level": "55"}})
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -387,7 +387,7 @@ func TestLogonService_TokenMode_SharedCacheInterop(t *testing.T) {
 	issuer := outbound.NewCacheTokenStore(cache, time.Minute)    // stands in for the engine/login side
 	validator := outbound.NewCacheTokenStore(cache, time.Minute) // the Logon side
 
-	token, err := issuer.Issue(ports.TokenPayload{CharacterName: "Merry", UserLevel: 30})
+	token, err := issuer.Issue(ports.TokenPayload{UserID: "Merry", Claims: map[string]string{"user_level": "30"}})
 	if err != nil {
 		t.Fatalf("Issue: %v", err)
 	}
@@ -417,7 +417,7 @@ func TestLogonService_TokenMode_TokenCharacterIsAuthoritative(t *testing.T) {
 	// Frodo; the client name is ignored.
 	svc, store, sessions := tokenLogonSvc(t)
 
-	token, _ := store.Issue(ports.TokenPayload{CharacterName: "Frodo", UserLevel: 55})
+	token, _ := store.Issue(ports.TokenPayload{UserID: "Frodo", Claims: map[string]string{"user_level": "55"}})
 
 	res := svc.Logon(services.LogonRequest{
 		ConnectionID: "client-1", SenderID: "client-1",
@@ -441,7 +441,7 @@ func TestLogonService_TokenMode_TokenCharacterIsAuthoritative(t *testing.T) {
 func TestLogonService_TokenMode_TokenIsSingleUse(t *testing.T) {
 	svc, store, _ := tokenLogonSvc(t)
 
-	token, _ := store.Issue(ports.TokenPayload{CharacterName: "Sam", UserLevel: 20})
+	token, _ := store.Issue(ports.TokenPayload{UserID: "Sam", Claims: map[string]string{"user_level": "20"}})
 
 	if res := svc.Logon(services.LogonRequest{
 		ConnectionID: "client-1", SenderID: "client-1",
@@ -499,5 +499,45 @@ func TestLogonService_TokenMode_NoStore_InternalError(t *testing.T) {
 	})
 	if res.Code != services.LogonInternalError {
 		t.Errorf("Code = %v, want LogonInternalError", res.Code)
+	}
+}
+
+func TestLogonService_TokenMode_RejectsMissingOrMalformedLevel(t *testing.T) {
+	for _, level := range []string{"", "not-a-level", "1.5", "2147483648", "4294967376", "-2147483649", "999999999999999999999999999999"} {
+		t.Run(level, func(t *testing.T) {
+			svc, store, sessions := tokenLogonSvc(t)
+			claims := map[string]string{}
+			if level != "" {
+				claims["user_level"] = level
+			}
+			token, err := store.Issue(ports.TokenPayload{UserID: "reader", Claims: claims})
+			if err != nil {
+				t.Fatal(err)
+			}
+			res := svc.Logon(services.LogonRequest{ConnectionID: "client-1", SenderID: "client-1", Credentials: creds("", "reader", token)})
+			if res.Code != services.LogonInvalidPassword {
+				t.Fatalf("bad level logged in: %+v", res)
+			}
+			if conn, _ := sessions.GetConnection("reader"); conn != nil {
+				t.Fatal("bad level created a session")
+			}
+		})
+	}
+}
+
+// A token without a user identity (for example one minted before an account has
+// a character) is valid for HTTP flows but must never bind a MUS session.
+func TestLogonService_TokenMode_RejectsEmptyUserID(t *testing.T) {
+	svc, store, sessions := tokenLogonSvc(t)
+	token, err := store.Issue(ports.TokenPayload{Claims: map[string]string{"user_level": "20"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := svc.Logon(services.LogonRequest{ConnectionID: "client-1", SenderID: "client-1", Credentials: creds("", "client-1", token)})
+	if res.Code != services.LogonInvalidPassword {
+		t.Fatalf("identity-less token logged in: %+v", res)
+	}
+	if conn, _ := sessions.GetConnection(""); conn != nil {
+		t.Fatal("identity-less token created a session")
 	}
 }

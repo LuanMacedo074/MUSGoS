@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"fsos-server/internal/domain/types/smus"
+	"musgos/internal/domain/types/smus"
 )
 
 // buildFrame wraps payload in a MUS envelope: [0x72 0x00][size:uint32][payload].

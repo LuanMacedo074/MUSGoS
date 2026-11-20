@@ -2,7 +2,7 @@ package mus
 
 import (
 	"fmt"
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 	"sync"
 )
 

@@ -1,4 +1,4 @@
-module fsos-server
+module musgos
 
 go 1.25.0
 

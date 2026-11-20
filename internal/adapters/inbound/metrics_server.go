@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 type MetricsServer struct {

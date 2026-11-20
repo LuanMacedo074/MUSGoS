@@ -6,7 +6,7 @@ import (
 	"math"
 	"testing"
 
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/domain/types/lingo"
 )
 
 func TestFromRawBytes_Integer(t *testing.T) {

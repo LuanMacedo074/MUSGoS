@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/ports"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/ports"
 )
 
 func TestLuaScriptEngine_ScopedLockRejectsNewLocksInsideCallback(t *testing.T) {
@@ -55,9 +55,9 @@ assert(value == "ready" and absent == nil and number == 7)
 mus.cache.get("after-scope")
 mus.response("finished")
 `), 0600))
-			cache := &scopedLockBarrier{Cache: outbound.NewMemoryCache(), after: make(chan struct{}), resume: make(chan struct{})}
+			cache := &testutil.ScopedLockBarrier{Cache: outbound.NewMemoryCache(), After: make(chan struct{}), Resume: make(chan struct{})}
 			var once sync.Once
-			resume := func() { once.Do(func() { close(cache.resume) }) }
+			resume := func() { once.Do(func() { close(cache.Resume) }) }
 			t.Cleanup(resume)
 			t.Cleanup(func() { cache.Close() })
 			engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, nil, nil, nil, nil, cache, nil)
@@ -67,7 +67,7 @@ mus.response("finished")
 				done <- err
 			}()
 			select {
-			case <-cache.after:
+			case <-cache.After:
 			case err := <-done:
 				t.Fatalf("script did not reach the end of the lock scope: %v", err)
 			case <-time.After(3 * time.Second):
@@ -82,19 +82,6 @@ mus.response("finished")
 			mustNoErr(t, <-done)
 		})
 	}
-}
-
-type scopedLockBarrier struct {
-	ports.Cache
-	after, resume chan struct{}
-}
-
-func (c *scopedLockBarrier) Get(key string) ([]byte, error) {
-	if key == "after-scope" {
-		close(c.after)
-		<-c.resume
-	}
-	return c.Cache.Get(key)
 }
 
 func TestLuaScriptEngine_OperationLocksReleaseOnEveryExit(t *testing.T) {

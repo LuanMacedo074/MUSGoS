@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/services"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/services"
 )
 
 // --- fake MigrationTracker ---

@@ -3,7 +3,7 @@ package outbound
 import (
 	"sync"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 type MemoryQueue struct {

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strconv"
 
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/config"
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/config"
+	"musgos/internal/domain/ports"
 )
 
 func NewSessionStore(storeType string, redisCfg config.RedisConfig) (ports.SessionStore, error) {

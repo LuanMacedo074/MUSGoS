@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 // dialect captures everything that differs between the SQL backends so the

@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	"fsos-server/internal/domain/types/smus"
+	"musgos/internal/domain/types/smus"
 )
 
 // A wire count far larger than the remaining bytes must be rejected with an

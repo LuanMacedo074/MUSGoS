@@ -85,32 +85,33 @@ type ServerConfig struct {
 	// SandboxedScriptsDir is the directory under ScriptsPath that
 	// mus.loadSandboxed reads; empty leaves the loader disabled.
 	SandboxedScriptsDir string
-	DisconnectHook      string
-	AuthMode            string
-	Redis               RedisConfig
-	AllEncrypted        bool
-	QueueType           string
-	QueueRedis          RedisConfig
-	RabbitMQ            RabbitMQConfig
-	CommandLevels       map[string]int
-	IdleTimeout         int
-	UDPPort             string
-	CacheType           string
-	CacheRedis          RedisConfig
-	RateLimitRequests   int
-	RateLimitWindow     int
-	MetricsPort         string
-	MetricsBindAddr     string
-	HTTPPort            string
-	HTTPBindAddr        string
-	HTTPScriptsPath     string
-	JobsEnabled         bool
-	DefaultMovieID      string
-	SMTPHost            string
-	SMTPPort            string
-	SMTPUser            string
-	SMTPPass            string
-	SMTPFrom            string
+	// DisconnectHook is the Lua subject run on disconnect; empty disables it.
+	DisconnectHook    string
+	AuthMode          string
+	Redis             RedisConfig
+	AllEncrypted      bool
+	QueueType         string
+	QueueRedis        RedisConfig
+	RabbitMQ          RabbitMQConfig
+	CommandLevels     map[string]int
+	IdleTimeout       int
+	UDPPort           string
+	CacheType         string
+	CacheRedis        RedisConfig
+	RateLimitRequests int
+	RateLimitWindow   int
+	MetricsPort       string
+	MetricsBindAddr   string
+	HTTPPort          string
+	HTTPBindAddr      string
+	HTTPScriptsPath   string
+	JobsEnabled       bool
+	DefaultMovieID    string
+	SMTPHost          string
+	SMTPPort          string
+	SMTPUser          string
+	SMTPPass          string
+	SMTPFrom          string
 }
 
 var defaultCommandLevels = map[string]int{
@@ -200,7 +201,7 @@ func LoadServerConfig() ServerConfig {
 		ScriptsPath:         getEnv("SCRIPTS_PATH", "external/scripts"),
 		ScriptTimeout:       getEnvInt("SCRIPT_TIMEOUT", 5),
 		SandboxedScriptsDir: getEnv("SANDBOXED_SCRIPTS_DIR", ""),
-		DisconnectHook:      getEnv("DISCONNECT_HOOK", "users/onDisconnect"),
+		DisconnectHook:      getEnv("DISCONNECT_HOOK", ""),
 		AuthMode:            getEnv("AUTH_MODE", "open"),
 		Redis: RedisConfig{
 			Host:      getEnv("REDIS_HOST", "localhost"),
@@ -246,15 +247,14 @@ func LoadServerConfig() ServerConfig {
 	// Optional generic HTTP inbound adapter: empty port = adapter off, mirroring
 	// the METRICS_PORT idiom. Dispatches requests to Lua under HTTP_SCRIPTS_PATH
 	// with no MUS session; loopback-bound by default like the metrics server. The
-	// engine stays agnostic to what the scripts do (auth lives in FsosServer Lua).
+	// engine stays agnostic to what the scripts do.
 	cfg.HTTPPort = getEnv("HTTP_PORT", "")
 	cfg.HTTPBindAddr = getEnv("HTTP_BIND_ADDR", "127.0.0.1")
 	cfg.HTTPScriptsPath = getEnv("HTTP_SCRIPTS_PATH", "external/https")
 	cfg.JobsEnabled = getEnv("JOBS_ENABLED", "1") == "1"
 	// Movie used to resolve @group sends from senders that aren't in any movie
-	// (system.script broadcasts, scheduler jobs). The FSOS client always
-	// connects with movieID "faria".
-	cfg.DefaultMovieID = getEnv("DEFAULT_MOVIE_ID", "faria")
+	// (system.script broadcasts, scheduler jobs). Empty disables the fallback.
+	cfg.DefaultMovieID = getEnv("DEFAULT_MOVIE_ID", "")
 	// SMTP for outbound mail (password recovery). Empty host = email disabled.
 	cfg.SMTPHost = getEnv("SMTP_HOST", "")
 	cfg.SMTPPort = getEnv("SMTP_PORT", "587")

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"fsos-server/_tests/testutil"
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/ports"
+	"musgos/_tests/testutil"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/ports"
 )
 
 func runCachePrimitiveScript(t *testing.T, cache ports.Cache, body string) (*ports.ScriptResult, error) {

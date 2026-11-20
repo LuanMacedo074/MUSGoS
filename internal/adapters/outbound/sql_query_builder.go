@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 )
 
 // dbExecutor is the subset of *sql.DB used by queries. Both *sql.DB and *sql.Tx

@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/ports"
 )
 
 func TestMemoryQueue_PublishSubscribe(t *testing.T) {

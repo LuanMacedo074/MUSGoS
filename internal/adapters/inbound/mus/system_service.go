@@ -3,10 +3,10 @@ package mus
 import (
 	"errors"
 	"fmt"
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/services"
-	"fsos-server/internal/domain/types/lingo"
-	"fsos-server/internal/domain/types/smus"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/services"
+	"musgos/internal/domain/types/lingo"
+	"musgos/internal/domain/types/smus"
 )
 
 type handlerFunc func(senderID string, msg *smus.MUSMessage) (*smus.MUSMessage, error)

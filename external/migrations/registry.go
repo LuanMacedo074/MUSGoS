@@ -1,6 +1,6 @@
 package migrations
 
-import "fsos-server/internal/domain/ports"
+import "musgos/internal/domain/ports"
 
 var All []ports.Migration
 

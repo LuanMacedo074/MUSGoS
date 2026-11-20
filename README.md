@@ -65,8 +65,9 @@ set** (Redis, RabbitMQ, cache, rate limiting, metrics, UDP, and more).
 | `SCRIPT_TIMEOUT` | `5` | Lua script timeout (seconds) |
 | `SANDBOXED_SCRIPTS_DIR` | _(empty)_ | Directory under `SCRIPTS_PATH` that `mus.loadSandboxed(id)` reads; empty disables it |
 | `JOBS_ENABLED` | `1` | Enable scheduled jobs |
-| `DISCONNECT_HOOK` | `users/onDisconnect` | Script subject invoked when a client disconnects |
-| `AUTH_MODE` | `open` | Auth mode (`none`, `open`, `strict`) |
+| `DISCONNECT_HOOK` | _(empty)_ | Script subject invoked when a client disconnects; empty disables it |
+| `DEFAULT_MOVIE_ID` | _(empty)_ | Movie that `@group` sends from movie-less senders (system scripts, jobs) resolve against; empty disables the fallback |
+| `AUTH_MODE` | `open` | Auth mode (`none`, `open`, `strict`, `token`); `token` logs on with a single-use `mus.token` token (see [`docs/refresh-tokens.md`](docs/refresh-tokens.md)) |
 | `SESSION_STORE_TYPE` | `memory` | Session store (`memory`, `redis`) |
 | `QUEUE_TYPE` | `memory` | Message queue (`memory`, `redis`, `rabbitmq`) |
 | `CACHE_TYPE` | `memory` | Cache (`memory`, `redis`) |
@@ -98,7 +99,9 @@ internal/
 Dependency rule: import arrows always point toward the domain. Adapters depend on
 the domain, never the other way around.
 
-Detailed docs in [`docs/architecture.md`](docs/architecture.md).
+Detailed docs in [`docs/architecture.md`](docs/architecture.md); the auth
+stores behind `mus.token` and `mus.refresh` are in
+[`docs/refresh-tokens.md`](docs/refresh-tokens.md).
 
 ## Tests
 
@@ -113,6 +116,50 @@ _tests/
 ├── factory/             ← factory tests
 └── adapters/            ← adapter tests
 ```
+
+## Syncing the engine with FsosServer
+
+[FsosServer](https://github.com/LuanMacedo074/FSOSServer) is a game built on a
+fork of this engine. The two repos share history and the same engine tree:
+
+- **Engine** (kept identical in both repos): `internal/`, `cmd/gameserver/`, and
+  the engine tests in `_tests/{adapters,config,domain,factory,testutil}`.
+- **Application** (never synced): `external/` and, in FsosServer, the game
+  tests in `_tests/game/`.
+
+Only the Go module path differs: `musgos` here, `fsos-server` in FsosServer.
+That makes a plain `git cherry-pick` fail on every import line, so engine
+commits cross between the repos as patches with the import path rewritten.
+
+Engine changes should land in MUSGoS first, but they may land in either repo.
+To carry commits from FsosServer into MUSGoS (run from this repo, with
+FsosServer checked out next to it):
+
+```bash
+git -C ../FsosServer format-patch --stdout <base>..<tip> -- \
+    internal cmd/gameserver _tests/adapters _tests/config _tests/domain _tests/factory _tests/testutil \
+  | sed 's#"fsos-server/#"musgos/#g' \
+  | git am -3
+gofmt -w internal cmd _tests   # the rewrite can reorder an import group
+```
+
+To carry commits the other way, run it from FsosServer with the repos swapped
+and `sed 's#"musgos/#"fsos-server/#g'`. The pathspec drops the application
+half of a mixed commit. If `git am` stops on a conflict, resolve it, then
+`git am --continue`.
+
+After a sync, check that the engine trees still match:
+
+```bash
+scripts/engine-drift.sh ../FsosServer          # file list; exit 1 on drift
+scripts/engine-drift.sh ../FsosServer --full   # unified diff
+```
+
+The script rewrites the module path and runs gofmt on both trees before it
+diffs them, so it reports only real drift. `internal/` and `cmd/gameserver/`
+should match once each engine change has been carried to the other repo. The
+current drift (engine fixes not yet carried over, and test files) is listed
+with a reason for each in [`docs/engine-drift.md`](docs/engine-drift.md).
 
 ## Credits
 

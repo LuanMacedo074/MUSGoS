@@ -3,13 +3,14 @@ package outbound
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/lingo"
 
 	"github.com/google/uuid"
 	lua "github.com/yuin/gopher-lua"
@@ -27,11 +28,15 @@ type LuaScriptEngine struct {
 	cache         ports.Cache
 	emailSender   ports.EmailSender
 	sandboxedDir  string
+	refreshTokens ports.RefreshTokenStore
+	tokens        ports.TokenStore
+	random        func() float64
 }
 
 func NewLuaScriptEngine(scriptsDir string, logger ports.Logger, scriptTimeoutSeconds int, publisher ports.QueuePublisher, sender ports.MessageSender, db ports.DBAdapter, queryBuilder ports.QueryBuilder, sessionStore ports.SessionStore, cache ports.Cache, emailSender ports.EmailSender) *LuaScriptEngine {
 	return &LuaScriptEngine{
 		scriptsDir:    scriptsDir,
+		random:        rand.Float64,
 		logger:        logger,
 		scriptTimeout: time.Duration(scriptTimeoutSeconds) * time.Second,
 		publisher:     publisher,
@@ -42,6 +47,22 @@ func NewLuaScriptEngine(scriptsDir string, logger ports.Logger, scriptTimeoutSec
 		cache:         cache,
 		emailSender:   emailSender,
 	}
+}
+
+// WithRandom supplies the source for mus.random(). Configure it before execution;
+// the source must be safe for concurrent use when the engine is shared.
+func (e *LuaScriptEngine) WithRandom(random func() float64) *LuaScriptEngine {
+	if random != nil {
+		e.random = random
+	}
+	return e
+}
+
+// WithAuthStores supplies authentication adapters selected by the composition root.
+// Without injected stores the corresponding auth modules remain disabled.
+func (e *LuaScriptEngine) WithAuthStores(tokens ports.TokenStore, refresh ports.RefreshTokenStore) *LuaScriptEngine {
+	e.tokens, e.refreshTokens = tokens, refresh
+	return e
 }
 
 // WithSandboxedChunkDir enables mus.loadSandboxed, which loads chunks from
@@ -181,15 +202,33 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 	}))
 
 	musMod.RawSetString("sendMessage", L.NewFunction(func(L *lua.LState) int {
-		recipientID := L.CheckString(1)
-		if recipientID == "" {
-			L.ArgError(1, "recipientID must not be empty")
-			return 0
+		// A directed audience keeps private message delivery off guessable groups.
+		recipients := []string{}
+		if audience, ok := L.Get(1).(*lua.LTable); ok {
+			for i := 1; i <= audience.Len(); i++ {
+				name, ok := audience.RawGetInt(i).(lua.LString)
+				if !ok || name == "" {
+					L.ArgError(1, "audience recipients must be non-empty strings")
+					return 0
+				}
+				recipients = append(recipients, string(name))
+			}
+		} else {
+			recipientID := L.CheckString(1)
+			if recipientID == "" {
+				L.ArgError(1, "recipientID must not be empty")
+				return 0
+			}
+			recipients = append(recipients, recipientID)
 		}
+
 		subject := L.CheckString(2)
 		content := L.Get(3)
 		lingoContent := lingo.LuaToLValue(content)
-		if e.sender != nil {
+		for _, recipientID := range recipients {
+			if e.sender == nil {
+				continue
+			}
 			// Script-authored messages go on the wire from system.script (the
 			// legacy client only renders several subjects when they come from
 			// the server); the invoking player still anchors group routing.
@@ -230,8 +269,8 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 		}()
 	}
 
-	if e.queryBuilder != nil {
-		registerRefreshModule(L, musMod, NewRefreshTokenStore(e.queryBuilder, nil))
+	if e.refreshTokens != nil {
+		registerRefreshModule(L, musMod, e.refreshTokens)
 	}
 
 	// Register mus.bcrypt module (password-verify primitive; no deps)
@@ -239,8 +278,8 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 
 	// Register mus.token module — issue/validate single-use tokens over the same
 	// cache the MUS Logon token path validates against.
-	if e.cache != nil {
-		registerTokenModule(L, musMod, NewCacheTokenStore(e.cache, DefaultTokenTTL))
+	if e.tokens != nil {
+		registerTokenModule(L, musMod, e.tokens)
 	}
 
 	// Register mus.log module
@@ -248,6 +287,9 @@ func (e *LuaScriptEngine) Execute(msg *ports.ScriptMessage) (*ports.ScriptResult
 
 	// Register mus.time module
 	registerTimeModule(L, musMod)
+
+	// Register mus.random
+	registerRandomModule(L, musMod, e.random)
 
 	// Register mus.json module
 	registerJsonModule(L, musMod)

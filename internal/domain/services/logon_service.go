@@ -1,8 +1,10 @@
 package services
 
 import (
-	"fsos-server/internal/domain/ports"
-	"fsos-server/internal/domain/types/lingo"
+	"strconv"
+
+	"musgos/internal/domain/ports"
+	"musgos/internal/domain/types/lingo"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -142,8 +144,7 @@ func (s *LogonService) Logon(req LogonRequest) LogonResult {
 
 	case "token":
 		// The credential is a token minted by the HTTP login step. Validate and
-		// consume it; the payload is authoritative for both the character the
-		// session binds to and its level — the engine never reads any account.
+		// consume it; the payload supplies the session identity and level.
 		if s.tokens == nil {
 			s.logger.Error("Logon failed: token mode without a token store", map[string]interface{}{
 				"client": req.ConnectionID,
@@ -157,8 +158,18 @@ func (s *LogonService) Logon(req LogonRequest) LogonResult {
 			})
 			return LogonResult{Code: LogonInvalidPassword, UserID: userID}
 		}
-		userID = payload.CharacterName
-		userLevel = payload.UserLevel
+		// A token without an identity serves pre-session HTTP flows only.
+		level, err := strconv.ParseInt(payload.Claims[ports.TokenUserLevelClaim], 10, 32)
+		if err != nil || payload.UserID == "" {
+			s.logger.Warn("Logon failed: token lacks a user id or a valid user level", map[string]interface{}{
+				"client":     req.ConnectionID,
+				"hasUserID":  payload.UserID != "",
+				"validLevel": err == nil,
+			})
+			return LogonResult{Code: LogonInvalidPassword, UserID: userID}
+		}
+		userLevel = int(level)
+		userID = payload.UserID
 
 	case "strict":
 		user, err := s.db.GetUser(userID)

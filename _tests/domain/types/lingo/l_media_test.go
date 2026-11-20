@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"fsos-server/internal/domain/types/lingo"
+	"musgos/internal/domain/types/lingo"
 )
 
 func TestLMedia_NewAndToBytes(t *testing.T) {

@@ -1,8 +1,8 @@
 package factory
 
 import (
-	"fsos-server/internal/adapters/outbound"
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/adapters/outbound"
+	"musgos/internal/domain/ports"
 )
 
 func NewScriptEngine(
@@ -17,10 +17,12 @@ func NewScriptEngine(
 	sessionStore ports.SessionStore,
 	cache ports.Cache,
 	emailSender ports.EmailSender,
+	auth AuthStores,
 ) ports.ScriptEngine {
 	if scriptsPath == "" {
 		return nil
 	}
 	return outbound.NewLuaScriptEngine(scriptsPath, logger, scriptTimeoutSeconds, publisher, sender, db, queryBuilder, sessionStore, cache, emailSender).
-		WithSandboxedChunkDir(sandboxedDir)
+		WithSandboxedChunkDir(sandboxedDir).
+		WithAuthStores(auth.Tokens, auth.Refresh)
 }

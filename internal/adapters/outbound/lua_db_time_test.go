@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"fsos-server/internal/domain/ports"
+	"musgos/internal/domain/ports"
 
 	lua "github.com/yuin/gopher-lua"
 )
