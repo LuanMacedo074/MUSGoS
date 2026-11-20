@@ -22,7 +22,8 @@ bind a session to an empty identity; once carried over, it is refused.
 
 ## Engine tests
 
-All remaining drift is in `_tests/`. None of it changes engine behaviour.
+Apart from the two engine fixes above, the remaining drift is in `_tests/`.
+None of the test drift changes engine behaviour.
 
 ### Only in MUSGoS
 
