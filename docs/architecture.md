@@ -99,7 +99,8 @@ internal/
         ├── lua_random_module.go      ← mus.random module for Lua
         ├── lua_token_module.go       ← mus.token module (single-use tokens with claims)
         ├── cache_token_store.go      ← cache-backed TokenStore
-        ├── refresh_token_store.go    ← schema-configurable RefreshTokenStore (mus.refresh)
+        ├── lua_refresh_module.go     ← mus.refresh module (remembered-device tokens)
+        ├── refresh_token_store.go    ← schema-configurable RefreshTokenStore
         ├── sql_db.go                 ← storage core: users, bans, attributes, schema DSL — written once, dialect-agnostic
         ├── sql_dialect.go            ← dialect seam: placeholders, column types, now-expressions, DDL quirks
         ├── sql_dialect_sqlite.go     ← SQLite dialect
@@ -365,7 +366,7 @@ These are the adapters that the domain **uses** to do things it doesn't know (or
 
 - **`redis_session_store.go`** — session store via Redis. Implements `ports.SessionStore`. Manages connections, ephemeral attributes, and rooms using Redis structures (HASH, SET) with key prefixing and TTL. For production and multi-instance scenarios.
 
-- **`lua_script_engine.go`** — implementation of `ports.ScriptEngine` via gopher-lua. Creates a fresh Lua VM per execution, with unsafe libs removed (`os`, `io`, `debug`). Registers the `mus` module with `getSender()`, `getContent()`, `response()`, `publish()`, `sendMessage()` and `random()`. `mus.sendMessage(recipient, subject, content)` accepts one recipient id or a list of them (`{"a", "b"}`); a list sends the message once to each listed recipient, so a script can address a private audience without a shared group. `mus.random()` returns a number in [0, 1); `WithRandom` injects its source. The token and refresh modules (`mus.token`, `mus.refresh`) are registered only when the composition root injects their stores through `WithAuthStores` (see `factory.NewAuthStores` and `external/auth`). Scripts live in `external/scripts/` with a 1:1 mapping by subject. Execution timeout configurable via `SCRIPT_TIMEOUT`.
+- **`lua_script_engine.go`** — implementation of `ports.ScriptEngine` via gopher-lua. Creates a fresh Lua VM per execution, with unsafe libs removed (`os`, `io`, `debug`). Registers the `mus` module with `getSender()`, `getContent()`, `response()`, `publish()`, `sendMessage()` and `random()`. `mus.sendMessage(recipient, subject, content)` accepts one recipient id or a list of them (`{"a", "b"}`); a list sends the message once to each listed recipient, so a script can address a private audience without a shared group. `mus.random()` returns a number in [0, 1); `WithRandom` injects its source. The token and refresh modules (`mus.token`, `mus.refresh`) are registered only when the composition root injects their stores through `WithAuthStores` (see `factory.NewAuthStores`, `external/auth` and [refresh-tokens.md](refresh-tokens.md)). Scripts live in `external/scripts/` with a 1:1 mapping by subject. Execution timeout configurable via `SCRIPT_TIMEOUT`.
 
 - **`lua_db_module.go`** — `mus.db` module for Lua scripts. Exposes DBPlayer, DBApplication, and DBAdmin operations (with bcrypt in `createUser`), plus the fluent query builder (`mus.db.table("name"):where(...):get()`, plus `:whereLessThan(col, value)` and `:whereEqualFold(col, text)` for case-insensitive text matches; `:where(col, nil)` matches NULL).
 

@@ -801,6 +801,18 @@ func TestExecute_Random_DefaultsToUnitInterval(t *testing.T) {
 	}
 }
 
+func TestExecute_SendMessage_DirectedAudience(t *testing.T) {
+	dir := setupScriptsDir(t)
+	writeScript(t, dir, "audience", `mus.sendMessage({"hero", "watcher"}, "Notice", "turn:2")`)
+	sender := &testutil.MockMessageSender{}
+	engine := outbound.NewLuaScriptEngine(dir, &testutil.MockLogger{}, 5, nil, sender, nil, nil, nil, nil, nil)
+	_, err := engine.Execute(&ports.ScriptMessage{Subject: "audience", SenderID: "hero", Content: lingo.NewLVoid()})
+	mustNoErr(t, err)
+	if len(sender.Calls) != 2 || !hasCall(sender, "hero", "Notice", "turn:2") || !hasCall(sender, "watcher", "Notice", "turn:2") {
+		t.Fatalf("directed audience = %+v", sender.Calls)
+	}
+}
+
 func TestExecute_SendMessage_RejectsInvalidAudience(t *testing.T) {
 	for _, audience := range []string{`{"hero", ""}`, `{"hero", 7}`} {
 		t.Run(audience, func(t *testing.T) {

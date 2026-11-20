@@ -99,7 +99,9 @@ internal/
 Dependency rule: import arrows always point toward the domain. Adapters depend on
 the domain, never the other way around.
 
-Detailed docs in [`docs/architecture.md`](docs/architecture.md).
+Detailed docs in [`docs/architecture.md`](docs/architecture.md); the auth
+stores behind `mus.token` and `mus.refresh` are in
+[`docs/refresh-tokens.md`](docs/refresh-tokens.md).
 
 ## Tests
 

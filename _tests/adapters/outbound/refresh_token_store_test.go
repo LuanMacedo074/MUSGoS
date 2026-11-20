@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"musgos/_tests/testutil"
-	"musgos/external/auth"
 	"musgos/internal/adapters/outbound"
 	"musgos/internal/domain/ports"
 	"musgos/internal/domain/types/lingo"
@@ -38,9 +37,19 @@ func newRefreshTestDB(t *testing.T) *outbound.SQLiteDB {
 	return db
 }
 
-// newRefreshStore maps the store onto the schema the shipped auth config documents.
+// refreshFixtureConfig maps the store onto newRefreshTestDB's schema. Engine
+// tests define it themselves rather than read an application's external/auth.
+var refreshFixtureConfig = outbound.RefreshTokenConfig{
+	IdentityTable: "accounts", IDColumn: "id", CredentialColumn: "password_hash", BanColumn: "banned",
+	FamilyIdentityColumn: "account_id", FamilyCredentialColumn: "password_hash",
+	FamilyTable: "refresh_families", FamilyIDColumn: "id", DeviceLabelColumn: "device_label",
+	CreatedAtColumn: "created_at", LastUsedAtColumn: "last_used_at", ExpiresAtColumn: "expires_at",
+	RevokedColumn: "revoked", RevisionColumn: "revision",
+	TokenTable: "refresh_tokens", TokenHashColumn: "token_hash", TokenFamilyColumn: "family_id", TokenUsedColumn: "used",
+}
+
 func newRefreshStore(db *outbound.SQLiteDB, now func() time.Time) *outbound.RefreshTokenStore {
-	return outbound.NewRefreshTokenStore(db.QueryBuilder(), now, auth.Config().Refresh)
+	return outbound.NewRefreshTokenStore(db.QueryBuilder(), now, refreshFixtureConfig)
 }
 
 func seedRefreshAccount(t *testing.T, db *outbound.SQLiteDB, email string) int64 {
@@ -275,7 +284,7 @@ func TestRefreshTokenStore_FailedRevocationCommitLeavesDeviceUsable(t *testing.T
 	mustNoErr(t, err)
 	failing := outbound.NewRefreshTokenStore(failingCommitBuilder{
 		TransactionalQueryBuilder: db.QueryBuilder().(ports.TransactionalQueryBuilder),
-	}, nil, auth.Config().Refresh)
+	}, nil, refreshFixtureConfig)
 	if err := failing.Revoke(token); err == nil {
 		t.Fatal("revocation succeeded despite a failed storage commit")
 	}
