@@ -411,8 +411,10 @@ pool := inbound.NewConnPool()
 // 2. Sender — uses pool as ConnectionWriter
 sender := mus.NewSender(pool, sessionStore, gameLogger)
 
-// 3. ScriptEngine — can send messages via Sender
-scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, gameLogger, cfg.ScriptTimeout, queue, sender)
+// 3. ScriptEngine — can send messages via Sender; auth stores back mus.token / mus.refresh
+authStores := factory.NewAuthStores(cache, dbResult.QueryBuilder, auth.Config())
+scriptEngine := factory.NewScriptEngine(cfg.ScriptsPath, cfg.SandboxedScriptsDir, gameLogger, cfg.ScriptTimeout,
+    queue, sender, dbResult.Adapter, dbResult.QueryBuilder, sessionStore, cache, emailSender, authStores)
 
 // 4. Handler — Dispatcher receives ScriptEngine + Sender + pool
 handler, _ := factory.NewHandler(cfg.Protocol, gameLogger, cipher, scriptEngine,

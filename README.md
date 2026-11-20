@@ -157,8 +157,8 @@ scripts/engine-drift.sh ../FsosServer --full   # unified diff
 
 The script rewrites the module path and runs gofmt on both trees before it
 diffs them, so it reports only real drift. `internal/` and `cmd/gameserver/`
-should always match. Today the engine tests still drift: some tests were
-renamed or improved in one repo and not yet carried to the other.
+should always match. The engine tests still drift; the files and the reason
+for each are recorded in [`docs/engine-drift.md`](docs/engine-drift.md).
 
 ## Credits
 
